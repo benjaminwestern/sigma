@@ -1,0 +1,24 @@
+{
+  "messages": [
+    {
+      "content": "I will call the tool.",
+      "reasoning_content": "inspect state",
+      "role": "assistant",
+      "tool_calls": [
+        {
+          "function": {
+            "arguments": "{\"path\":\"README.md\"}",
+            "name": "read"
+          },
+          "id": "call_1",
+          "type": "function"
+        }
+      ]
+    }
+  ],
+  "model": "compat-model",
+  "stream": true,
+  "stream_options": {
+    "include_usage": true
+  }
+}

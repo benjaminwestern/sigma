@@ -1,0 +1,33 @@
+{
+  "inputs": [
+    {
+      "content": "Weather?",
+      "object": "entry",
+      "role": "user",
+      "type": "message.input"
+    }
+  ],
+  "model": "mistral-test",
+  "stream": true,
+  "tools": [
+    {
+      "function": {
+        "description": "Get weather",
+        "name": "weather",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "city": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "city"
+          ],
+          "type": "object"
+        }
+      },
+      "type": "function"
+    }
+  ]
+}

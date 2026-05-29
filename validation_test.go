@@ -1,0 +1,346 @@
+// Copyright (c) 2026 Matthew Winter
+//
+// This source code is licensed under the MIT license found in the LICENSE file
+// in the root directory of this source tree.
+
+package sigma_test
+
+import (
+	"encoding/json"
+	"errors"
+	"strings"
+	"testing"
+
+	"github.com/wintermi/sigma"
+)
+
+func TestValidateToolCallValidatesNestedSchemaAndReturnsDecodedCopy(t *testing.T) {
+	t.Parallel()
+
+	schema := sigma.Schema{
+		"type": "object",
+		"properties": map[string]any{
+			"city":  map[string]any{"type": "string", "minLength": 2, "maxLength": 64},
+			"units": map[string]any{"type": "string", "enum": []any{"metric", "imperial"}},
+			"days": map[string]any{
+				"type": "array",
+				"items": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"date": map[string]any{"type": "string"},
+						"high": map[string]any{"type": "number", "minimum": -90, "maximum": 80},
+					},
+					"required":             []any{"date", "high"},
+					"additionalProperties": false,
+				},
+			},
+		},
+		"required":             []any{"city", "units", "days"},
+		"additionalProperties": false,
+	}
+	args := map[string]any{
+		"city":  "Melbourne",
+		"units": "metric",
+		"days": []any{
+			map[string]any{"date": "2026-05-25", "high": 18},
+		},
+	}
+	schemaBefore := mustJSON(t, schema)
+	argsBefore := mustJSON(t, args)
+
+	decoded, err := sigma.ValidateToolCall(
+		[]sigma.Tool{{Name: "weather", InputSchema: schema}},
+		sigma.ToolCall{Name: "weather", Arguments: args},
+	)
+	if err != nil {
+		t.Fatalf("ValidateToolCall returned error: %v", err)
+	}
+	if got, want := decoded["city"], "Melbourne"; got != want {
+		t.Fatalf("decoded city = %v, want %v", got, want)
+	}
+
+	decoded["city"] = "Sydney"
+	if got, want := args["city"], "Melbourne"; got != want {
+		t.Fatalf("input arguments were mutated: got %v want %v", got, want)
+	}
+	if got := mustJSON(t, schema); got != schemaBefore {
+		t.Fatalf("schema mutated:\nbefore %s\nafter  %s", schemaBefore, got)
+	}
+	if got := mustJSON(t, args); got != argsBefore {
+		t.Fatalf("arguments mutated:\nbefore %s\nafter  %s", argsBefore, got)
+	}
+}
+
+func TestValidateToolCallReportsValidationFailures(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		tools      []sigma.Tool
+		call       sigma.ToolCall
+		path       string
+		reason     string
+		expected   string
+		errorText  string
+		actualText string
+	}{
+		{
+			name:      "unknown tool",
+			tools:     []sigma.Tool{{Name: "weather", InputSchema: sigma.Schema{"type": "object"}}},
+			call:      sigma.ToolCall{Name: "search", Arguments: map[string]any{}},
+			path:      "$",
+			reason:    "tool is not registered",
+			expected:  "registered tool name",
+			errorText: "tool=search",
+		},
+		{
+			name: "missing required field",
+			tools: []sigma.Tool{{
+				Name:        "weather",
+				InputSchema: sigma.Schema{"type": "object", "required": []any{"city"}},
+			}},
+			call:       sigma.ToolCall{Name: "weather", Arguments: map[string]any{}},
+			path:       "$.city",
+			reason:     "missing required field",
+			expected:   "required property",
+			actualText: "missing",
+		},
+		{
+			name: "wrong primitive type",
+			tools: []sigma.Tool{{
+				Name: "weather",
+				InputSchema: sigma.Schema{
+					"type":       "object",
+					"properties": map[string]any{"city": map[string]any{"type": "string"}},
+				},
+			}},
+			call:       sigma.ToolCall{Name: "weather", Arguments: map[string]any{"city": 42}},
+			path:       "$.city",
+			reason:     "wrong primitive type",
+			expected:   "string",
+			actualText: "42",
+		},
+		{
+			name: "enum violation",
+			tools: []sigma.Tool{{
+				Name: "weather",
+				InputSchema: sigma.Schema{
+					"type":       "object",
+					"properties": map[string]any{"units": map[string]any{"type": "string", "enum": []any{"metric", "imperial"}}},
+				},
+			}},
+			call:       sigma.ToolCall{Name: "weather", Arguments: map[string]any{"units": "kelvin"}},
+			path:       "$.units",
+			reason:     "enum violation",
+			expected:   `one of ["metric", "imperial"]`,
+			actualText: `"kelvin"`,
+		},
+		{
+			name: "nested object error",
+			tools: []sigma.Tool{{
+				Name: "plot",
+				InputSchema: sigma.Schema{
+					"type": "object",
+					"properties": map[string]any{
+						"location": map[string]any{
+							"type":       "object",
+							"properties": map[string]any{"lat": map[string]any{"type": "number"}},
+						},
+					},
+				},
+			}},
+			call:     sigma.ToolCall{Name: "plot", Arguments: map[string]any{"location": map[string]any{"lat": "south"}}},
+			path:     "$.location.lat",
+			reason:   "wrong primitive type",
+			expected: "number",
+		},
+		{
+			name: "array item error",
+			tools: []sigma.Tool{{
+				Name: "tag",
+				InputSchema: sigma.Schema{
+					"type":       "object",
+					"properties": map[string]any{"tags": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}},
+				},
+			}},
+			call:     sigma.ToolCall{Name: "tag", Arguments: map[string]any{"tags": []any{"ok", 9}}},
+			path:     "$.tags[1]",
+			reason:   "wrong primitive type",
+			expected: "string",
+		},
+		{
+			name: "numeric maximum",
+			tools: []sigma.Tool{{
+				Name: "scale",
+				InputSchema: sigma.Schema{
+					"type":       "object",
+					"properties": map[string]any{"count": map[string]any{"type": "integer", "maximum": 5}},
+				},
+			}},
+			call:     sigma.ToolCall{Name: "scale", Arguments: map[string]any{"count": 6}},
+			path:     "$.count",
+			reason:   "number is above maximum",
+			expected: "<= 5",
+		},
+		{
+			name: "string length",
+			tools: []sigma.Tool{{
+				Name: "label",
+				InputSchema: sigma.Schema{
+					"type":       "object",
+					"properties": map[string]any{"name": map[string]any{"type": "string", "maxLength": 3}},
+				},
+			}},
+			call:     sigma.ToolCall{Name: "label", Arguments: map[string]any{"name": "long"}},
+			path:     "$.name",
+			reason:   "string is too long",
+			expected: "length <= 3",
+		},
+		{
+			name: "additional property",
+			tools: []sigma.Tool{{
+				Name: "weather",
+				InputSchema: sigma.Schema{
+					"type":                 "object",
+					"properties":           map[string]any{"city": map[string]any{"type": "string"}},
+					"additionalProperties": false,
+				},
+			}},
+			call:     sigma.ToolCall{Name: "weather", Arguments: map[string]any{"city": "Melbourne", "secret": "sk-live-secret"}},
+			path:     "$.secret",
+			reason:   "additional property is not allowed",
+			expected: "declared property",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := sigma.ValidateToolCall(tt.tools, tt.call)
+			if err == nil {
+				t.Fatal("ValidateToolCall returned nil error")
+			}
+			if !errors.Is(err, sigma.ErrToolValidation) {
+				t.Fatalf("error does not match ErrToolValidation: %v", err)
+			}
+
+			var validationErr *sigma.ToolValidationError
+			if !errors.As(err, &validationErr) {
+				t.Fatalf("error type = %T, want ToolValidationError", err)
+			}
+			if validationErr.Path != tt.path {
+				t.Fatalf("path = %q, want %q", validationErr.Path, tt.path)
+			}
+			if validationErr.Reason != tt.reason {
+				t.Fatalf("reason = %q, want %q", validationErr.Reason, tt.reason)
+			}
+			if validationErr.Expected != tt.expected {
+				t.Fatalf("expected = %q, want %q", validationErr.Expected, tt.expected)
+			}
+			if tt.actualText != "" && validationErr.Actual != tt.actualText {
+				t.Fatalf("actual = %q, want %q", validationErr.Actual, tt.actualText)
+			}
+			if tt.errorText != "" && !strings.Contains(err.Error(), tt.errorText) {
+				t.Fatalf("error text = %q, want substring %q", err.Error(), tt.errorText)
+			}
+			if strings.Contains(err.Error(), "sk-live-secret") {
+				t.Fatalf("error leaked secret: %q", err.Error())
+			}
+		})
+	}
+}
+
+func TestValidateToolCallAcceptsRawJSONArguments(t *testing.T) {
+	t.Parallel()
+
+	decoded, err := sigma.ValidateToolCall(
+		[]sigma.Tool{{
+			Name:        "weather",
+			InputSchema: json.RawMessage(`{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}`),
+		}},
+		sigma.ToolCall{Name: "weather", Arguments: json.RawMessage(`{"city":"Melbourne"}`)},
+	)
+	if err != nil {
+		t.Fatalf("ValidateToolCall returned error: %v", err)
+	}
+	if got, want := decoded["city"], "Melbourne"; got != want {
+		t.Fatalf("city = %v, want %v", got, want)
+	}
+}
+
+func TestValidateToolCallRejectsMalformedSchemas(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		schema any
+	}{
+		{name: "invalid json", schema: json.RawMessage(`{"type":`)},
+		{name: "schema is not object", schema: []any{"object"}},
+		{name: "required is not array", schema: sigma.Schema{"type": "object", "required": "city"}},
+		{name: "items is not schema", schema: sigma.Schema{"type": "object", "properties": map[string]any{"tags": map[string]any{"type": "array", "items": []any{}}}}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := sigma.ValidateToolCall(
+				[]sigma.Tool{{Name: "weather", InputSchema: tt.schema}},
+				sigma.ToolCall{Name: "weather", Arguments: map[string]any{"city": "Melbourne", "tags": []any{"x"}}},
+			)
+			if err == nil {
+				t.Fatal("ValidateToolCall returned nil error")
+			}
+			if !errors.Is(err, sigma.ErrToolValidation) {
+				t.Fatalf("error does not match ErrToolValidation: %v", err)
+			}
+
+			var validationErr *sigma.ToolValidationError
+			if !errors.As(err, &validationErr) {
+				t.Fatalf("error type = %T, want ToolValidationError", err)
+			}
+			if validationErr.Reason != "schema is malformed" {
+				t.Fatalf("reason = %q, want schema is malformed", validationErr.Reason)
+			}
+		})
+	}
+}
+
+func TestToolErrorMessageRedactsValidationError(t *testing.T) {
+	t.Parallel()
+
+	_, err := sigma.ValidateToolCall(
+		[]sigma.Tool{{
+			Name: "weather",
+			InputSchema: sigma.Schema{
+				"type":                 "object",
+				"properties":           map[string]any{"city": map[string]any{"type": "string"}},
+				"additionalProperties": false,
+			},
+		}},
+		sigma.ToolCall{Name: "weather", Arguments: map[string]any{"city": "Melbourne", "api_key": "sk-live-secret"}},
+	)
+	if err == nil {
+		t.Fatal("ValidateToolCall returned nil error")
+	}
+
+	message := sigma.ToolErrorMessage(sigma.ToolCall{Name: "weather"}, err)
+	if !strings.Contains(message, "invalid arguments") {
+		t.Fatalf("message = %q, want retry hint", message)
+	}
+	if strings.Contains(message, "sk-live-secret") {
+		t.Fatalf("message leaked secret: %q", message)
+	}
+}
+
+func mustJSON(t *testing.T, value any) string {
+	t.Helper()
+
+	data, err := json.Marshal(value)
+	if err != nil {
+		t.Fatalf("marshal JSON: %v", err)
+	}
+	return string(data)
+}

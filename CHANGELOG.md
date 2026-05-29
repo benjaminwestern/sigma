@@ -1,0 +1,78 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The project follows standard Major.Minor.Patch versioning and Go module
+semantic import versioning. The initial release is `v0.1.0`; public APIs may
+still change before `v1.0.0`, with breaking changes called out in release notes.
+
+## [0.1.0] - 2026-05-29
+
+### Added
+
+- The repository is licensed under the MIT License.
+- Root `sigma` package API for provider-neutral model metadata, requests,
+  messages, content blocks, tools, usage, cost, images, streams, diagnostics,
+  persistence, retries, credentials, and typed errors.
+- `Client`, package-level helpers, and `Registry` APIs for isolated model and
+  provider registration.
+- Deterministic `sigmatest` providers for text and image tests without live
+  network calls.
+- Text completion and streaming contracts with ordered events, final assistant
+  messages, cancellation handling, provider errors, tool-call deltas, thinking
+  blocks, usage, and cost accounting.
+- Context-aware SSE reads and shared stream lifecycle helpers in `internal/sse`
+  and `internal/streamlifecycle`.
+- Provider-defined tools alongside JSON-schema function tools (for example
+  Anthropic web search, web fetch, and code execution).
+- JSON persistence helpers for request replay, with validation for unknown
+  persisted request fields.
+- OpenAI-compatible Chat Completions MVP coverage, including custom/local
+  endpoints, compatibility metadata, streaming text, image input, tools, usage,
+  errors, redaction, and cancellation fixtures.
+- Anthropic Messages MVP coverage, including Anthropic-compatible routing,
+  streaming text, image input, thinking, tools, cache markers, usage, errors,
+  and deterministic fixtures.
+- Preview adapters for OpenAI Responses, Azure OpenAI Responses, OpenAI Codex
+  Responses, Fireworks AI Chat Completions, OpenCode Zen and OpenCode Go Chat
+  Completions, Google Generative AI, Google Vertex AI, Mistral Conversations,
+  Amazon Bedrock Converse Stream, and OpenRouter image generation.
+- Fireworks reasoning effort and thinking-budget controls over the shared
+  OpenAI-compatible Chat Completions path.
+- Amazon Bedrock Converse Stream over stdlib HTTP with SigV4 signing and
+  EventStream parsing, without an AWS SDK dependency.
+- Generated model metadata from a curated checked-in catalog, plus local
+  generation tooling.
+- Security tests and redaction helpers for provider errors, request/response
+  debug hooks, credential formatting, persistence boundaries, and synthetic
+  secret fixtures.
+- Documentation for MVP scope, providers, streaming, tools, images, reasoning,
+  errors, custom models, testing, persistence, inspiration from
+  `@earendil-works/pi-ai`, provider parity, security, and generated metadata.
+
+### Known limitations
+
+- Default registry entries are metadata-only; applications must import provider
+  packages and call their `Register` functions before runtime dispatch.
+- The MVP is text-first. OpenAI Images has generated metadata but no runnable
+  OpenAI image provider adapter.
+- Preview providers are not part of the first release gate and may change before
+  `v1.0.0`.
+- Interactive OAuth login and token persistence are deferred; the MVP uses
+  caller-supplied credentials or injected OAuth token providers only. OpenAI
+  Codex Responses in particular requires a caller-supplied OAuth token provider.
+- WebSocket transports are deferred; unsupported transport choices should fail
+  locally before network calls.
+- Token usage and cost reporting come from provider usage data and model
+  metadata; tokenizer-based token estimates are deferred.
+- The Go package targets server/CLI use; browser-specific behavior is out of
+  scope for the MVP.
+- Agent runtime orchestration and cross-provider context handoff (with
+  capability-loss reporting) are deferred to later integration work; the MVP
+  exposes only provider-neutral primitives.
+- DeepSeek, Groq, Cerebras, xAI, Together, GitHub Copilot, Kimi, and Xiaomi are
+  not yet first-class provider rows; provider IDs or routing may exist, but
+  independent provider-quality claims still need fixtures.
+- No live provider calls are required or expected for release validation.
+- The release should not be tagged until maintainers accept the verification
+  results and the [release notes](docs/release-notes-v0.1.0.md).

@@ -1,0 +1,42 @@
+{
+  "input": [
+    {
+      "content": [
+        {
+          "text": "Search current docs.",
+          "type": "input_text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "gpt-test",
+  "stream": true,
+  "tools": [
+    {
+      "description": "Lookup local records",
+      "name": "lookup",
+      "parameters": {
+        "properties": {
+          "query": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "type": "object"
+      },
+      "type": "function"
+    },
+    {
+      "filters": {
+        "allowed_domains": [
+          "example.com"
+        ]
+      },
+      "search_context_size": "low",
+      "type": "web_search"
+    }
+  ]
+}

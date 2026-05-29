@@ -1,0 +1,27 @@
+{
+  "max_tokens": 9,
+  "messages": [
+    {
+      "content": "policy",
+      "role": "system"
+    },
+    {
+      "content": "style",
+      "role": "system"
+    }
+  ],
+  "model": "local-model",
+  "stream": true,
+  "tools": [
+    {
+      "function": {
+        "description": "",
+        "name": "tool",
+        "parameters": {
+          "type": "object"
+        }
+      },
+      "type": "function"
+    }
+  ]
+}

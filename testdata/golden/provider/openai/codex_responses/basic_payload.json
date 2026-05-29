@@ -1,0 +1,15 @@
+{
+  "input": [
+    {
+      "content": [
+        {
+          "text": "hi",
+          "type": "input_text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "codex-mini-latest",
+  "stream": true
+}

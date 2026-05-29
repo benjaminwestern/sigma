@@ -1,0 +1,247 @@
+// Copyright (c) 2026 Matthew Winter
+//
+// This source code is licensed under the MIT license found in the LICENSE file
+// in the root directory of this source tree.
+
+package sigma_test
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/wintermi/sigma"
+)
+
+func TestCredentialFormattingRedactsValue(t *testing.T) {
+	t.Parallel()
+
+	credential := sigma.Credential{
+		Type:   sigma.CredentialTypeAPIKey,
+		Value:  "sk-test-secret",
+		Source: "env:OPENAI_API_KEY=sk-test-secret",
+		Expiry: time.Date(2026, 5, 25, 0, 0, 0, 0, time.UTC),
+		Metadata: map[string]any{
+			"tenant": "secret-tenant",
+		},
+	}
+
+	for _, formatted := range []string{
+		credential.String(),
+		fmt.Sprint(credential),
+		fmt.Sprintf("%+v", credential),
+		fmt.Sprintf("%#v", credential),
+	} {
+		if strings.Contains(formatted, "sk-test-secret") {
+			t.Fatalf("formatted credential leaked secret: %q", formatted)
+		}
+		if !strings.Contains(formatted, "[redacted]") {
+			t.Fatalf("formatted credential = %q, want redaction marker", formatted)
+		}
+	}
+}
+
+func TestEnvironmentAuthResolverUsesMetadataBeforeDefaultNames(t *testing.T) {
+	clearCredentialEnv(t)
+	t.Setenv("CUSTOM_OPENAI_KEY", "metadata-secret")
+	t.Setenv("OPENAI_API_KEY", "default-secret")
+
+	model := sigma.Model{
+		ID:       "custom-openai",
+		Provider: sigma.ProviderOpenAI,
+		ProviderMetadata: map[string]any{
+			sigma.MetadataAPIKeyEnvVar: "CUSTOM_OPENAI_KEY",
+		},
+	}
+
+	credential, err := (sigma.EnvironmentAuthResolver{}).Resolve(context.Background(), model, sigma.Options{})
+	if err != nil {
+		t.Fatalf("Resolve returned error: %v", err)
+	}
+	if got, want := credential.Value, "metadata-secret"; got != want {
+		t.Fatalf("credential value = %q, want %q", got, want)
+	}
+	if got, want := credential.Source, "env:CUSTOM_OPENAI_KEY"; got != want {
+		t.Fatalf("credential source = %q, want %q", got, want)
+	}
+}
+
+func TestEnvironmentAuthResolverCommonStaticKeys(t *testing.T) {
+	tests := []struct {
+		name     string
+		provider sigma.ProviderID
+		env      string
+	}{
+		{name: "openai", provider: sigma.ProviderOpenAI, env: "OPENAI_API_KEY"},
+		{name: "anthropic", provider: sigma.ProviderAnthropic, env: "ANTHROPIC_API_KEY"},
+		{name: "google", provider: sigma.ProviderGoogle, env: "GOOGLE_API_KEY"},
+		{name: "google cloud", provider: sigma.ProviderGoogleVertex, env: "GOOGLE_CLOUD_API_KEY"},
+		{name: "mistral", provider: sigma.ProviderMistral, env: "MISTRAL_API_KEY"},
+		{name: "openrouter", provider: sigma.ProviderOpenRouter, env: "OPENROUTER_API_KEY"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clearCredentialEnv(t)
+			t.Setenv(tt.env, "env-secret")
+
+			model := sigma.Model{ID: "model", Provider: tt.provider}
+			credential, err := (sigma.EnvironmentAuthResolver{}).Resolve(context.Background(), model, sigma.Options{})
+			if err != nil {
+				t.Fatalf("Resolve returned error: %v", err)
+			}
+			if got, want := credential.Value, "env-secret"; got != want {
+				t.Fatalf("credential value = %q, want %q", got, want)
+			}
+			if got, want := credential.Source, "env:"+tt.env; got != want {
+				t.Fatalf("credential source = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
+func TestChainAuthResolverPrecedence(t *testing.T) {
+	clearCredentialEnv(t)
+	t.Setenv("OPENAI_API_KEY", "env-secret")
+
+	model := sigma.Model{ID: "gpt-test", Provider: sigma.ProviderOpenAI}
+	clientResolver := sigma.AuthResolverFunc(func(context.Context, sigma.Model, sigma.Options) (sigma.Credential, error) {
+		return sigma.Credential{
+			Type:   sigma.CredentialTypeAPIKey,
+			Value:  "client-secret",
+			Source: "client:test",
+		}, nil
+	})
+	callbackResolver := sigma.AuthResolverFunc(func(context.Context, sigma.Model, sigma.Options) (sigma.Credential, error) {
+		return sigma.Credential{
+			Type:   sigma.CredentialTypeOAuthToken,
+			Value:  "callback-secret",
+			Source: "provider:test",
+		}, nil
+	})
+	resolver := sigma.ChainAuthResolver{
+		Client: clientResolver,
+		ProviderCallbacks: map[sigma.ProviderID]sigma.AuthResolver{
+			sigma.ProviderOpenAI: callbackResolver,
+		},
+	}
+
+	credential, err := resolver.Resolve(context.Background(), model, sigma.Options{APIKey: "request-secret"})
+	if err != nil {
+		t.Fatalf("Resolve(request) returned error: %v", err)
+	}
+	if got, want := credential.Value, "request-secret"; got != want {
+		t.Fatalf("request credential = %q, want %q", got, want)
+	}
+
+	credential, err = resolver.Resolve(context.Background(), model, sigma.Options{})
+	if err != nil {
+		t.Fatalf("Resolve(client) returned error: %v", err)
+	}
+	if got, want := credential.Value, "client-secret"; got != want {
+		t.Fatalf("client credential = %q, want %q", got, want)
+	}
+}
+
+func TestChainAuthResolverFallsBackToEnvironmentAndCallbacks(t *testing.T) {
+	clearCredentialEnv(t)
+	t.Setenv("OPENAI_API_KEY", "env-secret")
+
+	model := sigma.Model{ID: "gpt-test", Provider: sigma.ProviderOpenAI}
+	missingClient := sigma.AuthResolverFunc(func(context.Context, sigma.Model, sigma.Options) (sigma.Credential, error) {
+		return sigma.Credential{}, sigma.ErrCredentialUnavailable
+	})
+
+	credential, err := (sigma.ChainAuthResolver{Client: missingClient}).Resolve(context.Background(), model, sigma.Options{})
+	if err != nil {
+		t.Fatalf("Resolve(environment) returned error: %v", err)
+	}
+	if got, want := credential.Value, "env-secret"; got != want {
+		t.Fatalf("environment credential = %q, want %q", got, want)
+	}
+
+	clearCredentialEnv(t)
+	callback := sigma.AuthResolverFunc(func(context.Context, sigma.Model, sigma.Options) (sigma.Credential, error) {
+		return sigma.Credential{
+			Type:   sigma.CredentialTypeOAuthToken,
+			Value:  "callback-secret",
+			Source: "provider:test",
+		}, nil
+	})
+	credential, err = (sigma.ChainAuthResolver{
+		Client: missingClient,
+		ProviderCallbacks: map[sigma.ProviderID]sigma.AuthResolver{
+			sigma.ProviderOpenAI: callback,
+		},
+	}).Resolve(context.Background(), model, sigma.Options{})
+	if err != nil {
+		t.Fatalf("Resolve(callback) returned error: %v", err)
+	}
+	if got, want := credential.Value, "callback-secret"; got != want {
+		t.Fatalf("callback credential = %q, want %q", got, want)
+	}
+}
+
+func TestCredentialUnavailableErrorIsTypedAndRedacted(t *testing.T) {
+	clearCredentialEnv(t)
+	t.Setenv("OPENAI_API_KEY", "env-secret")
+
+	model := sigma.Model{ID: "claude-test", Provider: sigma.ProviderAnthropic}
+	_, err := (sigma.ChainAuthResolver{}).Resolve(context.Background(), model, sigma.Options{})
+	if err == nil {
+		t.Fatal("Resolve returned nil error")
+	}
+	if !errors.Is(err, sigma.ErrCredentialUnavailable) {
+		t.Fatalf("error %T does not match ErrCredentialUnavailable", err)
+	}
+	if strings.Contains(err.Error(), "env-secret") {
+		t.Fatalf("error leaked secret: %q", err.Error())
+	}
+	if !strings.Contains(err.Error(), "ANTHROPIC_API_KEY") {
+		t.Fatalf("error = %q, want checked source", err.Error())
+	}
+}
+
+func TestClientAuthResolverCanBeReplacedInTests(t *testing.T) {
+	t.Parallel()
+
+	clientResolver := sigma.AuthResolverFunc(func(context.Context, sigma.Model, sigma.Options) (sigma.Credential, error) {
+		return sigma.Credential{
+			Type:   sigma.CredentialTypeAPIKey,
+			Value:  "fake-secret",
+			Source: "test",
+		}, nil
+	})
+
+	client, provider, model := newOptionsTestClient(t, sigma.WithAuthResolver(clientResolver))
+	if _, err := client.Complete(context.Background(), model, sigma.Request{}); err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+
+	credential, err := provider.opts.AuthResolver.Resolve(context.Background(), model, provider.opts)
+	if err != nil {
+		t.Fatalf("Resolve returned error: %v", err)
+	}
+	if got, want := credential.Value, "fake-secret"; got != want {
+		t.Fatalf("credential value = %q, want %q", got, want)
+	}
+}
+
+func clearCredentialEnv(t *testing.T) {
+	t.Helper()
+
+	for _, name := range []string{
+		"OPENAI_API_KEY",
+		"ANTHROPIC_API_KEY",
+		"GOOGLE_API_KEY",
+		"GOOGLE_CLOUD_API_KEY",
+		"MISTRAL_API_KEY",
+		"OPENROUTER_API_KEY",
+		"CUSTOM_OPENAI_KEY",
+	} {
+		t.Setenv(name, "")
+	}
+}

@@ -1,0 +1,28 @@
+{
+  "image_config": {
+    "aspect_ratio": "3:2",
+    "count": 2,
+    "quality": "high"
+  },
+  "messages": [
+    {
+      "content": "A ceramic robot watering herbs",
+      "role": "user"
+    }
+  ],
+  "metadata": {
+    "trace": "abc"
+  },
+  "modalities": [
+    "image",
+    "text"
+  ],
+  "model": "google/gemini-2.5-flash-image",
+  "provider": {
+    "allow_fallbacks": false,
+    "only": [
+      "Google"
+    ]
+  },
+  "stream": false
+}

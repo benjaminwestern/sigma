@@ -1,0 +1,12 @@
+{
+  "inputs": [
+    {
+      "content": "Hello",
+      "object": "entry",
+      "role": "user",
+      "type": "message.input"
+    }
+  ],
+  "model": "mistral-test",
+  "stream": true
+}

@@ -1,0 +1,26 @@
+{
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "hi",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "claude-test",
+  "stream": true,
+  "system": "Cache me when supported.",
+  "tools": [
+    {
+      "description": "Lookup",
+      "input_schema": {
+        "type": "object"
+      },
+      "name": "lookup"
+    }
+  ]
+}

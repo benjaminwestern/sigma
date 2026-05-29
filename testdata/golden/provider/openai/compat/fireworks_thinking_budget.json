@@ -1,0 +1,17 @@
+{
+  "messages": [
+    {
+      "content": "hi",
+      "role": "user"
+    }
+  ],
+  "model": "accounts/fireworks/routers/kimi-k2p6-turbo",
+  "stream": true,
+  "stream_options": {
+    "include_usage": true
+  },
+  "thinking": {
+    "budget_tokens": 4096,
+    "type": "enabled"
+  }
+}

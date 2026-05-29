@@ -1,0 +1,21 @@
+{
+  "contents": [
+    {
+      "parts": [
+        {
+          "inlineData": {
+            "data": "aGk=",
+            "mimeType": "image/png"
+          }
+        },
+        {
+          "fileData": {
+            "fileUri": "https://example.test/cat.jpg",
+            "mimeType": "image/jpeg"
+          }
+        }
+      ],
+      "role": "user"
+    }
+  ]
+}

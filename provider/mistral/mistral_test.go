@@ -1,0 +1,688 @@
+// Copyright (c) 2026 Matthew Winter
+//
+// This source code is licensed under the MIT license found in the LICENSE file
+// in the root directory of this source tree.
+
+package mistral_test
+
+import (
+	"context"
+	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"reflect"
+	"strings"
+	"testing"
+
+	"github.com/wintermi/sigma"
+	"github.com/wintermi/sigma/internal/goldentest"
+	"github.com/wintermi/sigma/provider/mistral"
+)
+
+type capturedRequest struct {
+	Method  string
+	Path    string
+	Query   string
+	Headers http.Header
+	Body    string
+}
+
+func TestRegisterReportsConversationsAPI(t *testing.T) {
+	t.Parallel()
+
+	registry := sigma.NewRegistry()
+	providerID := sigma.ProviderID("mistral-compatible")
+	if err := mistral.Register(registry, providerID); err != nil {
+		t.Fatalf("Register returned error: %v", err)
+	}
+	if err := registry.RegisterModel(mistralTestModel(providerID)); err != nil {
+		t.Fatalf("RegisterModel returned error: %v", err)
+	}
+
+	providers := registry.ListProviders()
+	if got, want := providers[0].TextAPI, sigma.APIMistralConversations; got != want {
+		t.Fatalf("provider API = %q, want %q", got, want)
+	}
+}
+
+func TestCompleteSendsTextPayloadWithHooksHeadersAndOptions(t *testing.T) {
+	t.Parallel()
+
+	requests := make(chan capturedRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captureRequest(t, requests, r)
+		writeMistralSSE(t, w, completedEvent)
+	}))
+	t.Cleanup(server.Close)
+
+	payloadHookCalled := false
+	responseHookCalled := false
+	providerID := sigma.ProviderID("mistral-payload-test")
+	model := mistralTestModel(providerID)
+	client := mistralTestClient(
+		t,
+		providerID,
+		model,
+		server.URL,
+		mistral.WithHeader("X-Provider", "provider"),
+		mistral.WithPayloadHook(func(_ context.Context, _ sigma.Model, _ sigma.Request, _ sigma.Options, payload map[string]any) error {
+			payloadHookCalled = true
+			payload["name"] = "hooked"
+			return nil
+		}),
+		mistral.WithResponseHook(func(_ context.Context, _ sigma.Model, _ sigma.Options, resp *http.Response) error {
+			responseHookCalled = true
+			if got, want := resp.Header.Get("X-Response"), "seen"; got != want {
+				t.Fatalf("response hook header = %q, want %q", got, want)
+			}
+			return nil
+		}),
+	)
+
+	final, err := client.Complete(
+		context.Background(),
+		model,
+		sigma.Request{
+			SystemPrompt: "You are helpful.",
+			Messages:     []sigma.Message{sigma.UserText("Hello")},
+		},
+		sigma.WithAPIKey("request-key"),
+		sigma.WithTemperature(0.2),
+		sigma.WithMaxTokens(123),
+		sigma.WithHeader("X-Custom", "custom"),
+		sigma.WithMetadata(map[string]any{"trace": "abc"}),
+		sigma.WithProviderOptions(providerID, map[string]any{
+			"completion_args":   map[string]any{"top_p": 0.9},
+			"tool_choice":       "auto",
+			"store":             false,
+			"handoff_execution": "client",
+			"extra_body":        map[string]any{"description": "fixture"},
+		}),
+	)
+	if err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+	if !payloadHookCalled {
+		t.Fatal("payload hook was not called")
+	}
+	if !responseHookCalled {
+		t.Fatal("response hook was not called")
+	}
+	if got, want := final.ProviderMetadata["conversation_id"], "conv_complete"; got != want {
+		t.Fatalf("conversation id = %v, want %v", got, want)
+	}
+
+	request := receiveRequest(t, requests)
+	if got, want := request.Method, http.MethodPost; got != want {
+		t.Fatalf("method = %q, want %q", got, want)
+	}
+	if got, want := request.Path, "/conversations"; got != want {
+		t.Fatalf("path = %q, want %q", got, want)
+	}
+	if got, want := request.Query, ""; got != want {
+		t.Fatalf("query = %q, want %q", got, want)
+	}
+	assertHeader(t, request.Headers, "Authorization", "Bearer request-key")
+	assertHeader(t, request.Headers, "X-Client", "client")
+	assertHeader(t, request.Headers, "X-Provider", "provider")
+	assertHeader(t, request.Headers, "X-Custom", "custom")
+	goldentest.AssertJSON(t, request.Body, "provider/mistral/conversations/rich_text_payload.json")
+}
+
+func TestConversationsRejectsProviderDefinedTools(t *testing.T) {
+	t.Parallel()
+
+	requests := make(chan capturedRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captureRequest(t, requests, r)
+		writeMistralSSE(t, w, completedEvent)
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("mistral-provider-tools-test")
+	model := mistralTestModel(providerID)
+	client := mistralTestClient(t, providerID, model, server.URL)
+
+	_, err := client.Complete(context.Background(), model, sigma.Request{
+		Messages: []sigma.Message{sigma.UserText("Search current docs.")},
+		Tools: []sigma.Tool{{
+			Name:                "web_search",
+			ProviderDefinedType: "web_search",
+		}},
+	})
+	if err == nil {
+		t.Fatal("Complete returned nil error")
+	}
+	var sigmaErr *sigma.Error
+	if !errors.As(err, &sigmaErr) {
+		t.Fatalf("error type = %T, want *sigma.Error", err)
+	}
+	if got, want := sigmaErr.Code, sigma.ErrorUnsupported; got != want {
+		t.Fatalf("error code = %q, want %q", got, want)
+	}
+	if !strings.Contains(err.Error(), "provider-defined tool") {
+		t.Fatalf("error = %v, want provider-defined tool message", err)
+	}
+	select {
+	case request := <-requests:
+		t.Fatalf("unexpected provider request: %#v", request)
+	default:
+	}
+}
+
+func TestConversationGoldenPayloads(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		req    sigma.Request
+		golden string
+	}{
+		{
+			name: "text only",
+			req: sigma.Request{
+				Messages: []sigma.Message{sigma.UserText("Hello")},
+			},
+			golden: "provider/mistral/conversations/text_only_payload.json",
+		},
+		{
+			name: "tools",
+			req: sigma.Request{
+				Messages: []sigma.Message{sigma.UserText("Weather?")},
+				Tools: []sigma.Tool{{
+					Name:        "weather",
+					Description: "Get weather",
+					InputSchema: sigma.Schema{
+						"type": "object",
+						"properties": map[string]any{
+							"city": map[string]any{"type": "string"},
+						},
+						"required":             []any{"city"},
+						"additionalProperties": false,
+					},
+				}},
+			},
+			golden: "provider/mistral/conversations/tools_payload.json",
+		},
+		{
+			name: "replayed assistant messages",
+			req: sigma.Request{
+				Messages: []sigma.Message{
+					sigma.UserText("Weather?"),
+					{
+						Role: sigma.RoleAssistant,
+						Content: []sigma.ContentBlock{
+							sigma.Text("Let me check."),
+							sigma.ToolCallBlock("call_weather", "weather", map[string]any{"city": "Melbourne"}),
+						},
+					},
+				},
+			},
+			golden: "provider/mistral/conversations/tool_call_replay_payload.json",
+		},
+		{
+			name: "tool results",
+			req: sigma.Request{
+				Messages: []sigma.Message{
+					sigma.UserText("Weather?"),
+					{
+						Role: sigma.RoleAssistant,
+						Content: []sigma.ContentBlock{
+							sigma.ToolCallBlock("call_weather", "weather", map[string]any{"city": "Melbourne"}),
+						},
+					},
+					{
+						Role:       sigma.RoleTool,
+						ToolCallID: "call_weather",
+						ToolName:   "weather",
+						Content:    []sigma.ContentBlock{sigma.Text("Sunny")},
+					},
+				},
+			},
+			golden: "provider/mistral/conversations/tool_result_payload.json",
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			requests := make(chan capturedRequest, 1)
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				captureRequest(t, requests, r)
+				writeMistralSSE(t, w, completedEvent)
+			}))
+			t.Cleanup(server.Close)
+
+			providerID := sigma.ProviderID("mistral-golden-" + strings.ReplaceAll(tt.name, " ", "-"))
+			model := mistralTestModel(providerID)
+			client := mistralTestClient(t, providerID, model, server.URL)
+
+			if _, err := client.Complete(context.Background(), model, tt.req); err != nil {
+				t.Fatalf("Complete returned error: %v", err)
+			}
+			request := receiveRequest(t, requests)
+			goldentest.AssertJSON(t, request.Body, tt.golden)
+		})
+	}
+}
+
+func TestStreamingMapsTextUsageAndMetadata(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeMistralSSE(t, w, `event: conversation.response.started
+data: {"type":"conversation.response.started","conversation_id":"conv_stream"}
+
+event: message.output.delta
+data: {"type":"message.output.delta","output_index":0,"id":"msg_1","content_index":0,"model":"mistral-test-version","role":"assistant","content":"Hello"}
+
+event: message.output.delta
+data: {"type":"message.output.delta","output_index":0,"id":"msg_1","content_index":0,"content":" world"}
+
+event: conversation.response.done
+data: {"type":"conversation.response.done","usage":{"prompt_tokens":10,"completion_tokens":8,"total_tokens":18}}
+`)
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("mistral-stream-test")
+	model := mistralTestModel(providerID)
+	client := mistralTestClient(t, providerID, model, server.URL)
+
+	stream := client.Stream(context.Background(), model, sigma.Request{Messages: []sigma.Message{sigma.UserText("hi")}})
+	events := collectEvents(t, stream)
+	if err := stream.Err(); err != nil {
+		t.Fatalf("stream error = %v", err)
+	}
+	final, ok := stream.Final()
+	if !ok {
+		t.Fatal("stream final was not recorded")
+	}
+
+	if got, want := eventKinds(events), []sigma.EventKind{
+		sigma.EventKindStart,
+		sigma.EventKindTextStart,
+		sigma.EventKindTextDelta,
+		sigma.EventKindTextDelta,
+		sigma.EventKindTextEnd,
+		sigma.EventKindDone,
+	}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("event kinds = %v, want %v", got, want)
+	}
+	if got, want := final.Content[0].Text, "Hello world"; got != want {
+		t.Fatalf("text = %q, want %q", got, want)
+	}
+	if got, want := final.ProviderMetadata["conversation_id"], "conv_stream"; got != want {
+		t.Fatalf("conversation id = %v, want %v", got, want)
+	}
+	if got, want := final.ProviderMetadata["model"], "mistral-test-version"; got != want {
+		t.Fatalf("provider model = %v, want %v", got, want)
+	}
+	if final.Usage == nil {
+		t.Fatal("final usage was nil")
+	}
+	if got, want := final.Usage.InputTokens, 10; got != want {
+		t.Fatalf("input tokens = %d, want %d", got, want)
+	}
+}
+
+func TestStreamingMapsFunctionCall(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeMistralSSE(t, w, `event: conversation.response.started
+data: {"type":"conversation.response.started","conversation_id":"conv_tool"}
+
+event: function.call.delta
+data: {"type":"function.call.delta","output_index":0,"id":"fc_1","tool_call_id":"call_weather","name":"weather","arguments":"{\"city\""}
+
+event: function.call.delta
+data: {"type":"function.call.delta","output_index":0,"id":"fc_1","tool_call_id":"call_weather","name":"weather","arguments":":\"Melbourne\"}"}
+
+event: conversation.response.done
+data: {"type":"conversation.response.done","usage":{"prompt_tokens":5,"completion_tokens":6,"total_tokens":11}}
+`)
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("mistral-tool-test")
+	model := mistralTestModel(providerID)
+	client := mistralTestClient(t, providerID, model, server.URL)
+
+	stream := client.Stream(context.Background(), model, sigma.Request{Messages: []sigma.Message{sigma.UserText("weather")}})
+	events := collectEvents(t, stream)
+	if err := stream.Err(); err != nil {
+		t.Fatalf("stream error = %v", err)
+	}
+	final, ok := stream.Final()
+	if !ok {
+		t.Fatal("stream final was not recorded")
+	}
+
+	if got, want := eventKinds(events), []sigma.EventKind{
+		sigma.EventKindStart,
+		sigma.EventKindToolCallStart,
+		sigma.EventKindToolCallDelta,
+		sigma.EventKindToolCallDelta,
+		sigma.EventKindToolCallEnd,
+		sigma.EventKindDone,
+	}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("event kinds = %v, want %v", got, want)
+	}
+	delta := events[2].PartialToolCall
+	if delta == nil {
+		t.Fatal("tool-call delta was nil")
+	}
+	if got, want := delta.ID, "call_weather"; got != want {
+		t.Fatalf("partial id = %q, want %q", got, want)
+	}
+	if got, want := final.StopReason, sigma.StopReasonToolCalls; got != want {
+		t.Fatalf("stop reason = %q, want %q", got, want)
+	}
+	if got, want := final.Content[0].ToolCallID, "call_weather"; got != want {
+		t.Fatalf("tool call id = %q, want %q", got, want)
+	}
+	if got, want := final.Content[0].ToolName, "weather"; got != want {
+		t.Fatalf("tool call name = %q, want %q", got, want)
+	}
+	args := final.Content[0].ToolArguments.(map[string]any)
+	if got, want := args["city"], "Melbourne"; got != want {
+		t.Fatalf("tool city = %v, want %v", got, want)
+	}
+}
+
+func TestProviderErrorIsTypedAndRedacted(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("x-mistral-request-id", "req_123")
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = io.WriteString(w, `{"message":"bad key sk-secret123","type":"unauthorized"}`)
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("mistral-error-test")
+	model := mistralTestModel(providerID)
+	client := mistralTestClient(t, providerID, model, server.URL)
+
+	final, err := client.Complete(context.Background(), model, sigma.Request{Messages: []sigma.Message{sigma.UserText("hi")}})
+	if err == nil {
+		t.Fatal("Complete returned nil error")
+	}
+	if !errors.Is(err, sigma.ErrProviderResponse) {
+		t.Fatalf("error = %v, want ErrProviderResponse", err)
+	}
+	if got, want := final.Diagnostics[0].API, sigma.APIMistralConversations; got != want {
+		t.Fatalf("diagnostic API = %q, want %q", got, want)
+	}
+	if strings.Contains(err.Error(), "sk-secret123") {
+		t.Fatalf("error leaked secret: %v", err)
+	}
+}
+
+func TestStreamErrorEventIsTypedAndRedacted(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeMistralSSE(t, w, `event: conversation.response.error
+data: {"type":"conversation.response.error","error":{"message":"bad key sk-secret123","type":"provider"}}
+`)
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("mistral-stream-error-test")
+	model := mistralTestModel(providerID)
+	client := mistralTestClient(t, providerID, model, server.URL)
+
+	final, err := client.Complete(context.Background(), model, sigma.Request{Messages: []sigma.Message{sigma.UserText("hi")}})
+	if err == nil {
+		t.Fatal("Complete returned nil error")
+	}
+	if !errors.Is(err, sigma.ErrProviderResponse) {
+		t.Fatalf("error = %v, want ErrProviderResponse", err)
+	}
+	if got, want := final.StopReason, sigma.StopReasonError; got != want {
+		t.Fatalf("stop reason = %q, want %q", got, want)
+	}
+	if strings.Contains(err.Error(), "sk-secret123") {
+		t.Fatalf("error leaked secret: %v", err)
+	}
+}
+
+func TestRetryResendsRequestAfterRetryableStatus(t *testing.T) {
+	t.Parallel()
+
+	var attempts int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		if attempts == 1 {
+			w.WriteHeader(http.StatusTooManyRequests)
+			_, _ = io.WriteString(w, `{"message":"rate limited"}`)
+			return
+		}
+		writeMistralSSE(t, w, completedEvent)
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("mistral-retry-test")
+	model := mistralTestModel(providerID)
+	client := mistralTestClient(t, providerID, model, server.URL)
+
+	_, err := client.Complete(
+		context.Background(),
+		model,
+		sigma.Request{Messages: []sigma.Message{sigma.UserText("hi")}},
+		sigma.WithMaxRetries(1),
+		sigma.WithMaxRetryDelay(0),
+	)
+	if err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+	if got, want := attempts, 2; got != want {
+		t.Fatalf("attempts = %d, want %d", got, want)
+	}
+}
+
+func TestUnsupportedCapabilitiesFailBeforeNetworkCall(t *testing.T) {
+	t.Parallel()
+
+	var requests int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		w.WriteHeader(http.StatusTeapot)
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("mistral-unsupported-test")
+	model := mistralTestModel(providerID)
+	client := mistralTestClient(t, providerID, model, server.URL)
+
+	_, err := client.Complete(context.Background(), model, sigma.Request{
+		Messages: []sigma.Message{sigma.UserContent(sigma.ImageURL("image/png", "https://example.test/cat.png"))},
+	})
+	if err == nil {
+		t.Fatal("Complete returned nil error")
+	}
+	var sigmaErr *sigma.Error
+	if !errors.As(err, &sigmaErr) || sigmaErr.Code != sigma.ErrorUnsupported {
+		t.Fatalf("error = %v, want ErrorUnsupported", err)
+	}
+	if got, want := requests, 0; got != want {
+		t.Fatalf("requests = %d, want %d", got, want)
+	}
+}
+
+func TestCancellationAbortsStreamingRequest(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, `event: conversation.response.started
+data: {"type":"conversation.response.started","conversation_id":"conv_cancel"}
+
+event: message.output.delta
+data: {"type":"message.output.delta","output_index":0,"content_index":0,"content":"partial text"}
+
+event: function.call.delta
+data: {"type":"function.call.delta","output_index":1,"tool_call_id":"call_partial","name":"lookup","arguments":"{\"city\":\"Melbourne\"}"}
+
+`)
+		w.(http.Flusher).Flush()
+		<-r.Context().Done()
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("mistral-cancel-test")
+	model := mistralTestModel(providerID)
+	client := mistralTestClient(t, providerID, model, server.URL)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	stream := client.Stream(ctx, model, sigma.Request{Messages: []sigma.Message{sigma.UserText("hi")}})
+	for {
+		event := receiveEvent(t, stream)
+		if event.Kind == sigma.EventKindToolCallDelta {
+			break
+		}
+	}
+	cancel()
+
+	final, err := sigma.Collect(context.Background(), stream)
+	if err == nil {
+		t.Fatal("Collect returned nil error")
+	}
+	var sigmaErr *sigma.Error
+	if !errors.As(err, &sigmaErr) || sigmaErr.Code != sigma.ErrorAborted {
+		t.Fatalf("Collect error = %v, want ErrorAborted", err)
+	}
+	if got, want := final.StopReason, sigma.StopReasonAborted; got != want {
+		t.Fatalf("stop reason = %q, want %q", got, want)
+	}
+	if got, want := final.Content[0].Text, "partial text"; got != want {
+		t.Fatalf("partial text = %q, want %q", got, want)
+	}
+	if got, want := final.Content[1].ToolCallID, "call_partial"; got != want {
+		t.Fatalf("partial tool id = %q, want %q", got, want)
+	}
+	args := final.Content[1].ToolArguments.(map[string]any)
+	if got, want := args["city"], "Melbourne"; got != want {
+		t.Fatalf("partial tool city = %v, want %v", got, want)
+	}
+}
+
+func mistralTestClient(t *testing.T, providerID sigma.ProviderID, model sigma.Model, baseURL string, opts ...mistral.ProviderOption) *sigma.Client {
+	t.Helper()
+
+	registry := sigma.NewRegistry()
+	providerOpts := append([]mistral.ProviderOption{mistral.WithBaseURL(baseURL)}, opts...)
+	if err := registry.RegisterTextProvider(providerID, mistral.NewProvider(providerOpts...)); err != nil {
+		t.Fatalf("RegisterTextProvider returned error: %v", err)
+	}
+	if err := registry.RegisterModel(model); err != nil {
+		t.Fatalf("RegisterModel returned error: %v", err)
+	}
+	resolver := sigma.AuthResolverFunc(func(context.Context, sigma.Model, sigma.Options) (sigma.Credential, error) {
+		return sigma.Credential{Type: sigma.CredentialTypeAPIKey, Value: "resolved-key"}, nil
+	})
+	return sigma.NewClient(
+		sigma.WithRegistry(registry),
+		sigma.WithAuthResolver(resolver),
+		sigma.WithDefaultHeader("X-Client", "client"),
+	)
+}
+
+func mistralTestModel(providerID sigma.ProviderID) sigma.Model {
+	return sigma.Model{
+		ID:                   "mistral-test",
+		Provider:             providerID,
+		API:                  sigma.APIMistralConversations,
+		SupportedInputs:      []sigma.ContentBlockType{sigma.ContentBlockText},
+		SupportsTools:        true,
+		InputCostPerMillion:  1,
+		OutputCostPerMillion: 2,
+	}
+}
+
+func captureRequest(t *testing.T, requests chan<- capturedRequest, r *http.Request) {
+	t.Helper()
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		t.Fatalf("ReadAll request body returned error: %v", err)
+	}
+	requests <- capturedRequest{
+		Method:  r.Method,
+		Path:    r.URL.Path,
+		Query:   r.URL.RawQuery,
+		Headers: r.Header.Clone(),
+		Body:    string(body),
+	}
+}
+
+func receiveRequest(t *testing.T, requests <-chan capturedRequest) capturedRequest {
+	t.Helper()
+
+	select {
+	case request := <-requests:
+		return request
+	default:
+		t.Fatal("server did not receive request")
+		return capturedRequest{}
+	}
+}
+
+func writeMistralSSE(t *testing.T, w http.ResponseWriter, body string) {
+	t.Helper()
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("X-Response", "seen")
+	_, _ = io.WriteString(w, body)
+}
+
+func collectEvents(t *testing.T, stream *sigma.Stream) []sigma.Event {
+	t.Helper()
+
+	var events []sigma.Event
+	for event := range stream.Events() {
+		events = append(events, event)
+	}
+	return events
+}
+
+func receiveEvent(t *testing.T, stream *sigma.Stream) sigma.Event {
+	t.Helper()
+
+	event, ok := <-stream.Events()
+	if !ok {
+		t.Fatal("stream closed before event")
+	}
+	return event
+}
+
+func eventKinds(events []sigma.Event) []sigma.EventKind {
+	kinds := make([]sigma.EventKind, len(events))
+	for i, event := range events {
+		kinds[i] = event.Kind
+	}
+	return kinds
+}
+
+func assertHeader(t *testing.T, headers http.Header, key string, want string) {
+	t.Helper()
+
+	if got := headers.Get(key); got != want {
+		t.Fatalf("%s header = %q, want %q", key, got, want)
+	}
+}
+
+const completedEvent = `event: conversation.response.started
+data: {"type":"conversation.response.started","conversation_id":"conv_complete"}
+
+event: message.output.delta
+data: {"type":"message.output.delta","output_index":0,"id":"msg_complete","content_index":0,"model":"mistral-test","role":"assistant","content":"ok"}
+
+event: conversation.response.done
+data: {"type":"conversation.response.done","usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}
+`

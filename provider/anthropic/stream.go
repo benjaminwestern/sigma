@@ -1,0 +1,571 @@
+// Copyright (c) 2026 Matthew Winter
+//
+// This source code is licensed under the MIT license found in the LICENSE file
+// in the root directory of this source tree.
+
+package anthropic
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"sort"
+
+	"github.com/wintermi/sigma"
+	"github.com/wintermi/sigma/internal/sse"
+	"github.com/wintermi/sigma/internal/streamblocks"
+)
+
+type streamEvent struct {
+	Type    string          `json:"type"`
+	Index   int             `json:"index"`
+	Message streamMessage   `json:"message"`
+	Content streamContent   `json:"content_block"`
+	Delta   streamDelta     `json:"delta"`
+	Usage   *streamUsage    `json:"usage"`
+	Error   *streamAPIError `json:"error"`
+}
+
+type streamMessage struct {
+	ID         string          `json:"id"`
+	Type       string          `json:"type"`
+	Role       string          `json:"role"`
+	Model      string          `json:"model"`
+	Content    []streamContent `json:"content"`
+	StopReason string          `json:"stop_reason"`
+	Usage      *streamUsage    `json:"usage"`
+}
+
+type streamContent struct {
+	Type      string `json:"type"`
+	Text      string `json:"text"`
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Input     any    `json:"input"`
+	Thinking  string `json:"thinking"`
+	Signature string `json:"signature"`
+	Data      string `json:"data"`
+}
+
+type streamDelta struct {
+	Type        string `json:"type"`
+	Text        string `json:"text"`
+	Thinking    string `json:"thinking"`
+	Signature   string `json:"signature"`
+	PartialJSON string `json:"partial_json"`
+	StopReason  string `json:"stop_reason"`
+}
+
+type streamUsage struct {
+	InputTokens              int                  `json:"input_tokens"`
+	OutputTokens             int                  `json:"output_tokens"`
+	CacheCreationInputTokens int                  `json:"cache_creation_input_tokens"`
+	CacheReadInputTokens     int                  `json:"cache_read_input_tokens"`
+	CacheCreation            *streamCacheCreation `json:"cache_creation"`
+	ServerToolUse            map[string]int       `json:"server_tool_use"`
+	ServiceTier              string               `json:"service_tier"`
+}
+
+type streamCacheCreation struct {
+	Ephemeral5mInputTokens int `json:"ephemeral_5m_input_tokens"`
+	Ephemeral1hInputTokens int `json:"ephemeral_1h_input_tokens"`
+}
+
+type streamAPIError struct {
+	Type    string `json:"type"`
+	Message string `json:"message"`
+}
+
+type streamParser struct {
+	writer        sigma.StreamWriter
+	model         sigma.Model
+	compat        messagesCompat
+	final         sigma.AssistantMessage
+	started       bool
+	nextBlock     int
+	text          map[int]*streamblocks.Text
+	thinking      map[int]*streamblocks.Thinking
+	toolCalls     map[int]*streamblocks.ToolCall
+	responseID    string
+	providerModel string
+	usage         *sigma.Usage
+	stopReason    sigma.StopReason
+}
+
+func parseMessagesStream(ctx context.Context, r io.Reader, writer sigma.StreamWriter, model sigma.Model, compat messagesCompat) (sigma.AssistantMessage, error) {
+	parser := streamParser{
+		writer:    writer,
+		model:     model,
+		compat:    compat,
+		text:      make(map[int]*streamblocks.Text),
+		thinking:  make(map[int]*streamblocks.Thinking),
+		toolCalls: make(map[int]*streamblocks.ToolCall),
+		final: sigma.AssistantMessage{
+			Model:    model.ID,
+			Provider: model.Provider,
+		},
+	}
+	err := sse.Parse(ctx, r, func(event sse.Event) error {
+		if event.Done {
+			return sse.ErrStop
+		}
+		return parser.handleEvent(ctx, event)
+	})
+	if err != nil {
+		return parser.finalize(ctx), err
+	}
+	return parser.finalize(ctx), nil
+}
+
+func (p *streamParser) handleEvent(ctx context.Context, event sse.Event) error {
+	var parsed streamEvent
+	if err := json.Unmarshal([]byte(event.Data), &parsed); err != nil {
+		return fmt.Errorf("anthropic messages: decode stream event: %w", err)
+	}
+	if parsed.Type == "" {
+		parsed.Type = event.Event
+	}
+	switch parsed.Type {
+	case "message_start":
+		p.captureMessage(parsed.Message)
+		return p.emitStart(ctx)
+	case "content_block_start":
+		if err := p.emitStart(ctx); err != nil {
+			return err
+		}
+		return p.handleContentBlockStart(ctx, parsed.Index, parsed.Content)
+	case "content_block_delta":
+		if err := p.emitStart(ctx); err != nil {
+			return err
+		}
+		return p.handleDelta(ctx, parsed.Index, parsed.Delta)
+	case "content_block_stop":
+		return nil
+	case "message_delta":
+		if parsed.Delta.StopReason != "" {
+			p.stopReason = anthropicStopReason(parsed.Delta.StopReason)
+		}
+		if parsed.Usage != nil {
+			usage := parsed.Usage.sigmaUsage()
+			p.usage = &usage
+		}
+		return nil
+	case "message_stop":
+		return nil
+	case "ping":
+		return nil
+	case "error":
+		if parsed.Error != nil {
+			return streamError(parsed.Error)
+		}
+		return fmt.Errorf("anthropic messages: stream error")
+	default:
+		return nil
+	}
+}
+
+func (p *streamParser) captureMessage(message streamMessage) {
+	if message.ID != "" {
+		p.responseID = message.ID
+	}
+	if message.Model != "" {
+		p.providerModel = message.Model
+	}
+	if message.StopReason != "" {
+		p.stopReason = anthropicStopReason(message.StopReason)
+	}
+	if message.Usage != nil {
+		usage := message.Usage.sigmaUsage()
+		p.usage = &usage
+	}
+	for index, content := range message.Content {
+		p.captureContent(index, content)
+	}
+}
+
+func (p *streamParser) handleContentBlockStart(ctx context.Context, index int, content streamContent) error {
+	p.captureContent(index, content)
+	switch content.Type {
+	case "text": //nolint:goconst
+		return p.emitText(ctx, index, "")
+	case "thinking":
+		return p.emitThinking(ctx, index, "")
+	case "redacted_thinking":
+		_ = p.thinkingState(index)
+		return nil
+	case "tool_use":
+		return p.emitToolCall(ctx, index, "")
+	default:
+		return nil
+	}
+}
+
+func (p *streamParser) captureContent(index int, content streamContent) {
+	switch content.Type {
+	case "text":
+		state := p.textState(index)
+		if content.Text != "" {
+			state.Set(content.Text)
+		}
+	case "thinking":
+		state := p.thinkingState(index)
+		if content.Thinking != "" {
+			state.Set(content.Thinking)
+		}
+		if content.Signature != "" {
+			state.Signature = content.Signature
+		}
+	case "redacted_thinking":
+		state := p.thinkingState(index)
+		state.Redacted = true
+		if content.Data != "" {
+			state.ProviderSignature = content.Data
+		}
+	case "tool_use":
+		state := p.toolCallState(index)
+		state.SetID(content.ID)
+		state.SetName(content.Name)
+		if content.Input != nil {
+			data, err := json.Marshal(content.Input)
+			if err == nil && (state.ArgumentsText() == "" || string(data) != "{}") {
+				state.SetArguments(string(data))
+			}
+		}
+	}
+}
+
+func (p *streamParser) handleDelta(ctx context.Context, index int, delta streamDelta) error {
+	switch delta.Type {
+	case "text_delta":
+		return p.emitText(ctx, index, delta.Text)
+	case "thinking_delta":
+		return p.emitThinking(ctx, index, delta.Thinking)
+	case "signature_delta":
+		state := p.thinkingState(index)
+		state.Signature = delta.Signature
+		return nil
+	case "input_json_delta":
+		return p.emitToolCall(ctx, index, delta.PartialJSON)
+	default:
+		return nil
+	}
+}
+
+func (p *streamParser) emitStart(ctx context.Context) error {
+	if p.started {
+		return nil
+	}
+	p.started = true
+	return p.writer.Emit(ctx, sigma.Event{Kind: sigma.EventKindStart})
+}
+
+func (p *streamParser) emitText(ctx context.Context, index int, delta string) error {
+	state := p.textState(index)
+	if !state.Started {
+		if err := p.writer.Emit(ctx, sigma.Event{
+			Kind:         sigma.EventKindTextStart,
+			ContentIndex: intPtr(state.ContentIndex),
+		}); err != nil {
+			return err
+		}
+		state.Started = true
+	}
+	if delta == "" {
+		return nil
+	}
+	text := state.Append(delta)
+	return p.writer.Emit(ctx, sigma.Event{
+		Kind:         sigma.EventKindTextDelta,
+		ContentIndex: intPtr(state.ContentIndex),
+		DeltaText:    delta,
+		Text:         text,
+	})
+}
+
+func (p *streamParser) emitThinking(ctx context.Context, index int, delta string) error {
+	state := p.thinkingState(index)
+	if !state.Started {
+		if err := p.writer.Emit(ctx, sigma.Event{
+			Kind:         sigma.EventKindThinkingStart,
+			ContentIndex: intPtr(state.ContentIndex),
+		}); err != nil {
+			return err
+		}
+		state.Started = true
+	}
+	if delta == "" {
+		return nil
+	}
+	thinking := state.Append(delta)
+	return p.writer.Emit(ctx, sigma.Event{
+		Kind:         sigma.EventKindThinkingDelta,
+		ContentIndex: intPtr(state.ContentIndex),
+		DeltaText:    delta,
+		Thinking:     thinking,
+	})
+}
+
+func (p *streamParser) emitToolCall(ctx context.Context, index int, argumentsDelta string) error {
+	state := p.toolCallState(index)
+	if argumentsDelta != "" {
+		if state.ArgumentsText() == "{}" {
+			state.SetArguments("")
+		}
+		state.AppendArguments(argumentsDelta)
+	}
+	partial := state.Partial(argumentsDelta, streamblocks.ToolPartialArguments)
+	if !state.Started {
+		if err := p.writer.Emit(ctx, sigma.Event{
+			Kind:            sigma.EventKindToolCallStart,
+			ContentIndex:    intPtr(state.ContentIndex),
+			PartialToolCall: partial,
+		}); err != nil {
+			return err
+		}
+		state.Started = true
+	}
+	return p.writer.Emit(ctx, sigma.Event{
+		Kind:            sigma.EventKindToolCallDelta,
+		ContentIndex:    intPtr(state.ContentIndex),
+		PartialToolCall: partial,
+	})
+}
+
+func (p *streamParser) finalize(ctx context.Context) sigma.AssistantMessage {
+	contentByIndex := make(map[int]sigma.ContentBlock)
+	for _, state := range p.sortedText() {
+		contentByIndex[state.ContentIndex] = sigma.Text(state.String())
+	}
+	for _, state := range p.sortedThinking() {
+		block := sigma.Thinking(state.String(), state.Signature)
+		block.Redacted = state.Redacted
+		block.ProviderSignature = state.ProviderSignature
+		contentByIndex[state.ContentIndex] = block
+	}
+	for _, state := range p.sortedToolCalls() {
+		call := state.ToolCall()
+		contentByIndex[state.ContentIndex] = sigma.ToolCallBlock(call.ID, call.Name, call.Arguments)
+	}
+	p.emitEndEvents(ctx)
+
+	if len(contentByIndex) > 0 {
+		indexes := make([]int, 0, len(contentByIndex))
+		for index := range contentByIndex {
+			indexes = append(indexes, index)
+		}
+		sort.Ints(indexes)
+		p.final.Content = make([]sigma.ContentBlock, 0, len(indexes))
+		for _, index := range indexes {
+			p.final.Content = append(p.final.Content, contentByIndex[index])
+		}
+	}
+	if p.stopReason != "" {
+		p.final.StopReason = p.stopReason
+	} else if len(p.toolCalls) > 0 {
+		p.final.StopReason = sigma.StopReasonToolCalls
+	} else {
+		p.final.StopReason = sigma.StopReasonEndTurn
+	}
+	if p.usage != nil {
+		usage := *p.usage
+		p.final.Usage = &usage
+		cost := sigma.CostForUsage(p.model, usage)
+		p.final.Cost = &cost
+	}
+	p.final.ProviderMetadata = responseMetadata(p.responseID, p.providerModel, p.model.ID)
+	return p.final
+}
+
+func (p *streamParser) emitEndEvents(ctx context.Context) {
+	events := make([]struct {
+		index int
+		emit  func()
+	}, 0, len(p.text)+len(p.thinking)+len(p.toolCalls))
+	for _, state := range p.text {
+		state := state
+		if state.Started && !state.Closed {
+			events = append(events, struct {
+				index int
+				emit  func()
+			}{index: state.ContentIndex, emit: func() {
+				_ = p.writer.Emit(ctx, sigma.Event{
+					Kind:         sigma.EventKindTextEnd,
+					ContentIndex: intPtr(state.ContentIndex),
+					Text:         state.String(),
+				})
+				state.Closed = true
+			}})
+		}
+	}
+	for _, state := range p.thinking {
+		state := state
+		if state.Started && !state.Closed {
+			events = append(events, struct {
+				index int
+				emit  func()
+			}{index: state.ContentIndex, emit: func() {
+				_ = p.writer.Emit(ctx, sigma.Event{
+					Kind:         sigma.EventKindThinkingEnd,
+					ContentIndex: intPtr(state.ContentIndex),
+					Thinking:     state.String(),
+				})
+				state.Closed = true
+			}})
+		}
+	}
+	for _, state := range p.toolCalls {
+		state := state
+		if state.Started && !state.Closed {
+			events = append(events, struct {
+				index int
+				emit  func()
+			}{index: state.ContentIndex, emit: func() {
+				call := state.ToolCall()
+				_ = p.writer.Emit(ctx, sigma.Event{
+					Kind:         sigma.EventKindToolCallEnd,
+					ContentIndex: intPtr(state.ContentIndex),
+					ToolCall:     &call,
+				})
+				state.Closed = true
+			}})
+		}
+	}
+	sort.Slice(events, func(i, j int) bool {
+		return events[i].index < events[j].index
+	})
+	for _, event := range events {
+		event.emit()
+	}
+}
+
+func (p *streamParser) textState(index int) *streamblocks.Text {
+	state := p.text[index]
+	if state == nil {
+		state = &streamblocks.Text{ContentIndex: p.nextContentIndex()}
+		p.text[index] = state
+	}
+	return state
+}
+
+func (p *streamParser) thinkingState(index int) *streamblocks.Thinking {
+	state := p.thinking[index]
+	if state == nil {
+		state = &streamblocks.Thinking{ContentIndex: p.nextContentIndex()}
+		p.thinking[index] = state
+	}
+	return state
+}
+
+func (p *streamParser) toolCallState(index int) *streamblocks.ToolCall {
+	state := p.toolCalls[index]
+	if state == nil {
+		state = &streamblocks.ToolCall{ContentIndex: p.nextContentIndex()}
+		p.toolCalls[index] = state
+	}
+	return state
+}
+
+func (p *streamParser) nextContentIndex() int {
+	index := p.nextBlock
+	p.nextBlock++
+	return index
+}
+
+func (p *streamParser) sortedText() []*streamblocks.Text {
+	states := make([]*streamblocks.Text, 0, len(p.text))
+	for _, state := range p.text {
+		states = append(states, state)
+	}
+	sort.Slice(states, func(i, j int) bool {
+		return states[i].ContentIndex < states[j].ContentIndex
+	})
+	return states
+}
+
+func (p *streamParser) sortedThinking() []*streamblocks.Thinking {
+	states := make([]*streamblocks.Thinking, 0, len(p.thinking))
+	for _, state := range p.thinking {
+		states = append(states, state)
+	}
+	sort.Slice(states, func(i, j int) bool {
+		return states[i].ContentIndex < states[j].ContentIndex
+	})
+	return states
+}
+
+func (p *streamParser) sortedToolCalls() []*streamblocks.ToolCall {
+	states := make([]*streamblocks.ToolCall, 0, len(p.toolCalls))
+	for _, state := range p.toolCalls {
+		states = append(states, state)
+	}
+	sort.Slice(states, func(i, j int) bool {
+		return states[i].ContentIndex < states[j].ContentIndex
+	})
+	return states
+}
+
+func (u streamUsage) sigmaUsage() sigma.Usage {
+	usage := sigma.Usage{
+		InputTokens:           u.InputTokens,
+		OutputTokens:          u.OutputTokens,
+		CacheReadInputTokens:  u.CacheReadInputTokens,
+		CacheWriteInputTokens: u.CacheCreationInputTokens,
+	}
+	if usage.CacheWriteInputTokens == 0 && u.CacheCreation != nil {
+		usage.CacheWriteInputTokens = u.CacheCreation.Ephemeral5mInputTokens + u.CacheCreation.Ephemeral1hInputTokens
+	}
+	return usage
+}
+
+func anthropicStopReason(reason string) sigma.StopReason {
+	switch reason {
+	case "end_turn":
+		return sigma.StopReasonEndTurn
+	case "max_tokens":
+		return sigma.StopReasonMaxTokens
+	case "stop_sequence":
+		return sigma.StopReasonStopSequence
+	case "tool_use":
+		return sigma.StopReasonToolCalls
+	case "refusal":
+		return sigma.StopReasonContentFilter
+	default:
+		return sigma.StopReasonUnknown
+	}
+}
+
+func streamError(err *streamAPIError) error {
+	if err == nil {
+		return fmt.Errorf("anthropic messages: stream error")
+	}
+	if err.Type == "invalid_request_error" && contextOverflowCause([]byte(err.Message)) != nil {
+		return &sigma.Error{
+			Code:    sigma.ErrorContextOverflow,
+			Message: err.Message,
+			Err:     sigma.ErrContextOverflow,
+		}
+	}
+	if err.Type != "" {
+		return fmt.Errorf("anthropic messages: stream error: %s: %s", err.Type, err.Message)
+	}
+	return fmt.Errorf("anthropic messages: stream error: %s", err.Message)
+}
+
+func responseMetadata(responseID string, providerModel string, modelID sigma.ModelID) map[string]any {
+	metadata := make(map[string]any)
+	if responseID != "" {
+		metadata["id"] = responseID
+	}
+	if providerModel != "" && providerModel != string(modelID) {
+		metadata["model"] = providerModel
+	}
+	if len(metadata) == 0 {
+		return nil
+	}
+	return metadata
+}
+
+func intPtr(value int) *int {
+	return &value
+}

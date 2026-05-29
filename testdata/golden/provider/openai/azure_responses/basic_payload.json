@@ -1,0 +1,17 @@
+{
+  "input": [
+    {
+      "content": [
+        {
+          "text": "hi",
+          "type": "input_text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "instructions": "You are helpful.",
+  "max_output_tokens": 25,
+  "model": "request-deployment",
+  "stream": true
+}

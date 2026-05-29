@@ -1,0 +1,649 @@
+// Copyright (c) 2026 Matthew Winter
+//
+// This source code is licensed under the MIT license found in the LICENSE file
+// in the root directory of this source tree.
+
+package google_test
+
+import (
+	"context"
+	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"reflect"
+	"strings"
+	"testing"
+
+	"github.com/wintermi/sigma"
+	"github.com/wintermi/sigma/internal/goldentest"
+	"github.com/wintermi/sigma/provider/google"
+)
+
+type capturedRequest struct {
+	Method  string
+	Path    string
+	Query   string
+	Headers http.Header
+	Body    string
+}
+
+func TestRegisterReportsGenerativeAIAPI(t *testing.T) {
+	t.Parallel()
+
+	registry := sigma.NewRegistry()
+	providerID := sigma.ProviderID("google-compatible")
+	if err := google.Register(registry, providerID); err != nil {
+		t.Fatalf("Register returned error: %v", err)
+	}
+	if err := registry.RegisterModel(googleTestModel(providerID)); err != nil {
+		t.Fatalf("RegisterModel returned error: %v", err)
+	}
+
+	providers := registry.ListProviders()
+	if got, want := providers[0].TextAPI, sigma.APIGoogleGenerativeAI; got != want {
+		t.Fatalf("provider API = %q, want %q", got, want)
+	}
+}
+
+func TestCompleteSendsGoldenPayloadWithImagesToolsThinkingAndHooks(t *testing.T) {
+	t.Parallel()
+
+	requests := make(chan capturedRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captureRequest(t, requests, r)
+		writeGoogleSSE(t, w, completedEvent)
+	}))
+	t.Cleanup(server.Close)
+
+	payloadHookCalled := false
+	responseHookCalled := false
+	providerID := sigma.ProviderID("google-payload-test")
+	model := googleTestModel(providerID)
+	client := googleTestClient(
+		t,
+		providerID,
+		model,
+		server.URL,
+		google.WithHeader("X-Provider", "provider"),
+		google.WithPayloadHook(func(_ context.Context, _ sigma.Model, _ sigma.Request, _ sigma.Options, payload map[string]any) error {
+			payloadHookCalled = true
+			payload["labels"] = map[string]any{"hooked": true}
+			return nil
+		}),
+		google.WithResponseHook(func(_ context.Context, _ sigma.Model, _ sigma.Options, resp *http.Response) error {
+			responseHookCalled = true
+			if got, want := resp.Header.Get("X-Response"), "seen"; got != want {
+				t.Fatalf("response hook header = %q, want %q", got, want)
+			}
+			return nil
+		}),
+	)
+
+	final, err := client.Complete(
+		context.Background(),
+		model,
+		richRequest(),
+		sigma.WithTemperature(0.2),
+		sigma.WithMaxTokens(123),
+		sigma.WithHeader("X-Custom", "custom"),
+		sigma.WithGoogleOptions(sigma.GoogleOptions{ThinkingBudgetTokens: intPtr(2048)}),
+		sigma.WithProviderOptions(providerID, map[string]any{
+			"function_calling_config": map[string]any{"mode": "AUTO"},
+			"response_mime_type":      "text/plain",
+			"extra_body":              map[string]any{"cachedContent": "cachedContents/abc"},
+		}),
+	)
+	if err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+	if !payloadHookCalled {
+		t.Fatal("payload hook was not called")
+	}
+	if !responseHookCalled {
+		t.Fatal("response hook was not called")
+	}
+	if got, want := final.ProviderMetadata["id"], "resp_complete"; got != want {
+		t.Fatalf("response id = %v, want %v", got, want)
+	}
+
+	request := receiveRequest(t, requests)
+	if got, want := request.Method, http.MethodPost; got != want {
+		t.Fatalf("method = %q, want %q", got, want)
+	}
+	if got, want := request.Path, "/models/gemini-test:streamGenerateContent"; got != want {
+		t.Fatalf("path = %q, want %q", got, want)
+	}
+	if got, want := request.Query, "alt=sse"; got != want {
+		t.Fatalf("query = %q, want %q", got, want)
+	}
+	assertHeader(t, request.Headers, "X-Goog-Api-Key", "resolved-key")
+	assertHeader(t, request.Headers, "X-Client", "client")
+	assertHeader(t, request.Headers, "X-Provider", "provider")
+	assertHeader(t, request.Headers, "X-Custom", "custom")
+	goldentest.AssertJSON(t, request.Body, "provider/google/generative/rich_payload.json")
+}
+
+func TestCompleteSendsProviderDefinedToolsPayload(t *testing.T) {
+	t.Parallel()
+
+	requests := make(chan capturedRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captureRequest(t, requests, r)
+		writeGoogleSSE(t, w, completedEvent)
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("google-provider-tools-test")
+	model := googleTestModel(providerID)
+	client := googleTestClient(t, providerID, model, server.URL)
+
+	_, err := client.Complete(context.Background(), model, sigma.Request{
+		Messages: []sigma.Message{sigma.UserText("Search current docs.")},
+		Tools: []sigma.Tool{
+			{
+				Name:        "lookup",
+				Description: "Lookup local records",
+				InputSchema: sigma.Schema{
+					"type":       "object",
+					"properties": map[string]any{"query": map[string]any{"type": "string"}},
+					"required":   []any{"query"},
+				},
+			},
+			google.Tools.GoogleSearch(
+				google.WithWebSearch(),
+				google.WithTimeRange("2026-01-01T00:00:00Z", "2026-01-31T23:59:59Z"),
+			),
+			google.Tools.URLContext(),
+		},
+	})
+	if err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+
+	request := receiveRequest(t, requests)
+	goldentest.AssertJSON(t, request.Body, "provider/google/generative/provider_defined_tools_payload.json")
+}
+
+func TestImagePayloadUsesGooglePartShapes(t *testing.T) {
+	t.Parallel()
+
+	requests := make(chan capturedRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captureRequest(t, requests, r)
+		writeGoogleSSE(t, w, completedEvent)
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("google-image-test")
+	model := googleTestModel(providerID)
+	client := googleTestClient(t, providerID, model, server.URL)
+
+	_, err := client.Complete(context.Background(), model, sigma.Request{
+		Messages: []sigma.Message{sigma.UserContent(
+			sigma.ImageBase64("image/png", "aGk="),
+			sigma.ImageURL("image/jpeg", "https://example.test/cat.jpg"),
+		)},
+	})
+	if err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+
+	request := receiveRequest(t, requests)
+	goldentest.AssertJSON(t, request.Body, "provider/google/generative/image_payload.json")
+}
+
+func TestStreamingMapsTextThinkingUsageAndMetadata(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeGoogleSSE(t, w, `data: {"responseId":"resp_stream","modelVersion":"gemini-test-version","candidates":[{"content":{"role":"model","parts":[{"thought":true,"text":"Checked ","thoughtSignature":"think_sig"}]}}]}
+
+data: {"candidates":[{"content":{"role":"model","parts":[{"text":"Hello"}]}}]}
+
+data: {"candidates":[{"content":{"role":"model","parts":[{"text":" world"}]}}]}
+
+data: {"candidates":[{"content":{"role":"model","parts":[{"text":"","thoughtSignature":"text_sig"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":8,"totalTokenCount":18,"cachedContentTokenCount":3,"thoughtsTokenCount":2}}
+`)
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("google-stream-test")
+	model := googleTestModel(providerID)
+	client := googleTestClient(t, providerID, model, server.URL)
+
+	stream := client.Stream(context.Background(), model, sigma.Request{Messages: []sigma.Message{sigma.UserText("hi")}})
+	events := collectEvents(t, stream)
+	if err := stream.Err(); err != nil {
+		t.Fatalf("stream error = %v", err)
+	}
+	final, ok := stream.Final()
+	if !ok {
+		t.Fatal("stream final was not recorded")
+	}
+
+	if got, want := eventKinds(events), []sigma.EventKind{
+		sigma.EventKindStart,
+		sigma.EventKindThinkingStart,
+		sigma.EventKindThinkingDelta,
+		sigma.EventKindTextStart,
+		sigma.EventKindTextDelta,
+		sigma.EventKindTextDelta,
+		sigma.EventKindThinkingEnd,
+		sigma.EventKindTextEnd,
+		sigma.EventKindDone,
+	}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("event kinds = %v, want %v", got, want)
+	}
+	if got, want := final.Content[0].ThinkingText, "Checked "; got != want {
+		t.Fatalf("thinking = %q, want %q", got, want)
+	}
+	if got, want := final.Content[0].ProviderSignature, "think_sig"; got != want {
+		t.Fatalf("thinking signature = %q, want %q", got, want)
+	}
+	if got, want := final.Content[1].Text, "Hello world"; got != want {
+		t.Fatalf("text = %q, want %q", got, want)
+	}
+	if got, want := final.Content[1].ProviderSignature, "text_sig"; got != want {
+		t.Fatalf("text signature = %q, want %q", got, want)
+	}
+	if got, want := final.ProviderMetadata["modelVersion"], "gemini-test-version"; got != want {
+		t.Fatalf("model version = %v, want %v", got, want)
+	}
+	if final.Usage == nil {
+		t.Fatal("final usage was nil")
+	}
+	if got, want := final.Usage.CacheReadInputTokens, 3; got != want {
+		t.Fatalf("cache read tokens = %d, want %d", got, want)
+	}
+	if got, want := final.Usage.ThinkingTokens, 2; got != want {
+		t.Fatalf("thinking tokens = %d, want %d", got, want)
+	}
+}
+
+func TestCompleteFunctionCallArgumentsEmitToolCallEvents(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeGoogleSSE(t, w, `data: {"responseId":"resp_tool","candidates":[{"content":{"role":"model","parts":[{"functionCall":{"id":"call_weather","name":"weather","args":{"city":"Melbourne"}},"thoughtSignature":"tool_sig"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":5,"candidatesTokenCount":6}}
+`)
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("google-tool-test")
+	model := googleTestModel(providerID)
+	client := googleTestClient(t, providerID, model, server.URL)
+
+	stream := client.Stream(context.Background(), model, sigma.Request{Messages: []sigma.Message{sigma.UserText("weather")}})
+	events := collectEvents(t, stream)
+	if err := stream.Err(); err != nil {
+		t.Fatalf("stream error = %v", err)
+	}
+	final, ok := stream.Final()
+	if !ok {
+		t.Fatal("stream final was not recorded")
+	}
+
+	if got, want := eventKinds(events), []sigma.EventKind{
+		sigma.EventKindStart,
+		sigma.EventKindToolCallStart,
+		sigma.EventKindToolCallDelta,
+		sigma.EventKindToolCallEnd,
+		sigma.EventKindDone,
+	}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("event kinds = %v, want %v", got, want)
+	}
+	delta := events[2].PartialToolCall
+	if delta == nil {
+		t.Fatal("tool-call delta was nil")
+	}
+	if got, want := delta.ArgumentsDelta, `{"city":"Melbourne"}`; got != want {
+		t.Fatalf("arguments delta = %q, want %q", got, want)
+	}
+	if got, want := delta.ProviderSignature, "tool_sig"; got != want {
+		t.Fatalf("partial signature = %q, want %q", got, want)
+	}
+	if got, want := final.StopReason, sigma.StopReasonToolCalls; got != want {
+		t.Fatalf("stop reason = %q, want %q", got, want)
+	}
+	if got, want := final.Content[0].ToolCallID, "call_weather"; got != want {
+		t.Fatalf("tool call id = %q, want %q", got, want)
+	}
+	args := final.Content[0].ToolArguments.(map[string]any)
+	if got, want := args["city"], "Melbourne"; got != want {
+		t.Fatalf("tool city = %v, want %v", got, want)
+	}
+	if got, want := final.Content[0].ProviderSignature, "tool_sig"; got != want {
+		t.Fatalf("tool signature = %q, want %q", got, want)
+	}
+}
+
+func TestThinkingLevelMustBeSupportedByModelMetadata(t *testing.T) {
+	t.Parallel()
+
+	providerID := sigma.ProviderID("google-thinking-test")
+	model := googleTestModel(providerID)
+	model.ThinkingLevelMap = map[sigma.ThinkingLevel]string{sigma.ThinkingLevelHigh: "HIGH"}
+	client := googleTestClient(t, providerID, model, "https://example.invalid")
+
+	_, err := client.Complete(
+		context.Background(),
+		model,
+		sigma.Request{Messages: []sigma.Message{sigma.UserText("hi")}},
+		sigma.WithReasoningLevel(sigma.ThinkingLevelLow),
+	)
+	if err == nil {
+		t.Fatal("Complete returned nil error")
+	}
+	if !errors.Is(err, sigma.ErrInvalidOptions) {
+		t.Fatalf("error = %v, want ErrInvalidOptions", err)
+	}
+}
+
+func TestProviderErrorIsTypedAndRedacted(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("x-goog-request-id", "req_123")
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = io.WriteString(w, `{"error":{"message":"bad key sk-secret123","status":"UNAUTHENTICATED"}}`)
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("google-error-test")
+	model := googleTestModel(providerID)
+	client := googleTestClient(t, providerID, model, server.URL)
+
+	final, err := client.Complete(context.Background(), model, sigma.Request{Messages: []sigma.Message{sigma.UserText("hi")}})
+	if err == nil {
+		t.Fatal("Complete returned nil error")
+	}
+	if !errors.Is(err, sigma.ErrProviderResponse) {
+		t.Fatalf("error = %v, want ErrProviderResponse", err)
+	}
+	if got, want := final.Diagnostics[0].API, sigma.APIGoogleGenerativeAI; got != want {
+		t.Fatalf("diagnostic API = %q, want %q", got, want)
+	}
+	if strings.Contains(err.Error(), "sk-secret123") {
+		t.Fatalf("error leaked secret: %v", err)
+	}
+}
+
+func TestStreamErrorEventEndsWithError(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeGoogleSSE(t, w, `data: {"error":{"code":500,"status":"INTERNAL","message":"overloaded"}}
+`)
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("google-stream-error-test")
+	model := googleTestModel(providerID)
+	client := googleTestClient(t, providerID, model, server.URL)
+
+	final, err := client.Complete(context.Background(), model, sigma.Request{Messages: []sigma.Message{sigma.UserText("hi")}})
+	if err == nil {
+		t.Fatal("Complete returned nil error")
+	}
+	if got, want := final.StopReason, sigma.StopReasonError; got != want {
+		t.Fatalf("stop reason = %q, want %q", got, want)
+	}
+	if !strings.Contains(err.Error(), "INTERNAL") {
+		t.Fatalf("error = %v, want INTERNAL", err)
+	}
+}
+
+func TestRetryResendsRequestAfterRetryableStatus(t *testing.T) {
+	t.Parallel()
+
+	var attempts int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		if attempts == 1 {
+			w.WriteHeader(http.StatusTooManyRequests)
+			_, _ = io.WriteString(w, `{"error":{"message":"rate limited"}}`)
+			return
+		}
+		writeGoogleSSE(t, w, completedEvent)
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("google-retry-test")
+	model := googleTestModel(providerID)
+	client := googleTestClient(t, providerID, model, server.URL)
+
+	_, err := client.Complete(
+		context.Background(),
+		model,
+		sigma.Request{Messages: []sigma.Message{sigma.UserText("hi")}},
+		sigma.WithMaxRetries(1),
+		sigma.WithMaxRetryDelay(0),
+	)
+	if err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+	if got, want := attempts, 2; got != want {
+		t.Fatalf("attempts = %d, want %d", got, want)
+	}
+}
+
+func TestCancellationAbortsStreamingRequest(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, `data: {"responseId":"resp_cancel"}`+"\n\n")
+		_, _ = io.WriteString(w, `data: {"candidates":[{"content":{"role":"model","parts":[{"thought":true,"text":"partial plan"}]}}]}`+"\n\n")
+		_, _ = io.WriteString(w, `data: {"candidates":[{"content":{"role":"model","parts":[{"text":"partial text"}]}}]}`+"\n\n")
+		_, _ = io.WriteString(w, `data: {"candidates":[{"content":{"role":"model","parts":[{"functionCall":{"id":"call_partial","name":"lookup","args":{"city":"Melbourne"}}}]}}]}`+"\n\n")
+		w.(http.Flusher).Flush()
+		<-r.Context().Done()
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("google-cancel-test")
+	model := googleTestModel(providerID)
+	client := googleTestClient(t, providerID, model, server.URL)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	stream := client.Stream(ctx, model, sigma.Request{Messages: []sigma.Message{sigma.UserText("hi")}})
+	for {
+		event := receiveEvent(t, stream)
+		if event.Kind == sigma.EventKindToolCallDelta {
+			break
+		}
+	}
+	cancel()
+
+	final, err := sigma.Collect(context.Background(), stream)
+	if err == nil {
+		t.Fatal("Collect returned nil error")
+	}
+	var sigmaErr *sigma.Error
+	if !errors.As(err, &sigmaErr) || sigmaErr.Code != sigma.ErrorAborted {
+		t.Fatalf("Collect error = %v, want ErrorAborted", err)
+	}
+	if got, want := final.StopReason, sigma.StopReasonAborted; got != want {
+		t.Fatalf("stop reason = %q, want %q", got, want)
+	}
+	if got, want := final.Content[0].ThinkingText, "partial plan"; got != want {
+		t.Fatalf("partial thinking = %q, want %q", got, want)
+	}
+	if got, want := final.Content[1].Text, "partial text"; got != want {
+		t.Fatalf("partial text = %q, want %q", got, want)
+	}
+	if got, want := final.Content[2].ToolCallID, "call_partial"; got != want {
+		t.Fatalf("partial tool id = %q, want %q", got, want)
+	}
+	args := final.Content[2].ToolArguments.(map[string]any)
+	if got, want := args["city"], "Melbourne"; got != want {
+		t.Fatalf("partial tool city = %v, want %v", got, want)
+	}
+}
+
+func googleTestClient(t *testing.T, providerID sigma.ProviderID, model sigma.Model, baseURL string, opts ...google.ProviderOption) *sigma.Client {
+	t.Helper()
+
+	registry := sigma.NewRegistry()
+	providerOpts := append([]google.ProviderOption{google.WithBaseURL(baseURL)}, opts...)
+	if err := registry.RegisterTextProvider(providerID, google.NewProvider(providerOpts...)); err != nil {
+		t.Fatalf("RegisterTextProvider returned error: %v", err)
+	}
+	if err := registry.RegisterModel(model); err != nil {
+		t.Fatalf("RegisterModel returned error: %v", err)
+	}
+	resolver := sigma.AuthResolverFunc(func(context.Context, sigma.Model, sigma.Options) (sigma.Credential, error) {
+		return sigma.Credential{Type: sigma.CredentialTypeAPIKey, Value: "resolved-key"}, nil
+	})
+	return sigma.NewClient(
+		sigma.WithRegistry(registry),
+		sigma.WithAuthResolver(resolver),
+		sigma.WithDefaultHeader("X-Client", "client"),
+	)
+}
+
+func googleTestModel(providerID sigma.ProviderID) sigma.Model {
+	return sigma.Model{
+		ID:       "gemini-test",
+		Provider: providerID,
+		API:      sigma.APIGoogleGenerativeAI,
+		SupportedInputs: []sigma.ContentBlockType{
+			sigma.ContentBlockText,
+			sigma.ContentBlockImage,
+		},
+		SupportsTools:        true,
+		SupportsThinking:     true,
+		ThinkingLevelMap:     map[sigma.ThinkingLevel]string{sigma.ThinkingLevelHigh: "HIGH"},
+		InputCostPerMillion:  1,
+		OutputCostPerMillion: 2,
+	}
+}
+
+func richRequest() sigma.Request {
+	previousCall := sigma.ToolCallBlock("call_prev", "lookup", map[string]any{"query": "weather"})
+	previousCall.ProviderSignature = "tool_previous_sig"
+	previousText := sigma.Text("Earlier answer.")
+	previousText.ProviderSignature = "text_previous_sig"
+	previousThinking := sigma.Thinking("Internal summary.", "")
+	previousThinking.ProviderSignature = "think_previous_sig"
+
+	return sigma.Request{
+		SystemPrompt: "You are helpful.",
+		Messages: []sigma.Message{
+			{
+				Role:    sigma.RoleDeveloper,
+				Content: []sigma.ContentBlock{sigma.Text("Use terse answers.")},
+			},
+			sigma.UserContent(
+				sigma.Text("Describe this"),
+				sigma.ImageURL("image/png", "https://example.test/cat.png"),
+				sigma.ImageBase64("image/png", "aGk="),
+			),
+			{
+				Role: sigma.RoleAssistant,
+				Content: []sigma.ContentBlock{
+					previousText,
+					previousThinking,
+					previousCall,
+				},
+			},
+			{
+				Role:       sigma.RoleTool,
+				ToolCallID: "call_prev",
+				Content:    []sigma.ContentBlock{sigma.Text("Sunny")},
+			},
+		},
+		Tools: []sigma.Tool{{
+			Name:        "weather",
+			Description: "Get weather",
+			InputSchema: sigma.Schema{
+				"type": "object",
+				"properties": map[string]any{
+					"city": map[string]any{"type": "string"},
+				},
+				"required":             []any{"city"},
+				"additionalProperties": false,
+			},
+		}},
+	}
+}
+
+func captureRequest(t *testing.T, requests chan<- capturedRequest, r *http.Request) {
+	t.Helper()
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		t.Fatalf("ReadAll request body returned error: %v", err)
+	}
+	requests <- capturedRequest{
+		Method:  r.Method,
+		Path:    r.URL.Path,
+		Query:   r.URL.RawQuery,
+		Headers: r.Header.Clone(),
+		Body:    string(body),
+	}
+}
+
+func receiveRequest(t *testing.T, requests <-chan capturedRequest) capturedRequest {
+	t.Helper()
+
+	select {
+	case request := <-requests:
+		return request
+	default:
+		t.Fatal("server did not receive request")
+		return capturedRequest{}
+	}
+}
+
+func writeGoogleSSE(t *testing.T, w http.ResponseWriter, body string) {
+	t.Helper()
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("X-Response", "seen")
+	_, _ = io.WriteString(w, body)
+}
+
+func collectEvents(t *testing.T, stream *sigma.Stream) []sigma.Event {
+	t.Helper()
+
+	var events []sigma.Event
+	for event := range stream.Events() {
+		events = append(events, event)
+	}
+	return events
+}
+
+func receiveEvent(t *testing.T, stream *sigma.Stream) sigma.Event {
+	t.Helper()
+
+	event, ok := <-stream.Events()
+	if !ok {
+		t.Fatal("stream closed before event")
+	}
+	return event
+}
+
+func eventKinds(events []sigma.Event) []sigma.EventKind {
+	kinds := make([]sigma.EventKind, len(events))
+	for i, event := range events {
+		kinds[i] = event.Kind
+	}
+	return kinds
+}
+
+func assertHeader(t *testing.T, headers http.Header, key string, want string) {
+	t.Helper()
+
+	if got := headers.Get(key); got != want {
+		t.Fatalf("%s header = %q, want %q", key, got, want)
+	}
+}
+
+func intPtr(value int) *int {
+	return &value
+}
+
+const completedEvent = `data: {"responseId":"resp_complete","candidates":[{"content":{"role":"model","parts":[{"text":"ok"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":1,"candidatesTokenCount":1,"totalTokenCount":2}}
+`

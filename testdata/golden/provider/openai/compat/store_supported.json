@@ -1,0 +1,11 @@
+{
+  "messages": [
+    {
+      "content": "remember",
+      "role": "user"
+    }
+  ],
+  "model": "compat-model",
+  "store": true,
+  "stream": true
+}

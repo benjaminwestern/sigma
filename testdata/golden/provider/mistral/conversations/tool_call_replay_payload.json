@@ -1,0 +1,25 @@
+{
+  "inputs": [
+    {
+      "content": "Weather?",
+      "object": "entry",
+      "role": "user",
+      "type": "message.input"
+    },
+    {
+      "content": "Let me check.",
+      "object": "entry",
+      "role": "assistant",
+      "type": "message.output"
+    },
+    {
+      "arguments": "{\"city\":\"Melbourne\"}",
+      "name": "weather",
+      "object": "entry",
+      "tool_call_id": "call_weather",
+      "type": "function.call"
+    }
+  ],
+  "model": "mistral-test",
+  "stream": true
+}

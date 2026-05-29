@@ -1,0 +1,113 @@
+{
+  "include": [
+    "reasoning.encrypted_content"
+  ],
+  "input": [
+    {
+      "content": [
+        {
+          "text": "Use terse answers.",
+          "type": "input_text"
+        }
+      ],
+      "role": "developer"
+    },
+    {
+      "content": [
+        {
+          "text": "Describe this",
+          "type": "input_text"
+        },
+        {
+          "image_url": "https://example.test/cat.png",
+          "type": "input_image"
+        },
+        {
+          "image_url": "data:image/png;base64,aGk=",
+          "type": "input_image"
+        }
+      ],
+      "role": "user"
+    },
+    {
+      "content": [
+        {
+          "id": "text_prev",
+          "signature": "text_prev_sig",
+          "text": "Earlier answer.",
+          "type": "output_text"
+        }
+      ],
+      "role": "assistant",
+      "type": "message"
+    },
+    {
+      "encrypted_content": "enc_prev",
+      "id": "rs_prev",
+      "signature": "think_prev_sig",
+      "summary": [
+        {
+          "text": "Internal summary.",
+          "type": "summary_text"
+        }
+      ],
+      "type": "reasoning"
+    },
+    {
+      "arguments": "{\"query\":\"weather\"}",
+      "call_id": "call_prev",
+      "id": "fc_prev",
+      "name": "lookup",
+      "type": "function_call"
+    },
+    {
+      "call_id": "call_prev",
+      "output": "Sunny",
+      "type": "function_call_output"
+    }
+  ],
+  "instructions": "You are helpful.",
+  "max_output_tokens": 123,
+  "metadata": {
+    "trace": "abc"
+  },
+  "model": "gpt-test",
+  "parallel_tool_calls": false,
+  "previous_response_id": "resp_prev",
+  "prompt_cache_key": "cache-key",
+  "reasoning": {
+    "effort": "high",
+    "summary": "auto"
+  },
+  "service_tier": "default",
+  "store": false,
+  "stream": true,
+  "temperature": 0.2,
+  "text": {
+    "format": {
+      "type": "text"
+    }
+  },
+  "tool_choice": "auto",
+  "tools": [
+    {
+      "description": "Get weather",
+      "name": "weather",
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "city"
+        ],
+        "type": "object"
+      },
+      "strict": true,
+      "type": "function"
+    }
+  ],
+  "truncation": "auto"
+}

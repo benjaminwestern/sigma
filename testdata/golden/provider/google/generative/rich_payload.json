@@ -1,0 +1,117 @@
+{
+  "cachedContent": "cachedContents/abc",
+  "contents": [
+    {
+      "parts": [
+        {
+          "text": "Use terse answers."
+        }
+      ],
+      "role": "user"
+    },
+    {
+      "parts": [
+        {
+          "text": "Describe this"
+        },
+        {
+          "fileData": {
+            "fileUri": "https://example.test/cat.png",
+            "mimeType": "image/png"
+          }
+        },
+        {
+          "inlineData": {
+            "data": "aGk=",
+            "mimeType": "image/png"
+          }
+        }
+      ],
+      "role": "user"
+    },
+    {
+      "parts": [
+        {
+          "text": "Earlier answer.",
+          "thoughtSignature": "text_previous_sig"
+        },
+        {
+          "text": "Internal summary.",
+          "thought": true,
+          "thoughtSignature": "think_previous_sig"
+        },
+        {
+          "functionCall": {
+            "args": {
+              "query": "weather"
+            },
+            "id": "call_prev",
+            "name": "lookup"
+          },
+          "thoughtSignature": "tool_previous_sig"
+        }
+      ],
+      "role": "model"
+    },
+    {
+      "parts": [
+        {
+          "functionResponse": {
+            "id": "call_prev",
+            "name": "lookup",
+            "response": {
+              "output": "Sunny"
+            }
+          }
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "generationConfig": {
+    "maxOutputTokens": 123,
+    "responseMimeType": "text/plain",
+    "temperature": 0.2,
+    "thinkingConfig": {
+      "includeThoughts": true,
+      "thinkingBudget": 2048
+    }
+  },
+  "labels": {
+    "hooked": true
+  },
+  "systemInstruction": {
+    "parts": [
+      {
+        "text": "You are helpful."
+      }
+    ]
+  },
+  "toolConfig": {
+    "functionCallingConfig": {
+      "mode": "AUTO"
+    }
+  },
+  "tools": [
+    {
+      "functionDeclarations": [
+        {
+          "description": "Get weather",
+          "name": "weather",
+          "parameters": {
+            "additionalProperties": false,
+            "properties": {
+              "city": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "city"
+            ],
+            "type": "object"
+          }
+        }
+      ]
+    }
+  ]
+}

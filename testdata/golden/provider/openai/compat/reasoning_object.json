@@ -1,0 +1,14 @@
+{
+  "messages": [
+    {
+      "content": "think",
+      "role": "user"
+    }
+  ],
+  "model": "compat-model",
+  "reasoning": {
+    "effort": "high",
+    "summary": "auto"
+  },
+  "stream": true
+}

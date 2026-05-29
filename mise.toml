@@ -1,0 +1,78 @@
+[vars]
+PROJECT_NAME = "sigma"
+BUILD_DIR = "{{ cwd }}/build"
+VERSION = "{{ exec(command='git describe --tags --always --dirty 2>/dev/null || echo \"dev\"') }}"
+BUILD = "{{ exec(command='git rev-list --count HEAD 2>/dev/null || echo \"unknown\"') }}"
+COMMIT = "{{ exec(command='git rev-parse --short HEAD 2>/dev/null || echo \"unknown\"') }}"
+COMMIT_LONG = "{{ exec(command='git rev-parse HEAD 2>/dev/null || echo \"unknown\"') }}"
+
+[tools]
+go = "1.26"
+"aqua:golangci/golangci-lint" = { version = "latest" }
+"aqua:securego/gosec" = { version = "latest" }
+"go:golang.org/x/tools/gopls" = { version = "latest" }
+"go:golang.org/x/vuln/cmd/govulncheck" = { version = "latest" }
+"go:github.com/golangci/golangci-lint/v2/cmd/golangci-lint" = { version = "latest" }
+"go:mvdan.cc/gofumpt" = { version = "latest" }
+"go:go.uber.org/nilaway/cmd/nilaway" = { version = "latest" }
+
+[tasks."mise:validate"]
+description = "Validate the local mise task configuration"
+run = "mise tasks ls --local >/dev/null"
+
+[tasks."clean"]
+description = "Clean the build directory"
+run = """
+  rm -rf '{{ cwd }}/bin'
+  mkdir -p '{{ cwd }}/bin'
+  rm -rf '{{ vars.BUILD_DIR }}'
+  mkdir -p '{{ vars.BUILD_DIR }}/data'
+  mkdir -p '{{ vars.BUILD_DIR }}/tmp'
+"""
+
+[tasks."go:build"]
+description = "Build the CLI binary"
+depends = ["clean"]
+run = """
+  CGO_ENABLED=0 go build -ldflags='-w -s -X main.version={{ vars.VERSION }}' -o bin/{{ vars.PROJECT_NAME }} .
+"""
+
+[tasks."go:test"]
+description = "Run the Go test suite"
+run = "go test ./..."
+
+[tasks."go:race"]
+description = "Run the Go test suite with the race detector"
+run = "go test -race ./..."
+
+[tasks."go:vet"]
+description = "Run go vet"
+run = "go vet ./..."
+
+[tasks."go:generate"]
+description = "Regenerate checked-in Go files"
+run = "go generate ./..."
+
+[tasks."go:fmt"]
+description = "Apply Go formatters defined in .golangci.yaml"
+run = "golangci-lint fmt"
+
+[tasks."go:fmt:check"]
+description = "Check Go formatting against .golangci.yaml"
+run = "golangci-lint fmt --diff"
+
+[tasks."go:lint"]
+description = "Run golangci-lint using .golangci.yaml"
+run = "golangci-lint run"
+
+[tasks.ci]
+description = "Run the local CI-equivalent verification suite"
+depends = [
+  "mise:validate",
+  "go:fmt:check",
+  "go:lint",
+  "go:vet",
+  "go:test",
+  "go:race",
+]
+run = "true"

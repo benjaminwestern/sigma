@@ -1,0 +1,716 @@
+{
+  "schemaVersion": 1,
+  "snapshotDate": "2026-05-26",
+  "sources": [
+    {
+      "name": "Amazon Bedrock model catalog",
+      "url": "https://docs.aws.amazon.com/bedrock/latest/userguide/models-supported.html"
+    },
+    {
+      "name": "Anthropic models and pricing",
+      "url": "https://docs.anthropic.com/en/docs/about-claude/models/overview"
+    },
+    {
+      "name": "Fireworks Fire Pass setup",
+      "url": "https://docs.fireworks.ai/firepass"
+    },
+    {
+      "name": "Google Gemini models",
+      "url": "https://ai.google.dev/gemini-api/docs/models"
+    },
+    {
+      "name": "Mistral models",
+      "url": "https://docs.mistral.ai/getting-started/models/models_overview/"
+    },
+    {
+      "name": "OpenAI models and pricing",
+      "url": "https://platform.openai.com/docs/models"
+    },
+    {
+      "name": "OpenCode Zen models",
+      "url": "https://opencode.ai/zen"
+    },
+    {
+      "name": "OpenRouter models",
+      "url": "https://openrouter.ai/models"
+    }
+  ],
+  "textModels": [
+    {
+      "id": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+      "name": "Claude 3.5 Sonnet v2",
+      "provider": "amazon-bedrock",
+      "api": "bedrock-converse-stream",
+      "baseURL": "https://bedrock-runtime.{region}.amazonaws.com",
+      "supportedInputs": ["text", "image"],
+      "supportsTools": true,
+      "supportsThinking": false,
+      "cost": {
+        "inputPerMillion": 3,
+        "outputPerMillion": 15,
+        "currency": "USD"
+      },
+      "contextWindow": 200000,
+      "maxOutputTokens": 8192,
+      "headers": {},
+      "authEnvNames": ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"],
+      "defaultTransport": "sse",
+      "providerMetadata": {
+        "modelFamily": "claude"
+      }
+    },
+    {
+      "id": "claude-3-5-sonnet-20241022",
+      "name": "Claude 3.5 Sonnet",
+      "provider": "anthropic",
+      "api": "anthropic-messages",
+      "baseURL": "https://api.anthropic.com/v1",
+      "supportedInputs": ["text", "image"],
+      "supportsTools": true,
+      "supportsThinking": false,
+      "cost": {
+        "inputPerMillion": 3,
+        "outputPerMillion": 15,
+        "cacheReadInputPerMillion": 0.3,
+        "cacheWriteInputPerMillion": 3.75,
+        "currency": "USD"
+      },
+      "contextWindow": 200000,
+      "maxOutputTokens": 8192,
+      "headers": {
+        "anthropic-version": "2023-06-01"
+      },
+      "authEnvNames": ["ANTHROPIC_API_KEY"],
+      "defaultTransport": "sse",
+      "providerMetadata": {
+        "modelFamily": "claude"
+      }
+    },
+    {
+      "id": "accounts/fireworks/routers/kimi-k2p6-turbo",
+      "name": "Kimi K2.6 Turbo (Firepass)",
+      "provider": "fireworks",
+      "api": "openai-completions",
+      "baseURL": "https://api.fireworks.ai/inference/v1",
+      "supportedInputs": ["text", "image"],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "thinkingLevels": ["low", "medium", "high"],
+      "cost": {
+        "inputPerMillion": 0,
+        "outputPerMillion": 0,
+        "currency": "USD"
+      },
+      "contextWindow": 256000,
+      "maxOutputTokens": 256000,
+      "headers": {},
+      "authEnvNames": ["FIREWORKS_API_KEY"],
+      "defaultTransport": "sse",
+      "openAICompletionsCompat": {
+        "reasoningFormat": "fireworks",
+        "supportsStreamingUsage": "supported",
+        "supportsStrictTools": "supported",
+        "maxTokensField": "max_tokens"
+      },
+      "providerMetadata": {
+        "firepass": true,
+        "modelFamily": "kimi",
+        "router": true
+      }
+    },
+    {
+      "id": "gemini-2.0-flash",
+      "name": "Gemini 2.0 Flash",
+      "provider": "google",
+      "api": "google-generative-ai",
+      "baseURL": "https://generativelanguage.googleapis.com/v1beta",
+      "supportedInputs": ["text", "image"],
+      "supportsTools": true,
+      "supportsThinking": false,
+      "cost": {
+        "inputPerMillion": 0.1,
+        "outputPerMillion": 0.4,
+        "currency": "USD"
+      },
+      "contextWindow": 1048576,
+      "maxOutputTokens": 8192,
+      "headers": {},
+      "authEnvNames": ["GOOGLE_API_KEY", "GOOGLE_CLOUD_API_KEY"],
+      "defaultTransport": "sse",
+      "providerMetadata": {
+        "modelFamily": "gemini"
+      }
+    },
+    {
+      "id": "mistral-large-latest",
+      "name": "Mistral Large",
+      "provider": "mistral",
+      "api": "mistral-conversations",
+      "baseURL": "https://api.mistral.ai/v1",
+      "supportedInputs": ["text"],
+      "supportsTools": true,
+      "supportsThinking": false,
+      "cost": {
+        "inputPerMillion": 2,
+        "outputPerMillion": 6,
+        "currency": "USD"
+      },
+      "contextWindow": 128000,
+      "maxOutputTokens": 8192,
+      "headers": {},
+      "authEnvNames": ["MISTRAL_API_KEY"],
+      "defaultTransport": "sse",
+      "providerMetadata": {
+        "modelFamily": "mistral"
+      }
+    },
+    {
+      "id": "o4-mini",
+      "name": "o4-mini",
+      "provider": "openai",
+      "api": "openai-responses",
+      "baseURL": "https://api.openai.com/v1",
+      "supportedInputs": ["text", "image"],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "thinkingLevelMap": {
+        "low": "low",
+        "medium": "medium",
+        "high": "high"
+      },
+      "cost": {
+        "inputPerMillion": 1.1,
+        "outputPerMillion": 4.4,
+        "cacheReadInputPerMillion": 0.275,
+        "currency": "USD"
+      },
+      "contextWindow": 200000,
+      "maxOutputTokens": 100000,
+      "headers": {},
+      "authEnvNames": ["OPENAI_API_KEY"],
+      "defaultTransport": "sse",
+      "providerMetadata": {
+        "modelFamily": "o-series"
+      }
+    },
+    {
+      "id": "gpt-4o-mini",
+      "name": "GPT-4o mini",
+      "provider": "openai",
+      "api": "openai-responses",
+      "baseURL": "https://api.openai.com/v1",
+      "supportedInputs": ["text", "image"],
+      "supportsTools": true,
+      "supportsThinking": false,
+      "cost": {
+        "inputPerMillion": 0.15,
+        "outputPerMillion": 0.6,
+        "cacheReadInputPerMillion": 0.075,
+        "currency": "USD"
+      },
+      "contextWindow": 128000,
+      "maxOutputTokens": 16384,
+      "headers": {},
+      "authEnvNames": ["OPENAI_API_KEY"],
+      "defaultTransport": "sse",
+      "providerMetadata": {
+        "modelFamily": "gpt"
+      }
+    },
+    {
+      "id": "big-pickle",
+      "name": "Big Pickle",
+      "provider": "opencode",
+      "api": "openai-completions",
+      "baseURL": "https://opencode.ai/zen/v1",
+      "supportedInputs": ["text"],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 0,
+        "outputPerMillion": 0,
+        "currency": "USD"
+      },
+      "contextWindow": 200000,
+      "maxOutputTokens": 32000,
+      "headers": {},
+      "authEnvNames": ["OPENCODE_API_KEY"],
+      "defaultTransport": "sse",
+      "providerMetadata": {
+        "modelFamily": "big-pickle"
+      }
+    },
+    {
+      "id": "glm-5",
+      "name": "GLM-5",
+      "provider": "opencode",
+      "api": "openai-completions",
+      "baseURL": "https://opencode.ai/zen/v1",
+      "supportedInputs": ["text"],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 1,
+        "outputPerMillion": 3.2,
+        "cacheReadInputPerMillion": 0.2,
+        "currency": "USD"
+      },
+      "contextWindow": 204800,
+      "maxOutputTokens": 131072,
+      "headers": {},
+      "authEnvNames": ["OPENCODE_API_KEY"],
+      "defaultTransport": "sse",
+      "providerMetadata": {
+        "modelFamily": "glm"
+      }
+    },
+    {
+      "id": "glm-5.1",
+      "name": "GLM-5.1",
+      "provider": "opencode",
+      "api": "openai-completions",
+      "baseURL": "https://opencode.ai/zen/v1",
+      "supportedInputs": ["text"],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 1.4,
+        "outputPerMillion": 4.4,
+        "cacheReadInputPerMillion": 0.26,
+        "currency": "USD"
+      },
+      "contextWindow": 204800,
+      "maxOutputTokens": 131072,
+      "headers": {},
+      "authEnvNames": ["OPENCODE_API_KEY"],
+      "defaultTransport": "sse",
+      "providerMetadata": {
+        "modelFamily": "glm"
+      }
+    },
+    {
+      "id": "kimi-k2.5",
+      "name": "Kimi K2.5",
+      "provider": "opencode",
+      "api": "openai-completions",
+      "baseURL": "https://opencode.ai/zen/v1",
+      "supportedInputs": ["text", "image"],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 0.6,
+        "outputPerMillion": 3,
+        "cacheReadInputPerMillion": 0.08,
+        "currency": "USD"
+      },
+      "contextWindow": 262144,
+      "maxOutputTokens": 65536,
+      "headers": {},
+      "authEnvNames": ["OPENCODE_API_KEY"],
+      "defaultTransport": "sse",
+      "providerMetadata": {
+        "modelFamily": "kimi"
+      }
+    },
+    {
+      "id": "kimi-k2.6",
+      "name": "Kimi K2.6",
+      "provider": "opencode",
+      "api": "openai-completions",
+      "baseURL": "https://opencode.ai/zen/v1",
+      "supportedInputs": ["text", "image"],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 0.95,
+        "outputPerMillion": 4,
+        "cacheReadInputPerMillion": 0.16,
+        "currency": "USD"
+      },
+      "contextWindow": 262144,
+      "maxOutputTokens": 65536,
+      "headers": {},
+      "authEnvNames": ["OPENCODE_API_KEY"],
+      "defaultTransport": "sse",
+      "providerMetadata": {
+        "modelFamily": "kimi"
+      }
+    },
+    {
+      "id": "minimax-m2.5",
+      "name": "MiniMax M2.5",
+      "provider": "opencode",
+      "api": "openai-completions",
+      "baseURL": "https://opencode.ai/zen/v1",
+      "supportedInputs": ["text"],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 0.3,
+        "outputPerMillion": 1.2,
+        "cacheReadInputPerMillion": 0.06,
+        "currency": "USD"
+      },
+      "contextWindow": 204800,
+      "maxOutputTokens": 131072,
+      "headers": {},
+      "authEnvNames": ["OPENCODE_API_KEY"],
+      "defaultTransport": "sse",
+      "providerMetadata": {
+        "modelFamily": "minimax"
+      }
+    },
+    {
+      "id": "minimax-m2.7",
+      "name": "MiniMax M2.7",
+      "provider": "opencode",
+      "api": "openai-completions",
+      "baseURL": "https://opencode.ai/zen/v1",
+      "supportedInputs": ["text"],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 0.3,
+        "outputPerMillion": 1.2,
+        "cacheReadInputPerMillion": 0.06,
+        "currency": "USD"
+      },
+      "contextWindow": 204800,
+      "maxOutputTokens": 131072,
+      "headers": {},
+      "authEnvNames": ["OPENCODE_API_KEY"],
+      "defaultTransport": "sse",
+      "providerMetadata": {
+        "modelFamily": "minimax"
+      }
+    },
+    {
+      "id": "deepseek-v4-flash",
+      "name": "DeepSeek V4 Flash",
+      "provider": "opencode-go",
+      "api": "openai-completions",
+      "baseURL": "https://opencode.ai/zen/go/v1",
+      "supportedInputs": ["text"],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "thinkingLevelMap": {
+        "high": "high",
+        "xhigh": "max"
+      },
+      "cost": {
+        "inputPerMillion": 0.14,
+        "outputPerMillion": 0.28,
+        "cacheReadInputPerMillion": 0.0028,
+        "currency": "USD"
+      },
+      "contextWindow": 1000000,
+      "maxOutputTokens": 384000,
+      "headers": {},
+      "authEnvNames": ["OPENCODE_API_KEY"],
+      "defaultTransport": "sse",
+      "openAICompletionsCompat": {
+        "reasoningFormat": "deepseek",
+        "requiresReasoningContentOnAssistantMessages": "supported"
+      },
+      "providerMetadata": {
+        "modelFamily": "deepseek"
+      }
+    },
+    {
+      "id": "deepseek-v4-pro",
+      "name": "DeepSeek V4 Pro",
+      "provider": "opencode-go",
+      "api": "openai-completions",
+      "baseURL": "https://opencode.ai/zen/go/v1",
+      "supportedInputs": ["text"],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "thinkingLevelMap": {
+        "high": "high",
+        "xhigh": "max"
+      },
+      "cost": {
+        "inputPerMillion": 1.74,
+        "outputPerMillion": 3.48,
+        "cacheReadInputPerMillion": 0.0145,
+        "currency": "USD"
+      },
+      "contextWindow": 1000000,
+      "maxOutputTokens": 384000,
+      "headers": {},
+      "authEnvNames": ["OPENCODE_API_KEY"],
+      "defaultTransport": "sse",
+      "openAICompletionsCompat": {
+        "reasoningFormat": "deepseek",
+        "requiresReasoningContentOnAssistantMessages": "supported"
+      },
+      "providerMetadata": {
+        "modelFamily": "deepseek"
+      }
+    },
+    {
+      "id": "glm-5",
+      "name": "GLM-5",
+      "provider": "opencode-go",
+      "api": "openai-completions",
+      "baseURL": "https://opencode.ai/zen/go/v1",
+      "supportedInputs": ["text"],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 1,
+        "outputPerMillion": 3.2,
+        "cacheReadInputPerMillion": 0.2,
+        "currency": "USD"
+      },
+      "contextWindow": 202752,
+      "maxOutputTokens": 32768,
+      "headers": {},
+      "authEnvNames": ["OPENCODE_API_KEY"],
+      "defaultTransport": "sse",
+      "providerMetadata": {
+        "modelFamily": "glm"
+      }
+    },
+    {
+      "id": "glm-5.1",
+      "name": "GLM-5.1",
+      "provider": "opencode-go",
+      "api": "openai-completions",
+      "baseURL": "https://opencode.ai/zen/go/v1",
+      "supportedInputs": ["text"],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 1.4,
+        "outputPerMillion": 4.4,
+        "cacheReadInputPerMillion": 0.26,
+        "currency": "USD"
+      },
+      "contextWindow": 202752,
+      "maxOutputTokens": 32768,
+      "headers": {},
+      "authEnvNames": ["OPENCODE_API_KEY"],
+      "defaultTransport": "sse",
+      "providerMetadata": {
+        "modelFamily": "glm"
+      }
+    },
+    {
+      "id": "kimi-k2.5",
+      "name": "Kimi K2.5",
+      "provider": "opencode-go",
+      "api": "openai-completions",
+      "baseURL": "https://opencode.ai/zen/go/v1",
+      "supportedInputs": ["text", "image"],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 0.6,
+        "outputPerMillion": 3,
+        "cacheReadInputPerMillion": 0.1,
+        "currency": "USD"
+      },
+      "contextWindow": 262144,
+      "maxOutputTokens": 65536,
+      "headers": {},
+      "authEnvNames": ["OPENCODE_API_KEY"],
+      "defaultTransport": "sse",
+      "providerMetadata": {
+        "modelFamily": "kimi"
+      }
+    },
+    {
+      "id": "kimi-k2.6",
+      "name": "Kimi K2.6",
+      "provider": "opencode-go",
+      "api": "openai-completions",
+      "baseURL": "https://opencode.ai/zen/go/v1",
+      "supportedInputs": ["text", "image"],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "thinkingLevelMap": {
+        "off": "none"
+      },
+      "cost": {
+        "inputPerMillion": 0.95,
+        "outputPerMillion": 4,
+        "cacheReadInputPerMillion": 0.16,
+        "currency": "USD"
+      },
+      "contextWindow": 262144,
+      "maxOutputTokens": 65536,
+      "headers": {},
+      "authEnvNames": ["OPENCODE_API_KEY"],
+      "defaultTransport": "sse",
+      "openAICompletionsCompat": {
+        "reasoningFormat": "string-thinking"
+      },
+      "providerMetadata": {
+        "modelFamily": "kimi"
+      }
+    },
+    {
+      "id": "mimo-v2.5",
+      "name": "MiMo V2.5",
+      "provider": "opencode-go",
+      "api": "openai-completions",
+      "baseURL": "https://opencode.ai/zen/go/v1",
+      "supportedInputs": ["text", "image"],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 0.14,
+        "outputPerMillion": 0.28,
+        "cacheReadInputPerMillion": 0.0028,
+        "currency": "USD"
+      },
+      "contextWindow": 1000000,
+      "maxOutputTokens": 128000,
+      "headers": {},
+      "authEnvNames": ["OPENCODE_API_KEY"],
+      "defaultTransport": "sse",
+      "providerMetadata": {
+        "modelFamily": "mimo"
+      }
+    },
+    {
+      "id": "mimo-v2.5-pro",
+      "name": "MiMo V2.5 Pro",
+      "provider": "opencode-go",
+      "api": "openai-completions",
+      "baseURL": "https://opencode.ai/zen/go/v1",
+      "supportedInputs": ["text"],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 1.74,
+        "outputPerMillion": 3.48,
+        "cacheReadInputPerMillion": 0.0145,
+        "currency": "USD"
+      },
+      "contextWindow": 1048576,
+      "maxOutputTokens": 128000,
+      "headers": {},
+      "authEnvNames": ["OPENCODE_API_KEY"],
+      "defaultTransport": "sse",
+      "providerMetadata": {
+        "modelFamily": "mimo"
+      }
+    },
+    {
+      "id": "minimax-m2.7",
+      "name": "MiniMax M2.7",
+      "provider": "opencode-go",
+      "api": "openai-completions",
+      "baseURL": "https://opencode.ai/zen/go/v1",
+      "supportedInputs": ["text"],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 0.3,
+        "outputPerMillion": 1.2,
+        "cacheReadInputPerMillion": 0.06,
+        "currency": "USD"
+      },
+      "contextWindow": 204800,
+      "maxOutputTokens": 131072,
+      "headers": {},
+      "authEnvNames": ["OPENCODE_API_KEY"],
+      "defaultTransport": "sse",
+      "providerMetadata": {
+        "modelFamily": "minimax"
+      }
+    },
+    {
+      "id": "openai/gpt-4o-mini",
+      "name": "GPT-4o mini via OpenRouter",
+      "provider": "openrouter",
+      "api": "openai-completions",
+      "baseURL": "https://openrouter.ai/api/v1",
+      "supportedInputs": ["text", "image"],
+      "supportsTools": true,
+      "supportsThinking": false,
+      "cost": {
+        "inputPerMillion": 0.15,
+        "outputPerMillion": 0.6,
+        "currency": "USD"
+      },
+      "contextWindow": 128000,
+      "maxOutputTokens": 16384,
+      "headers": {
+        "HTTP-Referer": "",
+        "X-Title": ""
+      },
+      "authEnvNames": ["OPENROUTER_API_KEY"],
+      "defaultTransport": "sse",
+      "openAICompletionsCompat": {
+        "supportsStreamingUsage": "supported",
+        "supportsStrictTools": "supported",
+        "cacheControlFormat": "message",
+        "maxTokensField": "max_tokens",
+        "openRouterRouting": {
+          "allow_fallbacks": true
+        }
+      },
+      "providerMetadata": {
+        "modelFamily": "gpt",
+        "routedProvider": "openai"
+      }
+    }
+  ],
+  "imageModels": [
+    {
+      "id": "gpt-image-1",
+      "name": "GPT Image 1",
+      "provider": "openai",
+      "api": "openai-images",
+      "baseURL": "https://api.openai.com/v1",
+      "maxWidth": 1536,
+      "maxHeight": 1536,
+      "supportedSizes": ["1024x1024", "1024x1536", "1536x1024"],
+      "supportedFormats": ["image/png", "image/jpeg", "image/webp"],
+      "cost": {
+        "unit": "image",
+        "currency": "USD",
+        "values": {
+          "low": 0.011,
+          "medium": 0.042,
+          "high": 0.167
+        }
+      },
+      "headers": {},
+      "authEnvNames": ["OPENAI_API_KEY"],
+      "providerMetadata": {
+        "modelFamily": "gpt-image"
+      }
+    },
+    {
+      "id": "google/gemini-2.5-flash-image-preview",
+      "name": "Gemini 2.5 Flash Image Preview via OpenRouter",
+      "provider": "openrouter",
+      "api": "openrouter-images",
+      "baseURL": "https://openrouter.ai/api/v1",
+      "maxWidth": 1024,
+      "maxHeight": 1024,
+      "supportedSizes": ["1024x1024"],
+      "supportedFormats": ["image/png"],
+      "cost": {
+        "unit": "image",
+        "currency": "USD",
+        "values": {
+          "image": 0.039
+        }
+      },
+      "headers": {
+        "HTTP-Referer": "",
+        "X-Title": ""
+      },
+      "authEnvNames": ["OPENROUTER_API_KEY"],
+      "providerMetadata": {
+        "modelFamily": "gemini",
+        "routedProvider": "google"
+      }
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "hi",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "model": "compatible-claude-test",
+  "stream": true,
+  "thinking": {
+    "budget_tokens": 8192,
+    "type": "enabled"
+  }
+}

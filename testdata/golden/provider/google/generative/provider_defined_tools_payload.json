@@ -1,0 +1,47 @@
+{
+  "contents": [
+    {
+      "parts": [
+        {
+          "text": "Search current docs."
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "tools": [
+    {
+      "functionDeclarations": [
+        {
+          "description": "Lookup local records",
+          "name": "lookup",
+          "parameters": {
+            "properties": {
+              "query": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          }
+        }
+      ]
+    },
+    {
+      "googleSearch": {
+        "searchTypes": {
+          "webSearch": {}
+        },
+        "timeRangeFilter": {
+          "endTime": "2026-01-31T23:59:59Z",
+          "startTime": "2026-01-01T00:00:00Z"
+        }
+      }
+    },
+    {
+      "urlContext": {}
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "messages": [
+    {
+      "content": "route",
+      "role": "user"
+    }
+  ],
+  "model": "compat-model",
+  "provider": {
+    "allow_fallbacks": false,
+    "data_collection": "deny",
+    "order": [
+      "anthropic",
+      "openai"
+    ],
+    "require_parameters": true
+  },
+  "providerOptions": {
+    "gateway": {
+      "models": [
+        "anthropic/claude-sonnet-4.6"
+      ],
+      "only": [
+        "bedrock",
+        "anthropic"
+      ],
+      "order": [
+        "bedrock",
+        "anthropic"
+      ]
+    }
+  },
+  "stream": true
+}

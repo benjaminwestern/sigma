@@ -1,0 +1,26 @@
+{
+  "completion_args": {
+    "max_tokens": 123,
+    "temperature": 0.2,
+    "tool_choice": "auto",
+    "top_p": 0.9
+  },
+  "description": "fixture",
+  "handoff_execution": "client",
+  "inputs": [
+    {
+      "content": "Hello",
+      "object": "entry",
+      "role": "user",
+      "type": "message.input"
+    }
+  ],
+  "instructions": "You are helpful.",
+  "metadata": {
+    "trace": "abc"
+  },
+  "model": "mistral-test",
+  "name": "hooked",
+  "store": false,
+  "stream": true
+}

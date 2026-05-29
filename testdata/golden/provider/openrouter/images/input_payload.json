@@ -1,0 +1,32 @@
+{
+  "image_config": {
+    "aspect_ratio": "16:9",
+    "image_size": "4K"
+  },
+  "messages": [
+    {
+      "content": [
+        {
+          "text": "Turn this into an ink sketch",
+          "type": "text"
+        },
+        {
+          "text": "Keep the composition intact",
+          "type": "text"
+        },
+        {
+          "image_url": {
+            "url": "data:image/jpeg;base64,aW5wdXQ="
+          },
+          "type": "image_url"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "modalities": [
+    "image"
+  ],
+  "model": "google/gemini-2.5-flash-image",
+  "stream": false
+}

@@ -1,0 +1,146 @@
+{
+  "max_tokens": 123,
+  "messages": [
+    {
+      "content": [
+        {
+          "cache_control": {
+            "ttl": "1h",
+            "type": "ephemeral"
+          },
+          "text": "Use terse answers.",
+          "type": "text"
+        }
+      ],
+      "role": "user"
+    },
+    {
+      "content": [
+        {
+          "text": "Describe this",
+          "type": "text"
+        },
+        {
+          "source": {
+            "type": "url",
+            "url": "https://example.test/cat.png"
+          },
+          "type": "image"
+        },
+        {
+          "cache_control": {
+            "ttl": "1h",
+            "type": "ephemeral"
+          },
+          "source": {
+            "data": "aGk=",
+            "media_type": "image/png",
+            "type": "base64"
+          },
+          "type": "image"
+        }
+      ],
+      "role": "user"
+    },
+    {
+      "content": [
+        {
+          "text": "Earlier answer.",
+          "type": "text"
+        },
+        {
+          "signature": "think_prev_sig",
+          "thinking": "Internal summary.",
+          "type": "thinking"
+        },
+        {
+          "data": "redacted_previous",
+          "type": "redacted_thinking"
+        },
+        {
+          "id": "toolu_prev",
+          "input": {
+            "query": "weather"
+          },
+          "name": "lookup",
+          "type": "tool_use"
+        }
+      ],
+      "role": "assistant"
+    },
+    {
+      "content": [
+        {
+          "cache_control": {
+            "ttl": "1h",
+            "type": "ephemeral"
+          },
+          "content": [
+            {
+              "text": "Sunny",
+              "type": "text"
+            },
+            {
+              "source": {
+                "data": "aGk=",
+                "media_type": "image/png",
+                "type": "base64"
+              },
+              "type": "image"
+            }
+          ],
+          "tool_use_id": "toolu_prev",
+          "type": "tool_result"
+        }
+      ],
+      "role": "user"
+    }
+  ],
+  "metadata": {
+    "trace": "abc"
+  },
+  "model": "claude-test",
+  "stream": true,
+  "system": [
+    {
+      "cache_control": {
+        "ttl": "1h",
+        "type": "ephemeral"
+      },
+      "text": "You are helpful.",
+      "type": "text"
+    }
+  ],
+  "temperature": 0.2,
+  "thinking": {
+    "budget_tokens": 2048,
+    "display": "hidden",
+    "type": "enabled"
+  },
+  "tool_choice": {
+    "type": "auto"
+  },
+  "tools": [
+    {
+      "cache_control": {
+        "ttl": "1h",
+        "type": "ephemeral"
+      },
+      "description": "Get weather",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "city": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "city"
+        ],
+        "type": "object"
+      },
+      "name": "weather"
+    }
+  ],
+  "top_k": 1
+}

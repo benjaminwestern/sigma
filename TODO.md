@@ -1,0 +1,71 @@
+# TODO
+
+Deferred work that is outside the current release scope. None of these are
+`v0.1.0` release gates. Each item should land with the same evidence bar as MVP
+features — deterministic fixtures, golden payloads, or fake clients, plus
+cancellation/error coverage (see the coverage standards in
+[RELEASING.md](RELEASING.md)) — before it can be promoted out of "future" status.
+
+## Image generation
+
+- [ ] Implement a runnable OpenAI Images provider adapter (generated metadata
+      already exists; the adapter does not).
+- [ ] Add fixture/golden-payload coverage for OpenAI image generation requests
+      and responses.
+- [ ] Add cancellation and error-path coverage for the OpenAI Images adapter.
+- [ ] Decide how image generation graduates the text-first MVP boundary and
+      update docs accordingly.
+
+## First-class provider rows
+
+Provider IDs and compatibility routing may already exist, but each needs
+independent provider-quality claims backed by fixtures before becoming a
+first-class row in [provider parity](docs/provider-parity.md).
+
+- [ ] DeepSeek — promote to a first-class provider row with fixtures.
+- [ ] Groq — promote to a first-class provider row with fixtures.
+- [ ] Cerebras — promote to a first-class provider row with fixtures.
+- [ ] xAI — promote to a first-class provider row with fixtures.
+- [ ] Together — promote to a first-class provider row with fixtures.
+- [ ] GitHub Copilot — promote to a first-class provider row with fixtures.
+- [ ] Kimi — promote to a first-class provider row with fixtures.
+- [ ] Xiaomi — promote to a first-class provider row with fixtures.
+- [ ] For each promoted provider, add streaming, tools, usage, error, redaction,
+      and cancellation coverage.
+
+## Authentication and credentials
+
+- [ ] Implement interactive OAuth login (currently MVP uses caller-supplied
+      credentials or injected OAuth token providers only).
+- [ ] Implement token persistence for OAuth-based providers.
+- [ ] Wire interactive login and token persistence into OpenAI Codex Responses,
+      replacing the injected-token-only path.
+- [ ] Add deterministic coverage for login/refresh/persistence flows without
+      live network calls.
+
+## Transports
+
+- [ ] Add WebSocket transport support.
+- [ ] Ensure unsupported transport choices fail locally before any network call,
+      with tests asserting the early failure.
+
+## Usage and cost reporting
+
+- [ ] Add tokenizer-based token estimates as an alternative to provider-reported
+      usage.
+- [ ] Reconcile tokenizer estimates against provider usage data and model
+      metadata so reported cost stays consistent.
+
+## Platform reach
+
+- [ ] Add browser-specific behavior support (the MVP package stays server/CLI
+      friendly).
+- [ ] Confirm build constraints / packaging keep server/CLI builds unaffected.
+
+## Agent runtime and orchestration
+
+- [ ] Add agent runtime integration on top of the provider-neutral primitives
+      `sigma` exposes (orchestration is deferred to later integration cards).
+- [ ] Implement cross-provider context handoff.
+- [ ] Implement capability-loss reporting so unsupported handoff behavior remains
+      explicit rather than silently degrading.

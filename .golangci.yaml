@@ -1,0 +1,116 @@
+version: "2"
+run:
+  tests: false
+linters:
+  enable:
+    - bodyclose
+    - errcheck
+    - exhaustive
+    - goconst
+    - godot
+    - goprintffuncname
+    - gomoddirectives
+    - gosec
+    - misspell
+    - nakedret
+    - nestif
+    - nilerr
+    - noctx
+    - nolintlint
+    - prealloc
+    - revive
+    - rowserrcheck
+    - sqlclosecheck
+    - staticcheck
+    - tparallel
+    - unconvert
+    - unparam
+    - unused
+    - wrapcheck
+    - whitespace
+  settings:
+    errcheck:
+      check-type-assertions: true
+      check-blank: false
+      exclude-functions:
+        - io.Closer.Close
+        - (io.ReadCloser).Close
+        - (io.WriteCloser).Close
+        - (*os.File).Close
+        - (*bufio.Reader).ReadSlice
+    exhaustive:
+      default-signifies-exhaustive: true
+    goconst:
+      min-len: 3
+      min-occurrences: 10
+    gosec:
+      excludes:
+        - G101
+    revive:
+      rules:
+        - name: package-comments
+          disabled: true
+        - name: exported
+          disabled: true
+        - name: unused-parameter
+          disabled: true
+    wrapcheck:
+      extra-ignore-sigs:
+        - .Errorf(
+        - errors.New(
+        - errors.As(
+        - (context.Context).Err
+        - .Emit(
+        - .Resolve(
+        - .Token(
+        - RegisterTextProvider(
+        - RegisterImageProvider(
+        - RegisterModel(
+        - RegisterImageModel(
+        - RegisterDefaultTextProvider
+        - RegisterDefaultImageProvider
+        - DoHTTPWithRetry(
+        - RunTextPayloadDebugHooks(
+        - RunImagePayloadDebugHooks(
+        - Transform(
+        - NewRequestWithContext(
+        - .Do(
+        - ReadAll(
+        - Marshal(
+        - Unmarshal(
+        - Decode(
+        - Getwd(
+        - Open(
+        - ConverseStream
+        - GenerateImages(
+        - .Generate(
+        - ReadSlice(
+        - ValidateModelRef(
+        - GetAzureToken(
+        - /provider/openai.Register(
+        - .Complete(
+        - WriteFile(
+      ignore-package-globs:
+        - encoding/*
+        - github.com/wintermi/sigma/sigmatest
+        - github.com/aws/*
+        - github.com/wintermi/sigma/internal/streamstate
+      ignore-interface-regexps:
+        - \.Err\(
+        - \.Emit\(
+        - \.Resolve\(
+        - \.Token\(
+        - \.Generate\(
+  exclusions:
+    generated: lax
+    presets:
+      - common-false-positives
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+formatters:
+  enable:
+    - gofumpt
+    - goimports
+  exclusions:
+    generated: lax

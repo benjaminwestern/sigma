@@ -1,0 +1,30 @@
+{
+  "messages": [
+    {
+      "content": [
+        {
+          "cache_control": {
+            "type": "ephemeral"
+          },
+          "text": "policy",
+          "type": "text"
+        }
+      ],
+      "role": "system"
+    },
+    {
+      "content": [
+        {
+          "cache_control": {
+            "type": "ephemeral"
+          },
+          "text": "style",
+          "type": "text"
+        }
+      ],
+      "role": "system"
+    }
+  ],
+  "model": "compat-model",
+  "stream": true
+}
