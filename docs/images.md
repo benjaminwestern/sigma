@@ -65,7 +65,7 @@ generated image can be base64 data (`sigma.ImageOutputData`) or a URL
 
 ## OpenRouter Images
 
-The implemented image-generation adapter is `provider/openrouter`, which sends
+An implemented image-generation adapter is `provider/openrouter`, which sends
 non-streaming OpenRouter Chat Completions requests to image-capable models:
 
 ```go
@@ -80,12 +80,21 @@ OpenRouter maps `Size`, `Quality`, and provider-specific routing values to
 OpenRouter request fields where possible. Support depends on the routed upstream
 model.
 
-## OpenAI Images Metadata
+## OpenAI Images
 
-`ImageAPIOpenAIImages` and generated OpenAI image model metadata exist, but the
-OpenAI Images provider adapter is not implemented yet. Do not treat
-`gpt-image-1` metadata as runnable until [provider parity](provider-parity.md)
-marks it implemented.
+`ImageAPIOpenAIImages` uses OpenAI's dedicated image generation endpoint.
+
+```go
+registry := sigma.NewRegistry()
+_ = openai.RegisterImages(registry, sigma.ProviderOpenAI)
+client := sigma.NewClient(sigma.WithRegistry(registry))
+```
+
+Environment: `OPENAI_API_KEY`.
+
+The adapter implements generation-only requests through `ImageRequest.Prompt`.
+Reference-image editing through `ImageRequest.Inputs`, variations, streaming
+partial images, and Responses image-tool generation are deferred.
 
 ## Examples
 

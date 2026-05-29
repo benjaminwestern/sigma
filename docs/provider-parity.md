@@ -36,7 +36,7 @@ Release scope values:
 | Google Vertex AI | `google-vertex` | `preview` | `fixture-tested` | `partial` | `not supported by provider` | `fixture-tested` | `partial` | `not supported by provider` | `partial` | `partial` | `fixture-tested` | `implemented` | `implemented` | `fixture-tested` | `fixture-tested` | `intentionally omitted` |
 | Mistral Conversations | `mistral-conversations` | `preview` | `fixture-tested` | `not supported by provider` | `not supported by provider` | `fixture-tested` | `fixture-tested` | `fixture-tested` | `not yet implemented` | `not supported by provider` | `fixture-tested` | `implemented` | `fixture-tested` | `not supported by provider` | `fixture-tested` | `intentionally omitted` |
 | Amazon Bedrock Converse Stream | `bedrock-converse-stream` | `preview` | `fixture-tested` | `fixture-tested` | `not supported by provider` | `fixture-tested` | `fixture-tested` | `fixture-tested` | `fixture-tested` | `fixture-tested` | `fixture-tested` | `implemented` | `intentionally omitted` | `not supported by provider` | `fixture-tested` | `partial` |
-| OpenAI Images model metadata | `openai-images` | `future` | `not supported by provider` | `not yet implemented` | `not yet implemented` | `not supported by provider` | `not supported by provider` | `not supported by provider` | `not supported by provider` | `not supported by provider` | `not yet implemented` | `implemented` | `not yet implemented` | `not supported by provider` | `not yet implemented` | `intentionally omitted` |
+| OpenAI Images generation | `openai-images` | `preview` | `not supported by provider` | `not yet implemented` | `fixture-tested` | `not supported by provider` | `not supported by provider` | `not supported by provider` | `not supported by provider` | `not supported by provider` | `fixture-tested` | `implemented` | `fixture-tested` | `not supported by provider` | `fixture-tested` | `intentionally omitted` |
 | OpenRouter image generation | `openrouter-images` | `preview` | `not supported by provider` | `fixture-tested` | `fixture-tested` | `not supported by provider` | `not supported by provider` | `not supported by provider` | `not supported by provider` | `partial` | `fixture-tested` | `implemented` | `fixture-tested` | `not supported by provider` | `fixture-tested` | `intentionally omitted` |
 | Other source OpenAI-compatible provider IDs: DeepSeek, Groq, Cerebras, xAI, Together, GitHub Copilot | `openai-completions` | `future` | `partial` | `partial` | `not supported by provider` | `partial` | `partial` | `partial` | `partial` | `partial` | `partial` | `implemented` | `partial` | `intentionally omitted` | `fixture-tested` | `intentionally omitted` |
 
@@ -53,7 +53,7 @@ Release scope values:
 - `google-vertex`: [provider/google/vertex_test.go](../provider/google/vertex_test.go).
 - `mistral-conversations`: [provider/mistral/mistral_test.go](../provider/mistral/mistral_test.go).
 - `bedrock-converse-stream`: [provider/bedrock/bedrock_test.go](../provider/bedrock/bedrock_test.go).
-- `openai-images`: [image_models_generated.go](../image_models_generated.go) records generated model metadata only; no provider adapter exists yet.
+- `openai-images`: [provider/openai/images_test.go](../provider/openai/images_test.go), [image_models_generated.go](../image_models_generated.go).
 - `openrouter-images`: [provider/openrouter/images_test.go](../provider/openrouter/images_test.go).
 - Cost calculation: [usage_test.go](../usage_test.go) and provider stream tests that assert usage mapping.
 - Built-in model metadata registration: [modeldata_test.go](../modeldata_test.go).
@@ -61,7 +61,7 @@ Release scope values:
 ## Known limitations and compatibility risks
 
 - Default registry entries are metadata-only. Importing provider packages and calling their `Register` functions is still required for runtime provider dispatch.
-- `openai-images` has generated model metadata but no image-generation provider implementation. Do not treat `gpt-image-1` as runnable until an adapter lands.
+- `openai-images` currently implements generation-only requests. Reference-image editing, variations, streaming partial images, and Responses image-tool generation are deferred.
 - Azure, Codex, and Vertex adapters are implemented provider packages, but their APIs are not represented by generated default model metadata yet.
 - OpenAI-compatible provider IDs beyond OpenAI/OpenRouter/Fireworks/OpenCode rely
   on shared compatibility detection or explicit `OpenAICompletionsCompat`

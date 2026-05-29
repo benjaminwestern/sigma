@@ -19,14 +19,14 @@ packages and metadata fields. It should be read with
 | Google Vertex AI | `google-vertex` | [provider/google](../provider/google), Vertex provider config | Vertex routing/auth wrapper that reuses the Google payload and stream parser. |
 | Mistral Conversations | `mistral-conversations` | [provider/mistral](../provider/mistral) | Text adapter for Mistral Conversations streaming and tool-call deltas. |
 | Amazon Bedrock Converse Stream | `bedrock-converse-stream` | [provider/bedrock](../provider/bedrock) | AWS-isolated text adapter with stdlib SigV4/EventStream transport, injectable Converse Stream client, and credential detector. |
-| OpenAI Images | `openai-images` | [image_models_generated.go](../image_models_generated.go) | Generated image model metadata only; provider adapter is not implemented yet. |
+| OpenAI Images | `openai-images` | [provider/openai](../provider/openai), [image_models_generated.go](../image_models_generated.go) | Generation-only adapter over OpenAI's dedicated Images API plus generated image model metadata. |
 | OpenRouter image generation through Chat Completions | `openrouter-images` | [provider/openrouter](../provider/openrouter), `ImageModel.ProviderMetadata` | Image-generation adapter over OpenRouter chat-completions image responses. |
 
 ## Provider ID mapping
 
 | Source provider family | Go provider ID | API path today | Notes |
 | --- | --- | --- | --- |
-| OpenAI | `openai` | `openai-responses`, `openai-completions`, `openai-images` | Text Responses and Chat Completions adapters exist; Images metadata exists without a provider adapter. |
+| OpenAI | `openai` | `openai-responses`, `openai-completions`, `openai-images` | Text Responses, Chat Completions, and Images generation adapters exist. |
 | Azure OpenAI | caller-chosen, usually Azure-specific | `azure-openai-responses` | Uses model/request `AzureOpenAIResponses` config rather than generated default metadata. |
 | OpenAI Codex | caller-chosen, usually Codex-specific | `openai-codex-responses` | Requires explicit OAuth token provider; no interactive login. |
 | Anthropic | `anthropic` | `anthropic-messages` | Generated metadata includes a Claude text model. |
@@ -66,7 +66,7 @@ packages and metadata fields. It should be read with
 
 ## Source capabilities not yet represented as complete Go parity
 
-- Image generation through OpenAI Images is metadata-only.
+- OpenAI Images is generation-only; edits, variations, streaming partial images, and Responses image-tool generation are deferred.
 - Automatic provider/model discovery is generated from curated metadata, not live provider listing calls.
 - Interactive OAuth login and credential persistence are intentionally absent.
 - Cross-provider context handoff and capability-loss reporting are future work.

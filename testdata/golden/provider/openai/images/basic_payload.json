@@ -1,0 +1,11 @@
+{
+  "background": "transparent",
+  "model": "gpt-image-test-override",
+  "moderation": "low",
+  "n": 2,
+  "output_compression": 80,
+  "output_format": "webp",
+  "prompt": "A ceramic robot watering herbs",
+  "quality": "high",
+  "size": "1536x1024"
+}
