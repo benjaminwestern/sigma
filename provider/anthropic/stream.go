@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/wintermi/sigma"
 	"github.com/wintermi/sigma/internal/sse"
@@ -78,19 +80,21 @@ type streamAPIError struct {
 }
 
 type streamParser struct {
-	writer        sigma.StreamWriter
-	model         sigma.Model
-	compat        messagesCompat
-	final         sigma.AssistantMessage
-	started       bool
-	nextBlock     int
-	text          map[int]*streamblocks.Text
-	thinking      map[int]*streamblocks.Thinking
-	toolCalls     map[int]*streamblocks.ToolCall
-	responseID    string
-	providerModel string
-	usage         *sigma.Usage
-	stopReason    sigma.StopReason
+	writer         sigma.StreamWriter
+	model          sigma.Model
+	compat         messagesCompat
+	final          sigma.AssistantMessage
+	started        bool
+	nextBlock      int
+	text           map[int]*streamblocks.Text
+	thinking       map[int]*streamblocks.Thinking
+	toolCalls      map[int]*streamblocks.ToolCall
+	responseID     string
+	providerModel  string
+	usage          *sigma.Usage
+	stopReason     sigma.StopReason
+	messageStarted bool
+	messageStopped bool
 }
 
 func parseMessagesStream(ctx context.Context, r io.Reader, writer sigma.StreamWriter, model sigma.Model, compat messagesCompat) (sigma.AssistantMessage, error) {
@@ -115,12 +119,18 @@ func parseMessagesStream(ctx context.Context, r io.Reader, writer sigma.StreamWr
 	if err != nil {
 		return parser.finalize(ctx), err
 	}
+	if parser.messageStarted && !parser.messageStopped {
+		return parser.finalize(ctx), fmt.Errorf("anthropic messages: stream ended before message_stop")
+	}
 	return parser.finalize(ctx), nil
 }
 
 func (p *streamParser) handleEvent(ctx context.Context, event sse.Event) error {
+	if event.Event != "" && !isAnthropicStreamEvent(event.Event) {
+		return nil
+	}
 	var parsed streamEvent
-	if err := json.Unmarshal([]byte(event.Data), &parsed); err != nil {
+	if err := decodeStreamEvent(event.Data, &parsed); err != nil {
 		return fmt.Errorf("anthropic messages: decode stream event: %w", err)
 	}
 	if parsed.Type == "" {
@@ -129,6 +139,7 @@ func (p *streamParser) handleEvent(ctx context.Context, event sse.Event) error {
 	switch parsed.Type {
 	case "message_start":
 		p.captureMessage(parsed.Message)
+		p.messageStarted = true
 		return p.emitStart(ctx)
 	case "content_block_start":
 		if err := p.emitStart(ctx); err != nil {
@@ -151,7 +162,8 @@ func (p *streamParser) handleEvent(ctx context.Context, event sse.Event) error {
 		}
 		return nil
 	case "message_stop":
-		return nil
+		p.messageStopped = true
+		return sse.ErrStop
 	case "ping":
 		return nil
 	case "error":
@@ -206,7 +218,7 @@ func (p *streamParser) handleContentBlockStop(ctx context.Context, index int) er
 		return nil
 	}
 	if state := p.toolCalls[index]; state != nil && state.Started && !state.Closed {
-		call := state.ToolCall()
+		call := anthropicToolCall(state)
 		if err := p.writer.Emit(ctx, sigma.Event{
 			Kind:         sigma.EventKindToolCallEnd,
 			ContentIndex: intPtr(state.ContentIndex),
@@ -380,7 +392,7 @@ func (p *streamParser) finalize(ctx context.Context) sigma.AssistantMessage {
 		contentByIndex[state.ContentIndex] = block
 	}
 	for _, state := range p.sortedToolCalls() {
-		call := state.ToolCall()
+		call := anthropicToolCall(state)
 		contentByIndex[state.ContentIndex] = sigma.ToolCallBlock(call.ID, call.Name, call.Arguments)
 	}
 	p.emitEndEvents(ctx)
@@ -457,7 +469,7 @@ func (p *streamParser) emitEndEvents(ctx context.Context) {
 				index int
 				emit  func()
 			}{index: state.ContentIndex, emit: func() {
-				call := state.ToolCall()
+				call := anthropicToolCall(state)
 				_ = p.writer.Emit(ctx, sigma.Event{
 					Kind:         sigma.EventKindToolCallEnd,
 					ContentIndex: intPtr(state.ContentIndex),
@@ -472,6 +484,134 @@ func (p *streamParser) emitEndEvents(ctx context.Context) {
 	})
 	for _, event := range events {
 		event.emit()
+	}
+}
+
+func isAnthropicStreamEvent(name string) bool {
+	switch name {
+	case "message_start", "content_block_start", "content_block_delta", "content_block_stop", "message_delta", "message_stop", "ping", "error":
+		return true
+	default:
+		return false
+	}
+}
+
+func decodeStreamEvent(data string, event *streamEvent) error {
+	if err := json.Unmarshal([]byte(data), event); err == nil {
+		return nil
+	}
+	repaired := repairJSON(data)
+	if repaired == data {
+		return json.Unmarshal([]byte(data), event)
+	}
+	return json.Unmarshal([]byte(repaired), event)
+}
+
+func anthropicToolCall(state *streamblocks.ToolCall) sigma.ToolCall {
+	if _, ok := state.DecodeArguments(); !ok {
+		if repaired := repairJSON(state.ArgumentsText()); repaired != state.ArgumentsText() && json.Valid([]byte(repaired)) {
+			state.SetArguments(repaired)
+		}
+	}
+	return state.ToolCall()
+}
+
+func repairJSON(input string) string {
+	var repaired strings.Builder
+	repaired.Grow(len(input))
+	inString := false
+
+	for index := 0; index < len(input); {
+		r, size := utf8.DecodeRuneInString(input[index:])
+		if r == utf8.RuneError && size == 1 {
+			repaired.WriteByte(input[index])
+			index++
+			continue
+		}
+
+		if !inString {
+			repaired.WriteString(input[index : index+size])
+			if r == '"' {
+				inString = true
+			}
+			index += size
+			continue
+		}
+
+		switch r {
+		case '"':
+			repaired.WriteByte('"')
+			inString = false
+			index += size
+		case '\\':
+			if index+1 >= len(input) {
+				repaired.WriteString(`\\`)
+				index += size
+				continue
+			}
+			next := input[index+1]
+			if next == 'u' && index+6 <= len(input) && isHex4(input[index+2:index+6]) {
+				repaired.WriteString(input[index : index+6])
+				index += 6
+				continue
+			}
+			if isJSONEscape(next) {
+				repaired.WriteByte('\\')
+				repaired.WriteByte(next)
+				index += 2
+				continue
+			}
+			repaired.WriteString(`\\`)
+			index += size
+		default:
+			if r >= 0 && r <= 0x1f {
+				writeEscapedControl(&repaired, r)
+			} else {
+				repaired.WriteString(input[index : index+size])
+			}
+			index += size
+		}
+	}
+
+	return repaired.String()
+}
+
+func isJSONEscape(value byte) bool {
+	switch value {
+	case '"', '\\', '/', 'b', 'f', 'n', 'r', 't':
+		return true
+	default:
+		return false
+	}
+}
+
+func isHex4(value string) bool {
+	if len(value) != 4 {
+		return false
+	}
+	for _, r := range value {
+		if (r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F') {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func writeEscapedControl(builder *strings.Builder, r rune) {
+	switch r {
+	case '\b':
+		builder.WriteString(`\b`)
+	case '\f':
+		builder.WriteString(`\f`)
+	case '\n':
+		builder.WriteString(`\n`)
+	case '\r':
+		builder.WriteString(`\r`)
+	case '\t':
+		builder.WriteString(`\t`)
+	default:
+		fmt.Fprintf(builder, `\u%04x`, r)
 	}
 }
 

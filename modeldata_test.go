@@ -83,6 +83,34 @@ func TestGeneratedModelMetadataRegistersIntoFreshRegistry(t *testing.T) {
 	if got, want := anthropic.AnthropicMessagesCompat.ThinkingFormat, AnthropicThinkingBudget; got != want {
 		t.Fatalf("Anthropic thinking format = %q, want %q", got, want)
 	}
+	haiku, ok := registry.Model(ProviderAnthropic, "claude-haiku-4-5")
+	if !ok {
+		t.Fatal("fresh registry missing generated Claude Haiku 4.5 model")
+	}
+	if !haiku.SupportsReasoning() || haiku.ContextWindow != 200000 || haiku.MaxOutputTokens != 64000 {
+		t.Fatalf("Claude Haiku 4.5 metadata = %+v, want reasoning with current limits", haiku)
+	}
+	opus, ok := registry.Model(ProviderAnthropic, "claude-opus-4-8")
+	if !ok {
+		t.Fatal("fresh registry missing generated Claude Opus 4.8 model")
+	}
+	if opus.AnthropicMessagesCompat == nil || opus.AnthropicMessagesCompat.ThinkingFormat != AnthropicThinkingAdaptive {
+		t.Fatalf("Claude Opus 4.8 compat = %#v, want adaptive thinking", opus.AnthropicMessagesCompat)
+	}
+	if got, ok := opus.ProviderThinkingLevel(ThinkingLevelXHigh); !ok || got != "xhigh" {
+		t.Fatalf("Claude Opus 4.8 xhigh level = %q, %v; want xhigh, true", got, ok)
+	}
+	if opus.ContextWindow != 1000000 || opus.MaxOutputTokens != 128000 {
+		t.Fatalf("Claude Opus 4.8 limits = context %d max %d, want 1000000/128000", opus.ContextWindow, opus.MaxOutputTokens)
+	}
+	sonnet, ok := registry.Model(ProviderAnthropic, "claude-sonnet-4-6")
+	if !ok {
+		t.Fatal("fresh registry missing generated Claude Sonnet 4.6 model")
+	}
+	if sonnet.AnthropicMessagesCompat == nil || sonnet.AnthropicMessagesCompat.ThinkingFormat != AnthropicThinkingAdaptive {
+		t.Fatalf("Claude Sonnet 4.6 compat = %#v, want adaptive thinking", sonnet.AnthropicMessagesCompat)
+	}
+	assertMetadataStrings(t, opus.ProviderMetadata, MetadataAPIKeyEnvVars, []string{"ANTHROPIC_API_KEY"})
 
 	reasoning, ok := registry.Model(ProviderOpenAI, "o4-mini")
 	if !ok {

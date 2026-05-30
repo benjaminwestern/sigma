@@ -37,6 +37,24 @@ const (
 	MetadataAPIKeyEnvVars = "apiKeyEnvVars"
 )
 
+const (
+	defaultOpenAIAPIKeyEnv      = "OPENAI_API_KEY"
+	defaultAnthropicAPIKeyEnv   = "ANTHROPIC_API_KEY"
+	defaultGoogleAPIKeyEnv      = "GOOGLE_API_KEY"
+	defaultGoogleCloudAPIKeyEnv = "GOOGLE_CLOUD_API_KEY"
+	defaultMistralAPIKeyEnv     = "MISTRAL_API_KEY"
+	defaultOpenRouterAPIKeyEnv  = "OPENROUTER_API_KEY"
+)
+
+var defaultProviderEnvNames = map[ProviderID][]string{
+	ProviderOpenAI:       {defaultOpenAIAPIKeyEnv},
+	ProviderAnthropic:    {defaultAnthropicAPIKeyEnv},
+	ProviderGoogle:       {defaultGoogleAPIKeyEnv, defaultGoogleCloudAPIKeyEnv},
+	ProviderGoogleVertex: {defaultGoogleCloudAPIKeyEnv, defaultGoogleAPIKeyEnv},
+	ProviderMistral:      {defaultMistralAPIKeyEnv},
+	ProviderOpenRouter:   {defaultOpenRouterAPIKeyEnv},
+}
+
 // Credential carries authentication material for a provider.
 type Credential struct {
 	Type     CredentialType
@@ -267,22 +285,11 @@ func appendMetadataEnvNames(sources []string, value any) []string {
 }
 
 func defaultEnvNames(provider ProviderID) []string {
-	switch provider {
-	case ProviderOpenAI:
-		return []string{"OPENAI_API_KEY"}
-	case ProviderAnthropic:
-		return []string{"ANTHROPIC_API_KEY"}
-	case ProviderGoogle:
-		return []string{"GOOGLE_API_KEY", "GOOGLE_CLOUD_API_KEY"}
-	case ProviderGoogleVertex:
-		return []string{"GOOGLE_CLOUD_API_KEY", "GOOGLE_API_KEY"}
-	case ProviderMistral:
-		return []string{"MISTRAL_API_KEY"}
-	case ProviderOpenRouter:
-		return []string{"OPENROUTER_API_KEY"}
-	default:
+	names := defaultProviderEnvNames[provider]
+	if len(names) == 0 {
 		return nil
 	}
+	return append([]string(nil), names...)
 }
 
 func prefixSources(prefix string, sources []string) []string {

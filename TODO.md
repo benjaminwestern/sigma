@@ -119,8 +119,6 @@ evidence bar.
       routing before making either a first-class Anthropic-compatible row.
 - [ ] Add opt-in live Anthropic-compatible provider probes for compatibility
       metadata, separate from the deterministic release gate.
-- [ ] Add malformed Anthropic SSE JSON repair if compatible endpoints keep
-      producing repairable stream chunks in practice.
 
 ## Transports
 

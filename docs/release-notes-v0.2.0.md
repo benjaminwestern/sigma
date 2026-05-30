@@ -80,6 +80,8 @@ first-class parity rows.
 - Generated metadata now seeds representative entries for the remaining exposed
   provider IDs, including current OpenAI-compatible, Anthropic-compatible, and
   Vertex compatibility metadata.
+- Native Anthropic generated metadata now includes current Claude Haiku, Sonnet,
+  and Opus Messages rows, with adaptive-thinking metadata on supported models.
 - `TODO.md` now records the model-registry generation plan for future
   `models.dev` ingestion, provider-catalog overlays, refresh reports, and
   deterministic source review.
@@ -92,6 +94,10 @@ first-class parity rows.
   with `output_config.effort`, omits temperature while thinking is enabled,
   groups consecutive tool results, adds compatible tool-streaming hints, and
   preserves initial stream usage when final usage deltas are partial.
+- Anthropic Messages stream parsing now repairs malformed stream JSON and
+  streamed tool-call arguments when possible, stops cleanly at `message_stop`
+  before proxy trailers, and reports truncated streams while preserving partial
+  content.
 - Runtime behavior follows existing Sigma provider conventions: request-scoped
   auth, retries, timeouts, redacted debug hooks, typed provider errors, and
   cancellation mapping.
@@ -134,7 +140,6 @@ client := sigma.NewClient(sigma.WithRegistry(registry))
   canonicalization.
 - GitHub Copilot and Cloudflare AI Gateway Anthropic Messages routing.
 - Codex WebSocket session caching/fallback.
-- Malformed Anthropic SSE JSON repair.
 - Live OpenAI image tests; standard validation remains deterministic and
   credential-free.
 

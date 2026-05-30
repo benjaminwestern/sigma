@@ -714,6 +714,116 @@ data: {"type":"message_stop"}
 	}
 }
 
+func TestStreamRepairsMalformedJSONAndToolArguments(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeMessagesSSE(t, w, `event: message_start
+data: {"type":"message_start","message":{"id":"msg_repair","type":"message","role":"assistant","model":"claude-test","content":[],"usage":{"input_tokens":5,"output_tokens":0}}}
+
+event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_repair","name":"edit","input":{}}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\"path\":\"A\H\",\"text\":\"col1	col2\"}"}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":0}
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"output_tokens":4}}
+
+event: message_stop
+data: {"type":"message_stop"}
+`)
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("anthropic-repair-test")
+	model := anthropicTestModel(providerID)
+	client := anthropicTestClient(t, providerID, model, server.URL)
+
+	final, err := client.Complete(context.Background(), model, sigma.Request{Messages: []sigma.Message{sigma.UserText("edit")}})
+	if err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+	if got, want := final.StopReason, sigma.StopReasonToolCalls; got != want {
+		t.Fatalf("stop reason = %q, want %q", got, want)
+	}
+	if len(final.Content) != 1 || final.Content[0].Type != sigma.ContentBlockToolCall {
+		t.Fatalf("content = %#v, want one tool call", final.Content)
+	}
+	args := final.Content[0].ToolArguments.(map[string]any)
+	if got, want := args["path"], `A\H`; got != want {
+		t.Fatalf("tool path = %q, want %q", got, want)
+	}
+	if got, want := args["text"], "col1\tcol2"; got != want {
+		t.Fatalf("tool text = %q, want %q", got, want)
+	}
+}
+
+func TestStreamStopsAtMessageStopBeforeTrailingProxyEvents(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeMessagesSSE(t, w, completedEvent+`
+event: done
+data: [DONE]
+
+event: proxy.stats
+data: not json
+`)
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("anthropic-trailing-event-test")
+	model := anthropicTestModel(providerID)
+	client := anthropicTestClient(t, providerID, model, server.URL)
+
+	final, err := client.Complete(context.Background(), model, sigma.Request{Messages: []sigma.Message{sigma.UserText("hi")}})
+	if err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+	if got, want := final.Content[0].Text, "ok"; got != want {
+		t.Fatalf("text = %q, want %q", got, want)
+	}
+}
+
+func TestStreamEOFBeforeMessageStopReturnsPartialFinal(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeMessagesSSE(t, w, `data: {"type":"message_start","message":{"id":"msg_truncated","type":"message","role":"assistant","model":"claude-test","content":[]}}
+
+data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
+
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"partial"}}
+`)
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("anthropic-truncated-test")
+	model := anthropicTestModel(providerID)
+	client := anthropicTestClient(t, providerID, model, server.URL)
+
+	final, err := client.Complete(context.Background(), model, sigma.Request{Messages: []sigma.Message{sigma.UserText("hi")}})
+	if err == nil {
+		t.Fatal("Complete returned nil error")
+	}
+	if !strings.Contains(err.Error(), "stream ended before message_stop") {
+		t.Fatalf("error = %v, want stream ended before message_stop", err)
+	}
+	if got, want := final.StopReason, sigma.StopReasonError; got != want {
+		t.Fatalf("stop reason = %q, want %q", got, want)
+	}
+	if got, want := final.Content[0].Text, "partial"; got != want {
+		t.Fatalf("partial text = %q, want %q", got, want)
+	}
+	if got, want := final.ProviderMetadata["id"], "msg_truncated"; got != want {
+		t.Fatalf("response id = %v, want %v", got, want)
+	}
+}
+
 func TestProviderErrorIsTypedAndRedacted(t *testing.T) {
 	t.Parallel()
 

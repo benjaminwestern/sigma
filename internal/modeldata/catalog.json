@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "snapshotDate": "2026-05-26",
+  "snapshotDate": "2026-05-30",
   "sources": [
     {
       "name": "Amazon Bedrock model catalog",
@@ -87,6 +87,543 @@
         "supportsLongCacheRetention": "supported",
         "supportsCacheControlOnTools": "supported",
         "thinkingFormat": "budget"
+      },
+      "providerMetadata": {
+        "modelFamily": "claude"
+      }
+    },
+    {
+      "id": "claude-haiku-4-5",
+      "name": "Claude Haiku 4.5 (latest)",
+      "provider": "anthropic",
+      "api": "anthropic-messages",
+      "baseURL": "https://api.anthropic.com/v1",
+      "supportedInputs": ["text", "image"],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 1,
+        "outputPerMillion": 5,
+        "cacheReadInputPerMillion": 0.1,
+        "cacheWriteInputPerMillion": 1.25,
+        "currency": "USD"
+      },
+      "contextWindow": 200000,
+      "maxOutputTokens": 64000,
+      "headers": {
+        "anthropic-version": "2023-06-01"
+      },
+      "authEnvNames": ["ANTHROPIC_API_KEY"],
+      "defaultTransport": "sse",
+      "anthropicMessagesCompat": {
+        "supportsEagerToolInputStreaming": "supported",
+        "supportsLongCacheRetention": "supported",
+        "supportsCacheControlOnTools": "supported",
+        "thinkingFormat": "budget"
+      },
+      "providerMetadata": {
+        "modelFamily": "claude"
+      }
+    },
+    {
+      "id": "claude-haiku-4-5-20251001",
+      "name": "Claude Haiku 4.5",
+      "provider": "anthropic",
+      "api": "anthropic-messages",
+      "baseURL": "https://api.anthropic.com/v1",
+      "supportedInputs": ["text", "image"],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 1,
+        "outputPerMillion": 5,
+        "cacheReadInputPerMillion": 0.1,
+        "cacheWriteInputPerMillion": 1.25,
+        "currency": "USD"
+      },
+      "contextWindow": 200000,
+      "maxOutputTokens": 64000,
+      "headers": {
+        "anthropic-version": "2023-06-01"
+      },
+      "authEnvNames": ["ANTHROPIC_API_KEY"],
+      "defaultTransport": "sse",
+      "anthropicMessagesCompat": {
+        "supportsEagerToolInputStreaming": "supported",
+        "supportsLongCacheRetention": "supported",
+        "supportsCacheControlOnTools": "supported",
+        "thinkingFormat": "budget"
+      },
+      "providerMetadata": {
+        "modelFamily": "claude"
+      }
+    },
+    {
+      "id": "claude-opus-4-0",
+      "name": "Claude Opus 4 (latest)",
+      "provider": "anthropic",
+      "api": "anthropic-messages",
+      "baseURL": "https://api.anthropic.com/v1",
+      "supportedInputs": ["text", "image"],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 15,
+        "outputPerMillion": 75,
+        "cacheReadInputPerMillion": 1.5,
+        "cacheWriteInputPerMillion": 18.75,
+        "currency": "USD"
+      },
+      "contextWindow": 200000,
+      "maxOutputTokens": 32000,
+      "headers": {
+        "anthropic-version": "2023-06-01"
+      },
+      "authEnvNames": ["ANTHROPIC_API_KEY"],
+      "defaultTransport": "sse",
+      "anthropicMessagesCompat": {
+        "supportsEagerToolInputStreaming": "supported",
+        "supportsLongCacheRetention": "supported",
+        "supportsCacheControlOnTools": "supported",
+        "thinkingFormat": "budget"
+      },
+      "providerMetadata": {
+        "modelFamily": "claude"
+      }
+    },
+    {
+      "id": "claude-opus-4-1",
+      "name": "Claude Opus 4.1 (latest)",
+      "provider": "anthropic",
+      "api": "anthropic-messages",
+      "baseURL": "https://api.anthropic.com/v1",
+      "supportedInputs": ["text", "image"],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 15,
+        "outputPerMillion": 75,
+        "cacheReadInputPerMillion": 1.5,
+        "cacheWriteInputPerMillion": 18.75,
+        "currency": "USD"
+      },
+      "contextWindow": 200000,
+      "maxOutputTokens": 32000,
+      "headers": {
+        "anthropic-version": "2023-06-01"
+      },
+      "authEnvNames": ["ANTHROPIC_API_KEY"],
+      "defaultTransport": "sse",
+      "anthropicMessagesCompat": {
+        "supportsEagerToolInputStreaming": "supported",
+        "supportsLongCacheRetention": "supported",
+        "supportsCacheControlOnTools": "supported",
+        "thinkingFormat": "budget"
+      },
+      "providerMetadata": {
+        "modelFamily": "claude"
+      }
+    },
+    {
+      "id": "claude-opus-4-1-20250805",
+      "name": "Claude Opus 4.1",
+      "provider": "anthropic",
+      "api": "anthropic-messages",
+      "baseURL": "https://api.anthropic.com/v1",
+      "supportedInputs": ["text", "image"],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 15,
+        "outputPerMillion": 75,
+        "cacheReadInputPerMillion": 1.5,
+        "cacheWriteInputPerMillion": 18.75,
+        "currency": "USD"
+      },
+      "contextWindow": 200000,
+      "maxOutputTokens": 32000,
+      "headers": {
+        "anthropic-version": "2023-06-01"
+      },
+      "authEnvNames": ["ANTHROPIC_API_KEY"],
+      "defaultTransport": "sse",
+      "anthropicMessagesCompat": {
+        "supportsEagerToolInputStreaming": "supported",
+        "supportsLongCacheRetention": "supported",
+        "supportsCacheControlOnTools": "supported",
+        "thinkingFormat": "budget"
+      },
+      "providerMetadata": {
+        "modelFamily": "claude"
+      }
+    },
+    {
+      "id": "claude-opus-4-20250514",
+      "name": "Claude Opus 4",
+      "provider": "anthropic",
+      "api": "anthropic-messages",
+      "baseURL": "https://api.anthropic.com/v1",
+      "supportedInputs": ["text", "image"],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 15,
+        "outputPerMillion": 75,
+        "cacheReadInputPerMillion": 1.5,
+        "cacheWriteInputPerMillion": 18.75,
+        "currency": "USD"
+      },
+      "contextWindow": 200000,
+      "maxOutputTokens": 32000,
+      "headers": {
+        "anthropic-version": "2023-06-01"
+      },
+      "authEnvNames": ["ANTHROPIC_API_KEY"],
+      "defaultTransport": "sse",
+      "anthropicMessagesCompat": {
+        "supportsEagerToolInputStreaming": "supported",
+        "supportsLongCacheRetention": "supported",
+        "supportsCacheControlOnTools": "supported",
+        "thinkingFormat": "budget"
+      },
+      "providerMetadata": {
+        "modelFamily": "claude"
+      }
+    },
+    {
+      "id": "claude-opus-4-5",
+      "name": "Claude Opus 4.5 (latest)",
+      "provider": "anthropic",
+      "api": "anthropic-messages",
+      "baseURL": "https://api.anthropic.com/v1",
+      "supportedInputs": ["text", "image"],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 5,
+        "outputPerMillion": 25,
+        "cacheReadInputPerMillion": 0.5,
+        "cacheWriteInputPerMillion": 6.25,
+        "currency": "USD"
+      },
+      "contextWindow": 200000,
+      "maxOutputTokens": 64000,
+      "headers": {
+        "anthropic-version": "2023-06-01"
+      },
+      "authEnvNames": ["ANTHROPIC_API_KEY"],
+      "defaultTransport": "sse",
+      "anthropicMessagesCompat": {
+        "supportsEagerToolInputStreaming": "supported",
+        "supportsLongCacheRetention": "supported",
+        "supportsCacheControlOnTools": "supported",
+        "thinkingFormat": "budget"
+      },
+      "providerMetadata": {
+        "modelFamily": "claude"
+      }
+    },
+    {
+      "id": "claude-opus-4-5-20251101",
+      "name": "Claude Opus 4.5",
+      "provider": "anthropic",
+      "api": "anthropic-messages",
+      "baseURL": "https://api.anthropic.com/v1",
+      "supportedInputs": ["text", "image"],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 5,
+        "outputPerMillion": 25,
+        "cacheReadInputPerMillion": 0.5,
+        "cacheWriteInputPerMillion": 6.25,
+        "currency": "USD"
+      },
+      "contextWindow": 200000,
+      "maxOutputTokens": 64000,
+      "headers": {
+        "anthropic-version": "2023-06-01"
+      },
+      "authEnvNames": ["ANTHROPIC_API_KEY"],
+      "defaultTransport": "sse",
+      "anthropicMessagesCompat": {
+        "supportsEagerToolInputStreaming": "supported",
+        "supportsLongCacheRetention": "supported",
+        "supportsCacheControlOnTools": "supported",
+        "thinkingFormat": "budget"
+      },
+      "providerMetadata": {
+        "modelFamily": "claude"
+      }
+    },
+    {
+      "id": "claude-opus-4-6",
+      "name": "Claude Opus 4.6",
+      "provider": "anthropic",
+      "api": "anthropic-messages",
+      "baseURL": "https://api.anthropic.com/v1",
+      "supportedInputs": ["text", "image"],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "thinkingLevelMap": {
+        "xhigh": "max"
+      },
+      "cost": {
+        "inputPerMillion": 5,
+        "outputPerMillion": 25,
+        "cacheReadInputPerMillion": 0.5,
+        "cacheWriteInputPerMillion": 6.25,
+        "currency": "USD"
+      },
+      "contextWindow": 1000000,
+      "maxOutputTokens": 128000,
+      "headers": {
+        "anthropic-version": "2023-06-01"
+      },
+      "authEnvNames": ["ANTHROPIC_API_KEY"],
+      "defaultTransport": "sse",
+      "anthropicMessagesCompat": {
+        "supportsEagerToolInputStreaming": "supported",
+        "supportsLongCacheRetention": "supported",
+        "supportsCacheControlOnTools": "supported",
+        "thinkingFormat": "adaptive"
+      },
+      "providerMetadata": {
+        "modelFamily": "claude"
+      }
+    },
+    {
+      "id": "claude-opus-4-7",
+      "name": "Claude Opus 4.7",
+      "provider": "anthropic",
+      "api": "anthropic-messages",
+      "baseURL": "https://api.anthropic.com/v1",
+      "supportedInputs": ["text", "image"],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "thinkingLevelMap": {
+        "xhigh": "xhigh"
+      },
+      "cost": {
+        "inputPerMillion": 5,
+        "outputPerMillion": 25,
+        "cacheReadInputPerMillion": 0.5,
+        "cacheWriteInputPerMillion": 6.25,
+        "currency": "USD"
+      },
+      "contextWindow": 1000000,
+      "maxOutputTokens": 128000,
+      "headers": {
+        "anthropic-version": "2023-06-01"
+      },
+      "authEnvNames": ["ANTHROPIC_API_KEY"],
+      "defaultTransport": "sse",
+      "anthropicMessagesCompat": {
+        "supportsEagerToolInputStreaming": "supported",
+        "supportsLongCacheRetention": "supported",
+        "supportsCacheControlOnTools": "supported",
+        "thinkingFormat": "adaptive"
+      },
+      "providerMetadata": {
+        "modelFamily": "claude"
+      }
+    },
+    {
+      "id": "claude-opus-4-8",
+      "name": "Claude Opus 4.8",
+      "provider": "anthropic",
+      "api": "anthropic-messages",
+      "baseURL": "https://api.anthropic.com/v1",
+      "supportedInputs": ["text", "image"],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "thinkingLevelMap": {
+        "xhigh": "xhigh"
+      },
+      "cost": {
+        "inputPerMillion": 5,
+        "outputPerMillion": 25,
+        "cacheReadInputPerMillion": 0.5,
+        "cacheWriteInputPerMillion": 6.25,
+        "currency": "USD"
+      },
+      "contextWindow": 1000000,
+      "maxOutputTokens": 128000,
+      "headers": {
+        "anthropic-version": "2023-06-01"
+      },
+      "authEnvNames": ["ANTHROPIC_API_KEY"],
+      "defaultTransport": "sse",
+      "anthropicMessagesCompat": {
+        "supportsEagerToolInputStreaming": "supported",
+        "supportsLongCacheRetention": "supported",
+        "supportsCacheControlOnTools": "supported",
+        "thinkingFormat": "adaptive"
+      },
+      "providerMetadata": {
+        "modelFamily": "claude"
+      }
+    },
+    {
+      "id": "claude-sonnet-4-0",
+      "name": "Claude Sonnet 4 (latest)",
+      "provider": "anthropic",
+      "api": "anthropic-messages",
+      "baseURL": "https://api.anthropic.com/v1",
+      "supportedInputs": ["text", "image"],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 3,
+        "outputPerMillion": 15,
+        "cacheReadInputPerMillion": 0.3,
+        "cacheWriteInputPerMillion": 3.75,
+        "currency": "USD"
+      },
+      "contextWindow": 200000,
+      "maxOutputTokens": 64000,
+      "headers": {
+        "anthropic-version": "2023-06-01"
+      },
+      "authEnvNames": ["ANTHROPIC_API_KEY"],
+      "defaultTransport": "sse",
+      "anthropicMessagesCompat": {
+        "supportsEagerToolInputStreaming": "supported",
+        "supportsLongCacheRetention": "supported",
+        "supportsCacheControlOnTools": "supported",
+        "thinkingFormat": "budget"
+      },
+      "providerMetadata": {
+        "modelFamily": "claude"
+      }
+    },
+    {
+      "id": "claude-sonnet-4-20250514",
+      "name": "Claude Sonnet 4",
+      "provider": "anthropic",
+      "api": "anthropic-messages",
+      "baseURL": "https://api.anthropic.com/v1",
+      "supportedInputs": ["text", "image"],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 3,
+        "outputPerMillion": 15,
+        "cacheReadInputPerMillion": 0.3,
+        "cacheWriteInputPerMillion": 3.75,
+        "currency": "USD"
+      },
+      "contextWindow": 200000,
+      "maxOutputTokens": 64000,
+      "headers": {
+        "anthropic-version": "2023-06-01"
+      },
+      "authEnvNames": ["ANTHROPIC_API_KEY"],
+      "defaultTransport": "sse",
+      "anthropicMessagesCompat": {
+        "supportsEagerToolInputStreaming": "supported",
+        "supportsLongCacheRetention": "supported",
+        "supportsCacheControlOnTools": "supported",
+        "thinkingFormat": "budget"
+      },
+      "providerMetadata": {
+        "modelFamily": "claude"
+      }
+    },
+    {
+      "id": "claude-sonnet-4-5",
+      "name": "Claude Sonnet 4.5 (latest)",
+      "provider": "anthropic",
+      "api": "anthropic-messages",
+      "baseURL": "https://api.anthropic.com/v1",
+      "supportedInputs": ["text", "image"],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 3,
+        "outputPerMillion": 15,
+        "cacheReadInputPerMillion": 0.3,
+        "cacheWriteInputPerMillion": 3.75,
+        "currency": "USD"
+      },
+      "contextWindow": 200000,
+      "maxOutputTokens": 64000,
+      "headers": {
+        "anthropic-version": "2023-06-01"
+      },
+      "authEnvNames": ["ANTHROPIC_API_KEY"],
+      "defaultTransport": "sse",
+      "anthropicMessagesCompat": {
+        "supportsEagerToolInputStreaming": "supported",
+        "supportsLongCacheRetention": "supported",
+        "supportsCacheControlOnTools": "supported",
+        "thinkingFormat": "budget"
+      },
+      "providerMetadata": {
+        "modelFamily": "claude"
+      }
+    },
+    {
+      "id": "claude-sonnet-4-5-20250929",
+      "name": "Claude Sonnet 4.5",
+      "provider": "anthropic",
+      "api": "anthropic-messages",
+      "baseURL": "https://api.anthropic.com/v1",
+      "supportedInputs": ["text", "image"],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 3,
+        "outputPerMillion": 15,
+        "cacheReadInputPerMillion": 0.3,
+        "cacheWriteInputPerMillion": 3.75,
+        "currency": "USD"
+      },
+      "contextWindow": 200000,
+      "maxOutputTokens": 64000,
+      "headers": {
+        "anthropic-version": "2023-06-01"
+      },
+      "authEnvNames": ["ANTHROPIC_API_KEY"],
+      "defaultTransport": "sse",
+      "anthropicMessagesCompat": {
+        "supportsEagerToolInputStreaming": "supported",
+        "supportsLongCacheRetention": "supported",
+        "supportsCacheControlOnTools": "supported",
+        "thinkingFormat": "budget"
+      },
+      "providerMetadata": {
+        "modelFamily": "claude"
+      }
+    },
+    {
+      "id": "claude-sonnet-4-6",
+      "name": "Claude Sonnet 4.6",
+      "provider": "anthropic",
+      "api": "anthropic-messages",
+      "baseURL": "https://api.anthropic.com/v1",
+      "supportedInputs": ["text", "image"],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 3,
+        "outputPerMillion": 15,
+        "cacheReadInputPerMillion": 0.3,
+        "cacheWriteInputPerMillion": 3.75,
+        "currency": "USD"
+      },
+      "contextWindow": 1000000,
+      "maxOutputTokens": 64000,
+      "headers": {
+        "anthropic-version": "2023-06-01"
+      },
+      "authEnvNames": ["ANTHROPIC_API_KEY"],
+      "defaultTransport": "sse",
+      "anthropicMessagesCompat": {
+        "supportsEagerToolInputStreaming": "supported",
+        "supportsLongCacheRetention": "supported",
+        "supportsCacheControlOnTools": "supported",
+        "thinkingFormat": "adaptive"
       },
       "providerMetadata": {
         "modelFamily": "claude"

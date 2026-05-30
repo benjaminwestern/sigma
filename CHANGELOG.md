@@ -82,8 +82,10 @@ See [release notes](docs/release-notes-v0.2.0.md).
 - Anthropic Messages now sends explicit disabled thinking for reasoning-capable
   models, supports adaptive thinking `output_config.effort`, omits temperature
   while thinking is enabled, groups consecutive tool results, emits block-end
-  events at `content_block_stop`, and preserves stream-start usage when later
-  deltas are partial.
+  events at `content_block_stop`, repairs malformed stream JSON and streamed
+  tool-call arguments when possible, stops cleanly at `message_stop`, reports
+  truncated streams, and preserves stream-start usage when later deltas are
+  partial.
 - Provider parity and image-generation docs now mark `openai-images` as a
   generation-only preview adapter instead of metadata-only.
 - OpenCode Zen and OpenCode Go metadata now cover the promoted
@@ -107,6 +109,8 @@ See [release notes](docs/release-notes-v0.2.0.md).
 - Generated text metadata now includes representative metadata-only entries for
   every exposed non-custom provider ID, aligned with current compatibility
   metadata and generated base URL/header handling.
+- Native Anthropic metadata now includes current Claude Haiku, Sonnet, and Opus
+  Messages rows, including adaptive-thinking metadata for supported models.
 - Release docs now record the deferred model-registry generation plan, including
   future `models.dev` ingestion, source precedence, refresh reports, and the
   deterministic catalog review gate.
