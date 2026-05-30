@@ -97,6 +97,9 @@ See [release notes](docs/release-notes-v0.2.0.md).
 - `cmd/sigma-surface-probe` can run opt-in live OpenCode Zen/Go surface probes,
   including repair variants that distinguish Sigma request-shape issues,
   provider capability limits, and upstream availability failures.
+- `cmd/sigma-surface-probe` can also run opt-in live Fireworks probes for both
+  the OpenAI-compatible Fire Pass route and the Anthropic-compatible Messages
+  route, using `FIREWORKS_API_KEY`.
 - OpenAI Responses now normalizes Chat Completions-style function
   `tool_choice` objects to the Responses function-choice shape.
 - OpenAI-compatible Chat Completions stream metadata now accumulates streamed
@@ -140,7 +143,8 @@ See [release notes](docs/release-notes-v0.2.0.md).
   not yet first-class provider rows; generated metadata and routing may exist,
   but independent provider-quality claims still need fixtures.
 - No live provider calls are required or expected for release validation.
-  Live OpenCode probing is available through `cmd/sigma-surface-probe`, but it
-  is credential-gated and outside the deterministic release gate.
+  Live OpenCode and Fireworks probing is available through
+  `cmd/sigma-surface-probe`, but it is credential-gated and outside the
+  deterministic release gate.
 - The release should not be tagged until maintainers accept the verification
   results and the [release notes](docs/release-notes-v0.2.0.md).

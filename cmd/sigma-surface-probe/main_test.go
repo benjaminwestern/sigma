@@ -6,10 +6,13 @@
 package main
 
 import (
+	"context"
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/wintermi/sigma"
+	"github.com/wintermi/sigma/sigmatest"
 )
 
 func TestOpenCodeRouteAPI(t *testing.T) {
@@ -55,6 +58,100 @@ func TestKnownUnavailable(t *testing.T) {
 	}
 }
 
+func TestFireworksRoutesBuildExpectedModels(t *testing.T) {
+	t.Parallel()
+
+	openAI := routes["fireworks-openai"].Model(routes["fireworks-openai"], "accounts/fireworks/routers/kimi-k2p6-turbo")
+	if openAI.Provider != sigma.ProviderFireworks || openAI.API != sigma.APIOpenAICompletions {
+		t.Fatalf("fireworks-openai model provider/API = %q/%q", openAI.Provider, openAI.API)
+	}
+	if openAI.OpenAICompletionsCompat == nil ||
+		openAI.OpenAICompletionsCompat.ReasoningFormat != sigma.OpenAICompletionsReasoningFireworks ||
+		openAI.OpenAICompletionsCompat.MaxTokensField != sigma.OpenAICompletionsMaxTokens {
+		t.Fatalf("fireworks-openai compat = %#v, want Fireworks OpenAI completions compat", openAI.OpenAICompletionsCompat)
+	}
+	assertMetadataString(t, openAI.ProviderMetadata, "baseURL", "https://api.fireworks.ai/inference/v1")
+	assertMetadataStrings(t, openAI.ProviderMetadata, "apiKeyEnvVars", []string{"FIREWORKS_API_KEY"})
+
+	anthropic := routes["fireworks-anthropic"].Model(routes["fireworks-anthropic"], "accounts/fireworks/models/kimi-k2p6")
+	if anthropic.Provider != sigma.ProviderFireworks || anthropic.API != sigma.APIAnthropicMessages {
+		t.Fatalf("fireworks-anthropic model provider/API = %q/%q", anthropic.Provider, anthropic.API)
+	}
+	if anthropic.AnthropicMessagesCompat == nil ||
+		anthropic.AnthropicMessagesCompat.SupportsSessionAffinity != sigma.AnthropicCompatSupported ||
+		anthropic.AnthropicMessagesCompat.SupportsEagerToolInputStreaming != sigma.AnthropicCompatUnsupported ||
+		anthropic.AnthropicMessagesCompat.SupportsLongCacheRetention != sigma.AnthropicCompatUnsupported ||
+		anthropic.AnthropicMessagesCompat.SupportsCacheControlOnTools != sigma.AnthropicCompatUnsupported {
+		t.Fatalf("fireworks-anthropic compat = %#v, want Fireworks Anthropic compat", anthropic.AnthropicMessagesCompat)
+	}
+	assertMetadataString(t, anthropic.ProviderMetadata, "baseURL", "https://api.fireworks.ai/inference")
+	assertMetadataStrings(t, anthropic.ProviderMetadata, "apiKeyEnvVars", []string{"FIREWORKS_API_KEY"})
+}
+
+func TestModelsForRouteUsesSelectedModelsWithoutDiscovery(t *testing.T) {
+	t.Parallel()
+
+	models, err := modelsForRoute(context.Background(), routes["fireworks-anthropic"], "key", map[string]bool{
+		"z": true,
+		"a": true,
+	})
+	if err != nil {
+		t.Fatalf("modelsForRoute returned error: %v", err)
+	}
+	if !reflect.DeepEqual(models, []string{"a", "z"}) {
+		t.Fatalf("models = %v, want sorted selected models", models)
+	}
+}
+
+func TestOpenAICompatibleProbeCasesUseRouteProviderOptions(t *testing.T) {
+	t.Parallel()
+
+	testCase := findProbeCase(t, openAICompatibleProbeCases(routes["fireworks-openai"]), "json_object")
+	options := applyProbeOptions(testCase.Options)
+	if _, ok := options.ProviderOptions[sigma.ProviderFireworks]["extra_body"]; !ok {
+		t.Fatalf("fireworks provider options = %#v, want extra_body", options.ProviderOptions[sigma.ProviderFireworks])
+	}
+	if _, ok := options.ProviderOptions[sigma.ProviderOpenCode]; ok {
+		t.Fatalf("unexpected OpenCode provider options: %#v", options.ProviderOptions[sigma.ProviderOpenCode])
+	}
+}
+
+func TestAnthropicProbeCasesDoNotSendRawOpenAIExtraBody(t *testing.T) {
+	t.Parallel()
+
+	for _, testCase := range anthropicCompatibleProbeCases(routes["fireworks-anthropic"]) {
+		options := applyProbeOptions(testCase.Options)
+		if providerOptions := options.ProviderOptions[sigma.ProviderFireworks]; providerOptions != nil {
+			if _, ok := providerOptions["extra_body"]; ok {
+				t.Fatalf("%s set raw extra_body for Anthropic route: %#v", testCase.Name, providerOptions)
+			}
+		}
+	}
+}
+
+func TestRunCaseKeepsDistinctRouteNames(t *testing.T) {
+	t.Parallel()
+
+	model := sigma.Model{ID: "same-provider-model", Provider: sigma.ProviderFireworks, API: sigmatest.TextAPI}
+	for _, routeName := range []string{"fireworks-openai", "fireworks-anthropic"} {
+		route := routes[routeName]
+		provider := sigmatest.NewFauxProvider()
+		registry := sigma.NewRegistry()
+		if err := registry.RegisterTextProvider(sigma.ProviderFireworks, provider); err != nil {
+			t.Fatalf("RegisterTextProvider returned error: %v", err)
+		}
+		if err := registry.RegisterModel(model); err != nil {
+			t.Fatalf("RegisterModel returned error: %v", err)
+		}
+
+		client := sigma.NewClient(sigma.WithRegistry(registry))
+		result := runCase(context.Background(), route, client, model, singleTurnCase("basic", "", basicRequest("hi"), nil), "key", "basic")
+		if result.Route != routeName {
+			t.Fatalf("route = %q, want %q", result.Route, routeName)
+		}
+	}
+}
+
 func TestRepairVariantsCoverTargetedFallbacks(t *testing.T) {
 	t.Parallel()
 
@@ -77,7 +174,7 @@ func TestRepairVariantsCoverTargetedFallbacks(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			if !hasRepairVariant(repairVariants(probeCase{Name: tt.name}), tt.want) {
+			if !hasRepairVariant(repairVariants(routes["zen"], probeCase{Name: tt.name}), tt.want) {
 				t.Fatalf("repairVariants(%q) missing %q", tt.name, tt.want)
 			}
 		})
@@ -87,15 +184,16 @@ func TestRepairVariantsCoverTargetedFallbacks(t *testing.T) {
 func TestClassifyFailure(t *testing.T) {
 	t.Parallel()
 
+	route := routes["zen"]
 	model := sigma.Model{Provider: sigma.ProviderOpenCode, ID: "gpt-5.1-codex"}
-	if got := classifyFailure(model, errors.New("unknown parameter: 'thinking'")); got != "sigma_request_shape" {
+	if got := classifyFailure(route, model, errors.New("unknown parameter: 'thinking'")); got != "sigma_request_shape" {
 		t.Fatalf("unknown parameter classification = %q", got)
 	}
-	if got := classifyFailure(model, errors.New("model does not support image input")); got != "provider_capability_limit" {
+	if got := classifyFailure(route, model, errors.New("model does not support image input")); got != "provider_capability_limit" {
 		t.Fatalf("image classification = %q", got)
 	}
 	model.ID = "claude-opus-4-6"
-	if got := classifyFailure(model, errors.New("No provider available")); got != "upstream_availability" {
+	if got := classifyFailure(route, model, errors.New("No provider available")); got != "upstream_availability" {
 		t.Fatalf("availability classification = %q", got)
 	}
 }
@@ -145,4 +243,44 @@ func hasRepairVariant(variants []probeCase, name string) bool {
 		}
 	}
 	return false
+}
+
+func findProbeCase(t *testing.T, cases []probeCase, name string) probeCase {
+	t.Helper()
+
+	for _, testCase := range cases {
+		if testCase.Name == name {
+			return testCase
+		}
+	}
+	t.Fatalf("probe case %q not found", name)
+	return probeCase{}
+}
+
+func applyProbeOptions(opts []sigma.Option) sigma.Options {
+	var options sigma.Options
+	for _, opt := range opts {
+		opt(&options)
+	}
+	return options
+}
+
+func assertMetadataString(t *testing.T, metadata map[string]any, key string, want string) {
+	t.Helper()
+
+	if got, ok := metadata[key].(string); !ok || got != want {
+		t.Fatalf("metadata[%q] = %#v, want %q", key, metadata[key], want)
+	}
+}
+
+func assertMetadataStrings(t *testing.T, metadata map[string]any, key string, want []string) {
+	t.Helper()
+
+	got, ok := metadata[key].([]string)
+	if !ok {
+		t.Fatalf("metadata[%q] type = %T, want []string", key, metadata[key])
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("metadata[%q] = %v, want %v", key, got, want)
+	}
 }

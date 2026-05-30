@@ -86,6 +86,20 @@ still be promoted only with deterministic evidence.
       route-shape regressions, capability limits, and upstream availability
       changes; do not add live OpenCode calls to `mise run ci`.
 
+## Fireworks parity
+
+Sigma now has opt-in live Fireworks surface probes for the current
+OpenAI-compatible Fire Pass route and an Anthropic-compatible Messages route.
+These probes are diagnostics only; deterministic fixtures remain the release
+evidence bar.
+
+- [x] Add credential-gated Fireworks surface probes to
+      `cmd/sigma-surface-probe`.
+- [ ] Keep live Fireworks probing out of `mise run ci`; use it only for manual
+      compatibility investigation with `FIREWORKS_API_KEY`.
+- [ ] Promote additional Fireworks metadata only after matching deterministic
+      modeldata, payload, error, and compatibility coverage exists.
+
 ## Authentication and credentials
 
 - [ ] Implement interactive OAuth login (currently MVP uses caller-supplied

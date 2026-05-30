@@ -70,6 +70,9 @@ first-class parity rows.
 - `cmd/sigma-surface-probe` provides an opt-in live OpenCode probe and repair
   workflow. It reports Sigma request-shape failures separately from provider
   capability limits and upstream model availability failures.
+- `cmd/sigma-surface-probe` also provides opt-in live Fireworks probes for the
+  OpenAI-compatible Fire Pass route and the Anthropic-compatible Messages
+  route, with the same JSONL result and repair workflow.
 - OpenAI Responses now normalizes Chat Completions-style function
   `tool_choice` payloads before sending Responses requests.
 - OpenAI-compatible Chat Completions streams now accumulate streamed `logprobs`
@@ -121,8 +124,9 @@ client := sigma.NewClient(sigma.WithRegistry(registry))
 - GitHub Copilot dynamic headers and Cloudflare AI Gateway auth rewriting.
 - Full OpenCode catalog parity, including advertised-but-unavailable models and
   provider-specific feature quirks beyond the curated routed preview metadata.
-- Live OpenCode surface validation in CI. `cmd/sigma-surface-probe` is
-  credential-gated and remains outside deterministic release validation.
+- Live OpenCode or Fireworks surface validation in CI.
+  `cmd/sigma-surface-probe` is credential-gated and remains outside
+  deterministic release validation.
 - Automated model catalog refresh from `models.dev` and provider catalog APIs;
   generated metadata still enters the release through the checked-in catalog,
   checksum test, and generated Go review flow.
@@ -143,3 +147,6 @@ live provider network calls are required.
 The OpenCode routed preview provider and surface probe helpers are covered by
 deterministic route, metadata, and classification tests; live OpenCode probing
 is optional and requires `OPENCODE_API_KEY`.
+The Fireworks surface probe helpers are covered by deterministic route,
+metadata, and classification tests; live Fireworks probing is optional and
+requires `FIREWORKS_API_KEY`.

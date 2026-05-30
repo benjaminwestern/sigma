@@ -20,13 +20,20 @@ import (
 	"time"
 
 	"github.com/wintermi/sigma"
+	"github.com/wintermi/sigma/provider/anthropic"
+	"github.com/wintermi/sigma/provider/fireworks"
 	"github.com/wintermi/sigma/provider/opencode"
 )
 
 type routeSpec struct {
-	Name     string
-	Provider sigma.ProviderID
-	BaseURL  string
+	Name             string
+	Provider         sigma.ProviderID
+	BaseURL          string
+	ModelBaseURL     string
+	APIKeyEnv        string
+	RegisterProvider func(*sigma.Registry, routeSpec) error
+	Model            func(routeSpec, string) sigma.Model
+	Cases            func(routeSpec) []probeCase
 }
 
 type probeCase struct {
@@ -65,18 +72,49 @@ type config struct {
 }
 
 var routes = map[string]routeSpec{
-	"zen": {Name: "zen", Provider: sigma.ProviderOpenCode, BaseURL: opencode.ZenBaseURL},
-	"go":  {Name: "go", Provider: sigma.ProviderOpenCodeGo, BaseURL: opencode.GoBaseURL},
+	"zen": {
+		Name:             "zen",
+		Provider:         sigma.ProviderOpenCode,
+		BaseURL:          opencode.ZenBaseURL,
+		APIKeyEnv:        "OPENCODE_API_KEY",
+		RegisterProvider: registerOpenCodeProvider,
+		Model:            discoveredOpenCodeModel,
+		Cases:            openAICompatibleProbeCases,
+	},
+	"go": {
+		Name:             "go",
+		Provider:         sigma.ProviderOpenCodeGo,
+		BaseURL:          opencode.GoBaseURL,
+		APIKeyEnv:        "OPENCODE_API_KEY",
+		RegisterProvider: registerOpenCodeProvider,
+		Model:            discoveredOpenCodeModel,
+		Cases:            openAICompatibleProbeCases,
+	},
+	"fireworks-openai": {
+		Name:             "fireworks-openai",
+		Provider:         sigma.ProviderFireworks,
+		BaseURL:          fireworks.DefaultBaseURL,
+		APIKeyEnv:        "FIREWORKS_API_KEY",
+		RegisterProvider: registerFireworksOpenAIProvider,
+		Model:            discoveredFireworksOpenAIModel,
+		Cases:            openAICompatibleProbeCases,
+	},
+	"fireworks-anthropic": {
+		Name:             "fireworks-anthropic",
+		Provider:         sigma.ProviderFireworks,
+		BaseURL:          "https://api.fireworks.ai/inference",
+		ModelBaseURL:     fireworks.DefaultBaseURL,
+		APIKeyEnv:        "FIREWORKS_API_KEY",
+		RegisterProvider: registerFireworksAnthropicProvider,
+		Model:            discoveredFireworksAnthropicModel,
+		Cases:            anthropicCompatibleProbeCases,
+	},
 }
 
 const jsonTypeKey = "type"
 
 func main() {
 	cfg := parseConfig()
-	apiKey := os.Getenv("OPENCODE_API_KEY")
-	if apiKey == "" {
-		fatalf("OPENCODE_API_KEY is required for live OpenCode probing")
-	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), cfg.timeout)
 	defer cancel()
@@ -92,7 +130,11 @@ func main() {
 		if !ok {
 			fatalf("unknown route %q", routeName)
 		}
-		models, err := discoverModels(ctx, route, apiKey)
+		apiKey := os.Getenv(route.APIKeyEnv)
+		if apiKey == "" {
+			fatalf("%s is required for live %s probing", route.APIKeyEnv, route.Name)
+		}
+		models, err := modelsForRoute(ctx, route, apiKey, cfg.models)
 		if err != nil {
 			fatalf("discover %s models: %v", route.Name, err)
 		}
@@ -115,7 +157,7 @@ func parseConfig() config {
 	var timeout time.Duration
 	var repair bool
 	var includeUnavailable bool
-	flag.StringVar(&routeList, "routes", "zen,go", "comma-separated routes: zen,go")
+	flag.StringVar(&routeList, "routes", "zen,go", "comma-separated routes: zen,go,fireworks-openai,fireworks-anthropic")
 	flag.StringVar(&modelList, "models", "", "comma-separated model IDs to probe")
 	flag.BoolVar(&repair, "repair", false, "try targeted repair variants after a failing case")
 	flag.BoolVar(&includeUnavailable, "include-unavailable", false, "run known unavailable advertised models instead of skipping them")
@@ -131,8 +173,24 @@ func parseConfig() config {
 	}
 }
 
+func modelsForRoute(ctx context.Context, route routeSpec, apiKey string, selected map[string]bool) ([]string, error) {
+	if len(selected) > 0 {
+		models := make([]string, 0, len(selected))
+		for modelID := range selected {
+			models = append(models, modelID)
+		}
+		sort.Strings(models)
+		return models, nil
+	}
+	return discoverModels(ctx, route, apiKey)
+}
+
 func discoverModels(ctx context.Context, route routeSpec, apiKey string) ([]string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(route.BaseURL, "/")+"/models", nil)
+	baseURL := route.BaseURL
+	if route.ModelBaseURL != "" {
+		baseURL = route.ModelBaseURL
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(baseURL, "/")+"/models", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -201,17 +259,18 @@ func probeModel(ctx context.Context, route routeSpec, modelID string, apiKey str
 	}
 
 	client := probeClient(route, modelID)
-	model := discoveredOpenCodeModel(route, modelID)
-	results := make([]probeResult, 0, len(probeCases()))
-	for _, testCase := range probeCases() {
-		result := runCase(ctx, client, model, testCase, apiKey, testCase.Name)
+	model := route.Model(route, modelID)
+	cases := route.Cases(route)
+	results := make([]probeResult, 0, len(cases))
+	for _, testCase := range cases {
+		result := runCase(ctx, route, client, model, testCase, apiKey, testCase.Name)
 		if result.Outcome == "ok" || !cfg.repair {
 			results = append(results, result)
 			continue
 		}
 		repaired := result
-		for _, variant := range repairVariants(testCase) {
-			attempt := runCase(ctx, client, model, variant, apiKey, variant.Name)
+		for _, variant := range repairVariants(route, testCase) {
+			attempt := runCase(ctx, route, client, model, variant, apiKey, variant.Name)
 			if attempt.Outcome == "ok" {
 				attempt.Outcome = "fixed_by_repair_variant"
 				repaired = attempt
@@ -225,14 +284,37 @@ func probeModel(ctx context.Context, route routeSpec, modelID string, apiKey str
 
 func probeClient(route routeSpec, modelID string) *sigma.Client {
 	registry := sigma.NewRegistry()
+	_ = route.RegisterProvider(registry, route)
+	_ = registry.RegisterModel(route.Model(route, modelID))
+	return sigma.NewClient(sigma.WithRegistry(registry))
+}
+
+func registerOpenCodeProvider(registry *sigma.Registry, route routeSpec) error {
 	switch route.Name {
 	case "go":
-		_ = opencode.RegisterGo(registry)
+		if err := opencode.RegisterGo(registry); err != nil {
+			return fmt.Errorf("register opencode go provider: %w", err)
+		}
 	default:
-		_ = opencode.RegisterZen(registry)
+		if err := opencode.RegisterZen(registry); err != nil {
+			return fmt.Errorf("register opencode zen provider: %w", err)
+		}
 	}
-	_ = registry.RegisterModel(discoveredOpenCodeModel(route, modelID))
-	return sigma.NewClient(sigma.WithRegistry(registry))
+	return nil
+}
+
+func registerFireworksOpenAIProvider(registry *sigma.Registry, route routeSpec) error {
+	if err := fireworks.Register(registry, fireworks.WithBaseURL(route.BaseURL)); err != nil {
+		return fmt.Errorf("register fireworks openai-compatible provider: %w", err)
+	}
+	return nil
+}
+
+func registerFireworksAnthropicProvider(registry *sigma.Registry, route routeSpec) error {
+	if err := anthropic.Register(registry, sigma.ProviderFireworks, anthropic.WithBaseURL(route.BaseURL)); err != nil {
+		return fmt.Errorf("register fireworks anthropic-compatible provider: %w", err)
+	}
+	return nil
 }
 
 func discoveredOpenCodeModel(route routeSpec, id string) sigma.Model {
@@ -253,12 +335,71 @@ func discoveredOpenCodeModel(route routeSpec, id string) sigma.Model {
 	}
 }
 
-func runCase(ctx context.Context, client *sigma.Client, model sigma.Model, testCase probeCase, apiKey string, attempt string) probeResult {
+func discoveredFireworksOpenAIModel(route routeSpec, id string) sigma.Model {
+	return sigma.Model{
+		ID:               sigma.ModelID(id),
+		Provider:         route.Provider,
+		API:              sigma.APIOpenAICompletions,
+		SupportedInputs:  []sigma.ContentBlockType{sigma.ContentBlockText, sigma.ContentBlockImage},
+		SupportsTools:    true,
+		SupportsThinking: true,
+		ThinkingLevels:   []sigma.ThinkingLevel{sigma.ThinkingLevelLow, sigma.ThinkingLevelMedium, sigma.ThinkingLevelHigh},
+		ContextWindow:    256000,
+		MaxOutputTokens:  256000,
+		OpenAICompletionsCompat: &sigma.OpenAICompletionsCompat{
+			ReasoningFormat:        sigma.OpenAICompletionsReasoningFireworks,
+			SupportsStreamingUsage: sigma.OpenAICompatSupported,
+			SupportsStrictTools:    sigma.OpenAICompatSupported,
+			MaxTokensField:         sigma.OpenAICompletionsMaxTokens,
+		},
+		ProviderMetadata: map[string]any{
+			"baseURL":          route.BaseURL,
+			"apiKeyEnvVars":    []string{route.APIKeyEnv},
+			"modelFamily":      modelFamily(id),
+			"probeDiscovered":  true,
+			"probeRoute":       route.Name,
+			"probeSurface":     "openai-completions",
+			"fireworksSurface": "openai",
+		},
+	}
+}
+
+func discoveredFireworksAnthropicModel(route routeSpec, id string) sigma.Model {
+	return sigma.Model{
+		ID:               sigma.ModelID(id),
+		Provider:         route.Provider,
+		API:              sigma.APIAnthropicMessages,
+		SupportedInputs:  []sigma.ContentBlockType{sigma.ContentBlockText, sigma.ContentBlockImage},
+		SupportsTools:    true,
+		SupportsThinking: true,
+		ThinkingLevels:   []sigma.ThinkingLevel{sigma.ThinkingLevelLow, sigma.ThinkingLevelMedium, sigma.ThinkingLevelHigh},
+		ContextWindow:    262000,
+		MaxOutputTokens:  262000,
+		AnthropicMessagesCompat: &sigma.AnthropicMessagesCompat{
+			SupportsEagerToolInputStreaming: sigma.AnthropicCompatUnsupported,
+			SupportsLongCacheRetention:      sigma.AnthropicCompatUnsupported,
+			SupportsSessionAffinity:         sigma.AnthropicCompatSupported,
+			SupportsCacheControlOnTools:     sigma.AnthropicCompatUnsupported,
+			ThinkingFormat:                  sigma.AnthropicThinkingBudget,
+		},
+		ProviderMetadata: map[string]any{
+			"baseURL":          route.BaseURL,
+			"apiKeyEnvVars":    []string{route.APIKeyEnv},
+			"modelFamily":      modelFamily(id),
+			"probeDiscovered":  true,
+			"probeRoute":       route.Name,
+			"probeSurface":     "anthropic-messages",
+			"fireworksSurface": "anthropic",
+		},
+	}
+}
+
+func runCase(ctx context.Context, route routeSpec, client *sigma.Client, model sigma.Model, testCase probeCase, apiKey string, attempt string) probeResult {
 	options := append([]sigma.Option{sigma.WithAPIKey(apiKey)}, testCase.Options...)
 	_, err := client.Complete(ctx, model, testCase.Request, options...)
 	if err == nil {
 		return probeResult{
-			Route:   routeName(model.Provider),
+			Route:   route.Name,
 			Model:   string(model.ID),
 			Case:    testCase.Name,
 			Attempt: attempt,
@@ -266,16 +407,16 @@ func runCase(ctx context.Context, client *sigma.Client, model sigma.Model, testC
 		}
 	}
 	return probeResult{
-		Route:   routeName(model.Provider),
+		Route:   route.Name,
 		Model:   string(model.ID),
 		Case:    testCase.Name,
 		Attempt: attempt,
-		Outcome: classifyFailure(model, err),
+		Outcome: classifyFailure(route, model, err),
 		Error:   err.Error(),
 	}
 }
 
-func probeCases() []probeCase {
+func openAICompatibleProbeCases(route routeSpec) []probeCase {
 	return []probeCase{
 		singleTurnCase("basic_text", "plain streaming text", basicRequest("Reply with exactly: sigma-ok."), []sigma.Option{sigma.WithMaxTokens(128)}),
 		singleTurnCase("developer_instruction", "developer instruction handling", sigma.Request{
@@ -283,18 +424,15 @@ func probeCases() []probeCase {
 			Messages:     []sigma.Message{sigma.UserText("Reply with exactly: dev-ok.")},
 		}, []sigma.Option{sigma.WithMaxTokens(128)}),
 		singleTurnCase("json_object", "JSON object mode", basicRequest("Return JSON exactly {\"ok\":true}."), []sigma.Option{
-			sigma.WithProviderOption(sigma.ProviderOpenCode, "extra_body", map[string]any{"response_format": map[string]any{jsonTypeKey: "json_object"}}),
-			sigma.WithProviderOption(sigma.ProviderOpenCodeGo, "extra_body", map[string]any{"response_format": map[string]any{jsonTypeKey: "json_object"}}),
+			sigma.WithProviderOption(route.Provider, "extra_body", map[string]any{"response_format": map[string]any{jsonTypeKey: "json_object"}}),
 			sigma.WithMaxTokens(256),
 		}),
 		singleTurnCase("json_schema", "strict JSON schema", basicRequest("Return JSON exactly {\"answer\":\"ok\"}."), []sigma.Option{
-			sigma.WithProviderOption(sigma.ProviderOpenCode, "extra_body", jsonSchemaBody()),
-			sigma.WithProviderOption(sigma.ProviderOpenCodeGo, "extra_body", jsonSchemaBody()),
+			sigma.WithProviderOption(route.Provider, "extra_body", jsonSchemaBody()),
 			sigma.WithMaxTokens(256),
 		}),
 		singleTurnCase("logprobs", "logprobs and top_logprobs", basicRequest("Reply with exactly: yes."), []sigma.Option{
-			sigma.WithProviderOption(sigma.ProviderOpenCode, "extra_body", map[string]any{"logprobs": true, "top_logprobs": 2}),
-			sigma.WithProviderOption(sigma.ProviderOpenCodeGo, "extra_body", map[string]any{"logprobs": true, "top_logprobs": 2}),
+			sigma.WithProviderOption(route.Provider, "extra_body", map[string]any{"logprobs": true, "top_logprobs": 2}),
 			sigma.WithMaxTokens(16),
 		}),
 		singleTurnCase("cache_ephemeral", "prompt cache marker", basicRequest("Reply with exactly: cache-ok."), []sigma.Option{
@@ -302,17 +440,38 @@ func probeCases() []probeCase {
 			sigma.WithMaxTokens(128),
 		}),
 		singleTurnCase("image_input", "text plus image input", imageRequest(), []sigma.Option{sigma.WithMaxTokens(512)}),
-		singleTurnCase("thinking_string_none", "raw thinking string none", basicRequest("Reply with exactly: 5."), rawBodyOptions(map[string]any{"thinking": "none"})),
-		singleTurnCase("thinking_object_disabled", "raw thinking object disabled", basicRequest("Reply with exactly: 5."), rawBodyOptions(map[string]any{"thinking": map[string]any{jsonTypeKey: "disabled"}})),
-		singleTurnCase("thinking_bool_false", "raw thinking false", basicRequest("Reply with exactly: 5."), rawBodyOptions(map[string]any{"thinking": false})),
-		singleTurnCase("enable_thinking_false", "raw enable_thinking false", basicRequest("Reply with exactly: 5."), rawBodyOptions(map[string]any{"enable_thinking": false})),
-		singleTurnCase("reasoning_effort_low", "raw reasoning effort low", basicRequest("Reply with exactly: 5."), rawBodyOptions(map[string]any{"reasoning_effort": "low"})),
-		singleTurnCase("reasoning_effort_medium", "raw reasoning effort medium", basicRequest("Reply with exactly: 5."), rawBodyOptions(map[string]any{"reasoning_effort": "medium"})),
-		singleTurnCase("reasoning_effort_high", "raw reasoning effort high", basicRequest("Reply with exactly: 5."), rawBodyOptions(map[string]any{"reasoning_effort": "high"})),
+		singleTurnCase("thinking_string_none", "raw thinking string none", basicRequest("Reply with exactly: 5."), rawBodyOptions(route, map[string]any{"thinking": "none"})),
+		singleTurnCase("thinking_object_disabled", "raw thinking object disabled", basicRequest("Reply with exactly: 5."), rawBodyOptions(route, map[string]any{"thinking": map[string]any{jsonTypeKey: "disabled"}})),
+		singleTurnCase("thinking_bool_false", "raw thinking false", basicRequest("Reply with exactly: 5."), rawBodyOptions(route, map[string]any{"thinking": false})),
+		singleTurnCase("enable_thinking_false", "raw enable_thinking false", basicRequest("Reply with exactly: 5."), rawBodyOptions(route, map[string]any{"enable_thinking": false})),
+		singleTurnCase("reasoning_effort_low", "raw reasoning effort low", basicRequest("Reply with exactly: 5."), rawBodyOptions(route, map[string]any{"reasoning_effort": "low"})),
+		singleTurnCase("reasoning_effort_medium", "raw reasoning effort medium", basicRequest("Reply with exactly: 5."), rawBodyOptions(route, map[string]any{"reasoning_effort": "medium"})),
+		singleTurnCase("reasoning_effort_high", "raw reasoning effort high", basicRequest("Reply with exactly: 5."), rawBodyOptions(route, map[string]any{"reasoning_effort": "high"})),
 		toolCase("tool_auto_file_read", "auto read-file tool", "auto"),
 		toolCase("tool_required_file_read", "required read-file tool", "required"),
 		toolCase("strict_tool_required_write", "required strict write-file tool", "required"),
 		toolCase("three_turn_file_update", "multi-turn file update", "auto"),
+	}
+}
+
+func anthropicCompatibleProbeCases(_ routeSpec) []probeCase {
+	return []probeCase{
+		singleTurnCase("basic_text", "plain streaming text", basicRequest("Reply with exactly: sigma-ok."), []sigma.Option{sigma.WithMaxTokens(128)}),
+		singleTurnCase("developer_instruction", "system instruction handling", sigma.Request{
+			SystemPrompt: "Reply tersely.",
+			Messages:     []sigma.Message{sigma.UserText("Reply with exactly: dev-ok.")},
+		}, []sigma.Option{sigma.WithMaxTokens(128)}),
+		singleTurnCase("cache_ephemeral", "prompt cache marker", basicRequest("Reply with exactly: cache-ok."), []sigma.Option{
+			sigma.WithCacheRetention(sigma.CacheRetentionEphemeral),
+			sigma.WithSessionID("sigma-fireworks-probe"),
+			sigma.WithMaxTokens(128),
+		}),
+		singleTurnCase("image_input", "text plus image input", imageRequest(), []sigma.Option{sigma.WithMaxTokens(512)}),
+		singleTurnCase("reasoning_level_low", "typed reasoning low", basicRequest("Reply with exactly: 5."), []sigma.Option{sigma.WithReasoningLevel(sigma.ThinkingLevelLow), sigma.WithMaxTokens(512)}),
+		singleTurnCase("reasoning_level_medium", "typed reasoning medium", basicRequest("Reply with exactly: 5."), []sigma.Option{sigma.WithReasoningLevel(sigma.ThinkingLevelMedium), sigma.WithMaxTokens(512)}),
+		singleTurnCase("reasoning_level_high", "typed reasoning high", basicRequest("Reply with exactly: 5."), []sigma.Option{sigma.WithReasoningLevel(sigma.ThinkingLevelHigh), sigma.WithMaxTokens(512)}),
+		toolCase("tool_auto_file_read", "auto read-file tool", "auto"),
+		toolCase("tool_required_file_read", "required read-file tool", "required"),
 	}
 }
 
@@ -354,7 +513,7 @@ func toolCase(name string, description string, choice any) probeCase {
 	}
 }
 
-func repairVariants(failure probeCase) []probeCase {
+func repairVariants(route routeSpec, failure probeCase) []probeCase {
 	variants := []probeCase{
 		singleTurnCase("minimal_basic_text", "minimal availability check", basicRequest("Reply with exactly: sigma-ok."), []sigma.Option{sigma.WithMaxTokens(512)}),
 	}
@@ -373,7 +532,7 @@ func repairVariants(failure probeCase) []probeCase {
 		)
 	case "thinking_string_none", "thinking_bool_false", "thinking_object_disabled", "enable_thinking_false":
 		variants = append(variants,
-			singleTurnCase("thinking_object_disabled_repair", "object disabled thinking", basicRequest("Reply with exactly: 5."), rawBodyOptions(map[string]any{"thinking": map[string]any{jsonTypeKey: "disabled"}})),
+			singleTurnCase("thinking_object_disabled_repair", "object disabled thinking", basicRequest("Reply with exactly: 5."), rawBodyOptions(route, map[string]any{"thinking": map[string]any{jsonTypeKey: "disabled"}})),
 			singleTurnCase("no_thinking_control", "omit thinking control", basicRequest("Reply with exactly: 5."), []sigma.Option{sigma.WithMaxTokens(256)}),
 			singleTurnCase("no_thinking_control_more_tokens", "omit thinking control and larger cap", basicRequest("Reply with exactly: 5."), []sigma.Option{sigma.WithMaxTokens(1024)}),
 		)
@@ -387,13 +546,11 @@ func repairVariants(failure probeCase) []probeCase {
 	case "json_schema":
 		variants = append(variants,
 			singleTurnCase("json_schema_more_tokens", "strict schema with larger cap", failure.Request, []sigma.Option{
-				sigma.WithProviderOption(sigma.ProviderOpenCode, "extra_body", jsonSchemaBody()),
-				sigma.WithProviderOption(sigma.ProviderOpenCodeGo, "extra_body", jsonSchemaBody()),
+				sigma.WithProviderOption(route.Provider, "extra_body", jsonSchemaBody()),
 				sigma.WithMaxTokens(1024),
 			}),
 			singleTurnCase("json_object_fallback", "JSON object fallback", basicRequest("Return JSON exactly {\"answer\":\"ok\"}."), []sigma.Option{
-				sigma.WithProviderOption(sigma.ProviderOpenCode, "extra_body", map[string]any{"response_format": map[string]any{jsonTypeKey: "json_object"}}),
-				sigma.WithProviderOption(sigma.ProviderOpenCodeGo, "extra_body", map[string]any{"response_format": map[string]any{jsonTypeKey: "json_object"}}),
+				sigma.WithProviderOption(route.Provider, "extra_body", map[string]any{"response_format": map[string]any{jsonTypeKey: "json_object"}}),
 				sigma.WithMaxTokens(512),
 			}),
 			singleTurnCase("manual_json", "prompt-level JSON only", basicRequest("Return JSON exactly {\"answer\":\"ok\"}."), []sigma.Option{sigma.WithMaxTokens(512)}),
@@ -412,10 +569,9 @@ func repairVariants(failure probeCase) []probeCase {
 	return uniqueCases(variants)
 }
 
-func rawBodyOptions(body map[string]any) []sigma.Option {
+func rawBodyOptions(route routeSpec, body map[string]any) []sigma.Option {
 	return []sigma.Option{
-		sigma.WithProviderOption(sigma.ProviderOpenCode, "extra_body", body),
-		sigma.WithProviderOption(sigma.ProviderOpenCodeGo, "extra_body", body),
+		sigma.WithProviderOption(route.Provider, "extra_body", body),
 		sigma.WithMaxTokens(256),
 	}
 }
@@ -481,8 +637,8 @@ func knownUnavailable(route string, id string) bool {
 	}
 }
 
-func classifyFailure(model sigma.Model, err error) string {
-	if knownUnavailable(routeName(model.Provider), string(model.ID)) {
+func classifyFailure(route routeSpec, model sigma.Model, err error) string {
+	if knownUnavailable(route.Name, string(model.ID)) {
 		return "upstream_availability"
 	}
 	message := strings.ToLower(err.Error())
@@ -501,13 +657,6 @@ func classifyFailure(model sigma.Model, err error) string {
 	default:
 		return "no_working_attempt"
 	}
-}
-
-func routeName(provider sigma.ProviderID) string {
-	if provider == sigma.ProviderOpenCodeGo {
-		return "go"
-	}
-	return "zen"
 }
 
 func modelFamily(id string) string {
