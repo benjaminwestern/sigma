@@ -56,6 +56,14 @@ See [release notes](docs/release-notes-v0.3.0.md).
 - Provider execution errors now expose typed `sigma.ClassifyError` results with
   stable auth, quota, billing, context-overflow, rate-limit, transient,
   invalid-request, provider, and unknown classes plus retry-after hints.
+- Google Generative AI and Vertex AI now honor concrete model-scoped `baseURL`
+  and `headers` metadata with request/provider options retaining higher
+  precedence, while Vertex ignores generated `{location}` base URL templates.
+- Google Vertex AI auto credential mode now treats placeholder API-key values
+  as unavailable so configured OAuth/ADC token providers can be used instead.
+- Google replay now normalizes tool-call IDs for Google-hosted model families
+  that require explicit function IDs, and omits empty function-response IDs for
+  native Gemini requests.
 
 ### Compatibility
 

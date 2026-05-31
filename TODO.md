@@ -131,6 +131,23 @@ evidence bar.
 
 ## Google parity
 
+The Google adapters already cover the v0.2 request and stream slice with
+deterministic fixtures. The next useful hardening pass around Vertex
+credentials, model-scoped routing metadata, and tool-call replay for
+Google-hosted non-Gemini routes is complete. Broader model coverage should
+still come through the catalog refresh workflow.
+
+- [x] Treat Vertex API-key placeholder values such as angle-bracket markers and
+      local credential sentinels as unavailable in auto credential mode, so a
+      configured OAuth/ADC token provider can be used instead of sending the
+      placeholder as `X-Goog-Api-Key`.
+- [x] Let Google Generative AI and Vertex adapters consume concrete
+      model-scoped `baseURL` and `headers` metadata where present, while keeping
+      request/provider options higher precedence and ignoring generated Vertex
+      base URL templates that still contain `{location}` placeholders.
+- [x] Normalize Google replayed tool-call IDs for model families that require
+      explicit function-call IDs, and omit empty function-response IDs for
+      native Gemini requests.
 - [ ] Keep live Google Gemini API and Vertex AI validation out of `mise run ci`;
       use credential-gated probes only for manual compatibility investigation.
 - [ ] Add broader Vertex-specific fixtures only when Vertex behavior diverges

@@ -190,6 +190,86 @@ func TestVertexAutoCredentialPrefersResolvedAPIKeyBeforeTokenProvider(t *testing
 	}
 }
 
+func TestVertexAutoCredentialFallsBackToTokenForAPIKeyPlaceholders(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		value string
+	}{
+		{name: "angle bracket marker", value: "<authenticated>"},
+		{name: "local sentinel", value: "gcp-vertex-credentials"},
+		{name: "blank", value: "  "},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			requests := make(chan capturedVertexRequest, 1)
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				captureVertexRequest(t, requests, r)
+				writeVertexSSE(t, w, vertexCompletedEvent)
+			}))
+			t.Cleanup(server.Close)
+
+			tokenCalls := 0
+			client, model := vertexTestClientWithAuth(t,
+				vertexAPIKeyResolver(tt.value),
+				WithVertexConfig(VertexConfig{ProjectID: "test-project", Location: "us-central1"}),
+				WithVertexBaseURL(server.URL+"/v1"),
+				WithVertexTokenProvider(sigma.OAuthTokenProviderFunc(func(context.Context, sigma.Model, sigma.Options) (sigma.Credential, error) {
+					tokenCalls++
+					return sigma.Credential{Type: sigma.CredentialTypeOAuthToken, Value: "vertex-token"}, nil
+				})),
+			)
+
+			if _, err := client.Complete(context.Background(), model, sigma.Request{Messages: []sigma.Message{sigma.UserText("hi")}}); err != nil {
+				t.Fatalf("Complete returned error: %v", err)
+			}
+			if tokenCalls != 1 {
+				t.Fatalf("token provider calls = %d, want 1", tokenCalls)
+			}
+			request := receiveVertexRequest(t, requests)
+			if got, want := request.Headers.Get("Authorization"), "Bearer vertex-token"; got != want {
+				t.Fatalf("authorization header = %q, want %q", got, want)
+			}
+			if got := request.Headers.Get("X-Goog-Api-Key"); got != "" {
+				t.Fatalf("api key header = %q, want empty", got)
+			}
+		})
+	}
+}
+
+func TestVertexAPIKeyModeRejectsAPIKeyPlaceholderWithoutTokenFallback(t *testing.T) {
+	t.Parallel()
+
+	tokenCalls := 0
+	client, model := vertexTestClientWithAuth(t,
+		vertexAPIKeyResolver("<authenticated>"),
+		WithVertexConfig(VertexConfig{
+			ProjectID:      "test-project",
+			Location:       "us-central1",
+			CredentialMode: VertexCredentialAPIKey,
+		}),
+		WithVertexBaseURL("https://example.invalid/v1"),
+		WithVertexTokenProvider(sigma.OAuthTokenProviderFunc(func(context.Context, sigma.Model, sigma.Options) (sigma.Credential, error) {
+			tokenCalls++
+			return sigma.Credential{Type: sigma.CredentialTypeOAuthToken, Value: "vertex-token"}, nil
+		})),
+	)
+
+	_, err := client.Complete(context.Background(), model, sigma.Request{Messages: []sigma.Message{sigma.UserText("hi")}})
+	if err == nil {
+		t.Fatal("Complete returned nil error")
+	}
+	if !errors.Is(err, sigma.ErrCredentialUnavailable) {
+		t.Fatalf("error = %v, want ErrCredentialUnavailable", err)
+	}
+	if tokenCalls != 0 {
+		t.Fatalf("token provider calls = %d, want 0", tokenCalls)
+	}
+}
+
 func TestVertexMissingProjectAndLocationReturnTypedErrors(t *testing.T) {
 	t.Parallel()
 
@@ -217,6 +297,91 @@ func TestVertexMissingProjectAndLocationReturnTypedErrors(t *testing.T) {
 				t.Fatalf("error = %v, want %q", err, tt.message)
 			}
 		})
+	}
+}
+
+func TestVertexUsesConcreteModelBaseURLAndHeaders(t *testing.T) {
+	t.Parallel()
+
+	requests := make(chan capturedVertexRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captureVertexRequest(t, requests, r)
+		writeVertexSSE(t, w, vertexCompletedEvent)
+	}))
+	t.Cleanup(server.Close)
+
+	model := vertexTestModel()
+	model.ProviderMetadata = map[string]any{
+		"baseURL": server.URL + "/model-base",
+		"headers": map[string]any{
+			"Authorization":  "Bearer metadata-secret",
+			"X-Goog-Api-Key": "metadata-key",
+			"X-Model":        "model",
+			"X-Shared":       "model",
+		},
+	}
+	client := vertexTestClientWithModel(
+		t,
+		model,
+		vertexAPIKeyResolver("vertex-api-key"),
+		WithVertexConfig(VertexConfig{ProjectID: "test-project", Location: "us-central1"}),
+		WithVertexHeader("X-Shared", "provider"),
+	)
+
+	if _, err := client.Complete(
+		context.Background(),
+		model,
+		sigma.Request{Messages: []sigma.Message{sigma.UserText("hi")}},
+		sigma.WithHeaders(map[string]string{"X-Shared": "request"}),
+	); err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+
+	request := receiveVertexRequest(t, requests)
+	if got, want := request.Path, "/model-base/projects/test-project/locations/us-central1/publishers/google/models/gemini-test:streamGenerateContent"; got != want {
+		t.Fatalf("path = %q, want %q", got, want)
+	}
+	if got, want := request.Headers.Get("X-Goog-Api-Key"), "vertex-api-key"; got != want {
+		t.Fatalf("api key header = %q, want %q", got, want)
+	}
+	if got := request.Headers.Get("Authorization"); got != "" {
+		t.Fatalf("authorization header = %q, want empty", got)
+	}
+	if got, want := request.Headers.Get("X-Model"), "model"; got != want {
+		t.Fatalf("model header = %q, want %q", got, want)
+	}
+	if got, want := request.Headers.Get("X-Shared"), "request"; got != want {
+		t.Fatalf("shared header = %q, want %q", got, want)
+	}
+}
+
+func TestVertexIgnoresTemplatedModelBaseURL(t *testing.T) {
+	t.Parallel()
+
+	requests := make(chan capturedVertexRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captureVertexRequest(t, requests, r)
+		writeVertexSSE(t, w, vertexCompletedEvent)
+	}))
+	t.Cleanup(server.Close)
+
+	model := vertexTestModel()
+	model.ProviderMetadata = map[string]any{"baseURL": "https://{location}-aiplatform.googleapis.com"}
+	client := vertexTestClientWithModel(
+		t,
+		model,
+		vertexAPIKeyResolver("vertex-api-key"),
+		WithVertexConfig(VertexConfig{ProjectID: "test-project", Location: "us-central1"}),
+		WithVertexBaseURL(server.URL+"/v1"),
+	)
+
+	if _, err := client.Complete(context.Background(), model, sigma.Request{Messages: []sigma.Message{sigma.UserText("hi")}}); err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+
+	request := receiveVertexRequest(t, requests)
+	if got, want := request.Path, "/v1/projects/test-project/locations/us-central1/publishers/google/models/gemini-test:streamGenerateContent"; got != want {
+		t.Fatalf("path = %q, want %q", got, want)
 	}
 }
 
@@ -349,6 +514,19 @@ func vertexTestClient(t *testing.T, opts ...VertexProviderOption) (*sigma.Client
 	t.Helper()
 
 	model := vertexTestModel()
+	return vertexTestClientWithModel(t, model, vertexAPIKeyResolver("vertex-api-key"), opts...), model
+}
+
+func vertexTestClientWithAuth(t *testing.T, resolver sigma.AuthResolver, opts ...VertexProviderOption) (*sigma.Client, sigma.Model) {
+	t.Helper()
+
+	model := vertexTestModel()
+	return vertexTestClientWithModel(t, model, resolver, opts...), model
+}
+
+func vertexTestClientWithModel(t *testing.T, model sigma.Model, resolver sigma.AuthResolver, opts ...VertexProviderOption) *sigma.Client {
+	t.Helper()
+
 	registry := sigma.NewRegistry()
 	if err := registry.RegisterTextProvider(sigma.ProviderGoogleVertex, NewVertexProvider(opts...)); err != nil {
 		t.Fatalf("RegisterTextProvider returned error: %v", err)
@@ -358,9 +536,9 @@ func vertexTestClient(t *testing.T, opts ...VertexProviderOption) (*sigma.Client
 	}
 	client := sigma.NewClient(
 		sigma.WithRegistry(registry),
-		sigma.WithAuthResolver(vertexAPIKeyResolver("vertex-api-key")),
+		sigma.WithAuthResolver(resolver),
 	)
-	return client, model
+	return client
 }
 
 func vertexTestModel() sigma.Model {

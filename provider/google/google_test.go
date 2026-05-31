@@ -47,6 +47,86 @@ func TestRegisterReportsGenerativeAIAPI(t *testing.T) {
 	}
 }
 
+func TestCompleteUsesModelBaseURLAndHeaders(t *testing.T) {
+	t.Parallel()
+
+	requests := make(chan capturedRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captureRequest(t, requests, r)
+		writeGoogleSSE(t, w, completedEvent)
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("google-model-metadata-test")
+	model := googleTestModel(providerID)
+	model.ProviderMetadata = map[string]any{
+		"baseURL": server.URL + "/model-base",
+		"headers": map[string]any{
+			"Authorization":  "Bearer metadata-secret",
+			"X-Goog-Api-Key": "metadata-key",
+			"X-Model":        "model",
+			"X-Shared":       "model",
+		},
+	}
+	client := googleTestClient(
+		t,
+		providerID,
+		model,
+		"https://provider-base.invalid",
+		google.WithHeader("X-Shared", "provider"),
+	)
+
+	if _, err := client.Complete(
+		context.Background(),
+		model,
+		sigma.Request{Messages: []sigma.Message{sigma.UserText("hi")}},
+		sigma.WithHeaders(map[string]string{"X-Shared": "request"}),
+	); err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+
+	request := receiveRequest(t, requests)
+	if got, want := request.Path, "/model-base/models/gemini-test:streamGenerateContent"; got != want {
+		t.Fatalf("path = %q, want %q", got, want)
+	}
+	assertHeader(t, request.Headers, "X-Goog-Api-Key", "resolved-key")
+	assertHeader(t, request.Headers, "X-Model", "model")
+	assertHeader(t, request.Headers, "X-Shared", "request")
+	if got := request.Headers.Get("Authorization"); got != "" {
+		t.Fatalf("authorization header = %q, want empty", got)
+	}
+}
+
+func TestCompleteProviderBaseURLOptionOverridesModelMetadata(t *testing.T) {
+	t.Parallel()
+
+	requests := make(chan capturedRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captureRequest(t, requests, r)
+		writeGoogleSSE(t, w, completedEvent)
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("google-model-base-url-override-test")
+	model := googleTestModel(providerID)
+	model.ProviderMetadata = map[string]any{"baseURL": "https://model-base.invalid"}
+	client := googleTestClient(t, providerID, model, "https://provider-base.invalid")
+
+	if _, err := client.Complete(
+		context.Background(),
+		model,
+		sigma.Request{Messages: []sigma.Message{sigma.UserText("hi")}},
+		sigma.WithProviderOptions(providerID, map[string]any{"base_url": server.URL + "/option-base"}),
+	); err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+
+	request := receiveRequest(t, requests)
+	if got, want := request.Path, "/option-base/models/gemini-test:streamGenerateContent"; got != want {
+		t.Fatalf("path = %q, want %q", got, want)
+	}
+}
+
 func TestCompleteSendsGoldenPayloadWithImagesToolsThinkingAndHooks(t *testing.T) {
 	t.Parallel()
 
@@ -401,6 +481,98 @@ func TestToolResultsMergeAndRouteImagesByGeminiVersion(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestNativeGeminiOmitsEmptyFunctionResponseID(t *testing.T) {
+	t.Parallel()
+
+	requests := make(chan capturedRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captureRequest(t, requests, r)
+		writeGoogleSSE(t, w, completedEvent)
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("google-empty-tool-id-test")
+	model := googleTestModel(providerID)
+	client := googleTestClient(t, providerID, model, server.URL)
+
+	_, err := client.Complete(context.Background(), model, sigma.Request{
+		Messages: []sigma.Message{
+			sigma.UserText("read"),
+			{
+				Role:    sigma.RoleAssistant,
+				Content: []sigma.ContentBlock{sigma.ToolCallBlock("", "read", map[string]any{"path": "a.txt"})},
+			},
+			{
+				Role:     sigma.RoleTool,
+				ToolName: "read",
+				Content:  []sigma.ContentBlock{sigma.Text("alpha")},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+
+	payload := decodeRequestPayload(t, receiveRequest(t, requests).Body)
+	contents := payload["contents"].([]any)
+	toolTurn := contents[2].(map[string]any)
+	parts := toolTurn["parts"].([]any)
+	response := parts[0].(map[string]any)["functionResponse"].(map[string]any)
+	if _, ok := response["id"]; ok {
+		t.Fatalf("function response id = %v, want omitted", response["id"])
+	}
+}
+
+func TestHostedGoogleToolCallIDsAreNormalizedForReplay(t *testing.T) {
+	t.Parallel()
+
+	requests := make(chan capturedRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captureRequest(t, requests, r)
+		writeGoogleSSE(t, w, completedEvent)
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("google-hosted-tool-id-test")
+	model := googleTestModel(providerID)
+	model.ID = "claude-test"
+	client := googleTestClient(t, providerID, model, server.URL)
+
+	_, err := client.Complete(context.Background(), model, sigma.Request{
+		Messages: []sigma.Message{
+			sigma.UserText("read"),
+			{
+				Role:    sigma.RoleAssistant,
+				Content: []sigma.ContentBlock{sigma.ToolCallBlock("call:prev/with spaces", "read", map[string]any{"path": "a.txt"})},
+			},
+			{
+				Role:       sigma.RoleTool,
+				ToolCallID: "call:prev/with spaces",
+				ToolName:   "read",
+				Content:    []sigma.ContentBlock{sigma.Text("alpha")},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+
+	payload := decodeRequestPayload(t, receiveRequest(t, requests).Body)
+	contents := payload["contents"].([]any)
+	modelTurn := contents[1].(map[string]any)
+	modelParts := modelTurn["parts"].([]any)
+	call := modelParts[0].(map[string]any)["functionCall"].(map[string]any)
+	if got, want := call["id"], "call_prev_with_spaces"; got != want {
+		t.Fatalf("function call id = %v, want %v", got, want)
+	}
+	toolTurn := contents[2].(map[string]any)
+	toolParts := toolTurn["parts"].([]any)
+	response := toolParts[0].(map[string]any)["functionResponse"].(map[string]any)
+	if got, want := response["id"], "call_prev_with_spaces"; got != want {
+		t.Fatalf("function response id = %v, want %v", got, want)
 	}
 }
 

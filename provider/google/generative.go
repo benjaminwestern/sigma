@@ -212,7 +212,7 @@ func (p *Provider) newRequest(ctx context.Context, model sigma.Model, req sigma.
 		return nil, fmt.Errorf("google generative ai: encode request: %w", err)
 	}
 
-	endpoint, err := p.endpoint(model.Provider, model.ID, opts)
+	endpoint, err := p.endpoint(model, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -224,11 +224,14 @@ func (p *Provider) newRequest(ctx context.Context, model sigma.Model, req sigma.
 	httpReq.Header.Set("Accept", "text/event-stream")
 	httpReq.Header.Set("User-Agent", "sigma/google-generative-ai")
 
-	if err := p.addAuthHeader(ctx, httpReq, model, opts); err != nil {
-		return nil, err
-	}
 	for key, value := range p.headers {
 		httpReq.Header.Set(key, value)
+	}
+	for key, value := range googleModelHeaders(model) {
+		httpReq.Header.Set(key, value)
+	}
+	if err := p.addAuthHeader(ctx, httpReq, model, opts); err != nil {
+		return nil, err
 	}
 	for key, value := range opts.Headers {
 		httpReq.Header.Set(key, value)
@@ -263,23 +266,37 @@ func (p *Provider) addAuthHeader(ctx context.Context, req *http.Request, model s
 	return nil
 }
 
-func (p *Provider) endpoint(provider sigma.ProviderID, model sigma.ModelID, opts sigma.Options) (string, error) {
-	options := providerOptions(opts, provider)
+func (p *Provider) endpoint(model sigma.Model, opts sigma.Options) (string, error) {
+	options := providerOptions(opts, model.Provider)
 	if endpoint, ok := stringOption(options, providerOptionEndpoint); ok {
 		return endpoint, nil
 	}
 
-	baseURL := p.baseURLForProvider(provider, opts)
+	baseURL := p.baseURLForModel(model, opts)
 	parsed, err := url.Parse(baseURL)
 	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
 		return "", fmt.Errorf("google generative ai: invalid base URL %q", baseURL)
 	}
-	endpoint := baseURL + "/" + modelPath(model) + ":streamGenerateContent"
+	endpoint := baseURL + "/" + modelPath(model.ID) + ":streamGenerateContent"
 	separator := "?"
 	if strings.Contains(endpoint, "?") {
 		separator = "&"
 	}
 	return endpoint + separator + "alt=sse", nil
+}
+
+func (p *Provider) baseURLForModel(model sigma.Model, opts sigma.Options) string {
+	baseURL := p.baseURLForProvider(model.Provider, opts)
+	if value := modelMetadataString(model.ProviderMetadata, "baseURL"); value != "" {
+		baseURL = value
+	}
+	options := providerOptions(opts, model.Provider)
+	if value, ok := stringOption(options, providerOptionBaseURL); ok {
+		baseURL = value
+	} else if value, ok := stringOption(options, providerOptionBaseURLCamel); ok {
+		baseURL = value
+	}
+	return strings.TrimRight(baseURL, "/")
 }
 
 func (p *Provider) baseURLForProvider(provider sigma.ProviderID, opts sigma.Options) string {
@@ -294,6 +311,58 @@ func (p *Provider) baseURLForProvider(provider sigma.ProviderID, opts sigma.Opti
 		baseURL = value
 	}
 	return strings.TrimRight(baseURL, "/")
+}
+
+func googleModelHeaders(model sigma.Model) map[string]string {
+	raw := model.ProviderMetadata["headers"]
+	var headers map[string]string
+	switch values := raw.(type) {
+	case map[string]string:
+		headers = values
+	case map[string]any:
+		headers = make(map[string]string, len(values))
+		for key, value := range values {
+			text, ok := value.(string)
+			if !ok {
+				continue
+			}
+			headers[key] = text
+		}
+	default:
+		return nil
+	}
+	if len(headers) == 0 {
+		return nil
+	}
+	copied := make(map[string]string, len(headers))
+	for key, value := range headers {
+		if unsafeGoogleMetadataHeader(key) {
+			continue
+		}
+		copied[key] = value
+	}
+	return copied
+}
+
+func unsafeGoogleMetadataHeader(key string) bool {
+	switch strings.ToLower(strings.TrimSpace(key)) {
+	case "authorization", "proxy-authorization", "x-goog-api-key":
+		return true
+	default:
+		return false
+	}
+}
+
+func modelMetadataString(metadata map[string]any, key string) string {
+	value, ok := metadata[key]
+	if !ok {
+		return ""
+	}
+	text, ok := value.(string)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(text)
 }
 
 func (p *Provider) httpClient(opts sigma.Options) *http.Client {

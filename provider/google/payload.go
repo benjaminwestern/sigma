@@ -91,8 +91,9 @@ func generativePayload(model sigma.Model, req sigma.Request, opts sigma.Options)
 
 func googleContents(model sigma.Model, req sigma.Request) ([]map[string]any, error) {
 	contents := make([]map[string]any, 0, len(req.Messages))
+	ids := newGoogleToolCallIDNormalizer(model.ID)
 	for _, message := range req.Messages {
-		converted, err := googleContent(model, message)
+		converted, err := googleContent(model, message, ids)
 		if err != nil {
 			return nil, err
 		}
@@ -104,7 +105,7 @@ func googleContents(model sigma.Model, req sigma.Request) ([]map[string]any, err
 	return contents, nil
 }
 
-func googleContent(model sigma.Model, message sigma.Message) ([]map[string]any, error) {
+func googleContent(model sigma.Model, message sigma.Message, ids *googleToolCallIDNormalizer) ([]map[string]any, error) {
 	switch message.Role {
 	case sigma.RoleUser, sigma.RoleDeveloper:
 		parts, err := googleInputParts(message.Content)
@@ -113,13 +114,13 @@ func googleContent(model sigma.Model, message sigma.Message) ([]map[string]any, 
 		}
 		return []map[string]any{{"role": "user", "parts": parts}}, nil
 	case sigma.RoleAssistant:
-		parts, err := googleAssistantParts(model, message)
+		parts, err := googleAssistantParts(model, message, ids)
 		if err != nil {
 			return nil, err
 		}
 		return []map[string]any{{"role": "model", "parts": parts}}, nil
 	case sigma.RoleTool:
-		return googleToolResultContents(model, message)
+		return googleToolResultContents(model, message, ids)
 	default:
 		return nil, fmt.Errorf("google generative ai: unsupported message role %q", message.Role)
 	}
@@ -179,7 +180,7 @@ func googleInputParts(blocks []sigma.ContentBlock) ([]map[string]any, error) {
 	return parts, nil
 }
 
-func googleAssistantParts(model sigma.Model, message sigma.Message) ([]map[string]any, error) {
+func googleAssistantParts(model sigma.Model, message sigma.Message, ids *googleToolCallIDNormalizer) ([]map[string]any, error) {
 	parts := make([]map[string]any, 0, len(message.Content))
 	for _, block := range message.Content {
 		switch block.Type {
@@ -206,8 +207,8 @@ func googleAssistantParts(model sigma.Model, message sigma.Message) ([]map[strin
 				"name": block.ToolName,
 				"args": args,
 			}
-			if block.ToolCallID != "" {
-				call["id"] = block.ToolCallID
+			if id := ids.normalize(block.ToolCallID); id != "" {
+				call["id"] = id
 			}
 			part := map[string]any{"functionCall": call}
 			addThoughtSignature(part, replayThoughtSignature(model, message, block.ProviderSignature))
@@ -219,7 +220,7 @@ func googleAssistantParts(model sigma.Model, message sigma.Message) ([]map[strin
 	return parts, nil
 }
 
-func googleToolResultContents(model sigma.Model, message sigma.Message) ([]map[string]any, error) {
+func googleToolResultContents(model sigma.Model, message sigma.Message, ids *googleToolCallIDNormalizer) ([]map[string]any, error) {
 	text, images, err := googleToolResultContent(message.Content)
 	if err != nil {
 		return nil, err
@@ -237,8 +238,10 @@ func googleToolResultContents(model sigma.Model, message sigma.Message) ([]map[s
 	}
 	functionResponse := map[string]any{
 		"name":     message.ToolName,
-		"id":       message.ToolCallID,
 		"response": response,
+	}
+	if id := ids.normalize(message.ToolCallID); id != "" {
+		functionResponse["id"] = id
 	}
 	if len(images) > 0 && supportsGoogleMultimodalFunctionResponse(model.ID) {
 		functionResponse["parts"] = images
@@ -638,6 +641,73 @@ func supportsGoogleMultimodalFunctionResponse(modelID sigma.ModelID) bool {
 		return true
 	}
 	return major >= 3
+}
+
+type googleToolCallIDNormalizer struct {
+	required bool
+	ids      map[string]string
+	used     map[string]string
+}
+
+func newGoogleToolCallIDNormalizer(modelID sigma.ModelID) *googleToolCallIDNormalizer {
+	return &googleToolCallIDNormalizer{
+		required: requiresGoogleToolCallID(modelID),
+		ids:      make(map[string]string),
+		used:     make(map[string]string),
+	}
+}
+
+func (n *googleToolCallIDNormalizer) normalize(id string) string {
+	if id == "" {
+		return ""
+	}
+	if !n.required {
+		return id
+	}
+	if normalized := n.ids[id]; normalized != "" {
+		return normalized
+	}
+	base := googleSafeToolCallID(id)
+	for attempt := 0; ; attempt++ {
+		candidate := base
+		if attempt > 0 {
+			suffix := "_" + strconv.Itoa(attempt)
+			candidate = strings.TrimRight(base[:min(len(base), max(1, 64-len(suffix)))], "_") + suffix
+		}
+		if owner := n.used[candidate]; owner == "" || owner == id {
+			n.ids[id] = candidate
+			n.used[candidate] = id
+			return candidate
+		}
+	}
+}
+
+func googleSafeToolCallID(id string) string {
+	var out strings.Builder
+	for _, r := range id {
+		switch {
+		case r >= 'a' && r <= 'z',
+			r >= 'A' && r <= 'Z',
+			r >= '0' && r <= '9',
+			r == '_',
+			r == '-':
+			out.WriteRune(r)
+		default:
+			out.WriteByte('_')
+		}
+		if out.Len() == 64 {
+			break
+		}
+	}
+	if out.Len() == 0 {
+		return "_"
+	}
+	return out.String()
+}
+
+func requiresGoogleToolCallID(modelID sigma.ModelID) bool {
+	id := strings.ToLower(string(modelID))
+	return strings.HasPrefix(id, "claude-") || strings.HasPrefix(id, "gpt-oss-")
 }
 
 func geminiMajorVersion(modelID sigma.ModelID) (int, bool) {

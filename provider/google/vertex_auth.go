@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/wintermi/sigma"
 	"github.com/wintermi/sigma/internal/redact"
@@ -56,6 +57,12 @@ func (p *VertexProvider) vertexCredential(ctx context.Context, model sigma.Model
 	default:
 		credential, err := p.vertexResolvedCredential(ctx, model, opts, "")
 		if err == nil {
+			if credential.Type == sigma.CredentialTypeAPIKey && vertexAPIKeyUnavailable(credential.Value) {
+				if p.tokenProvider != nil {
+					return p.vertexTokenCredential(ctx, model, opts)
+				}
+				return sigma.Credential{}, p.vertexCredentialUnavailable(model, credential.Source)
+			}
 			return credential, nil
 		}
 		if !errors.Is(err, sigma.ErrCredentialUnavailable) {
@@ -81,6 +88,9 @@ func (p *VertexProvider) vertexResolvedCredential(ctx context.Context, model sig
 	}
 	if credential.Type == "" {
 		credential.Type = sigma.CredentialTypeAPIKey
+	}
+	if want == sigma.CredentialTypeAPIKey && vertexAPIKeyUnavailable(credential.Value) {
+		return sigma.Credential{}, p.vertexCredentialUnavailable(model, credential.Source)
 	}
 	if want != "" && credential.Type != want {
 		return sigma.Credential{}, vertexInvalidOptions(model, fmt.Sprintf("google vertex: credential mode %q requires %q credential, got %q", want, want, credential.Type), nil)
@@ -114,6 +124,17 @@ func (p *VertexProvider) vertexCredentialUnavailable(model sigma.Model, sources 
 		Model:    model.ID,
 		Sources:  sources,
 	}
+}
+
+func vertexAPIKeyUnavailable(value string) bool {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return true
+	}
+	if trimmed == "gcp-vertex-credentials" {
+		return true
+	}
+	return strings.HasPrefix(trimmed, "<") && strings.HasSuffix(trimmed, ">")
 }
 
 func vertexAuthError(model sigma.Model, message string, err error) error {

@@ -286,11 +286,14 @@ func (p *VertexProvider) newRequest(ctx context.Context, model sigma.Model, req 
 	httpReq.Header.Set("Accept", "text/event-stream")
 	httpReq.Header.Set("User-Agent", "sigma/google-vertex")
 
-	if err := p.addAuthHeader(ctx, httpReq, model, opts, config); err != nil {
-		return nil, err
-	}
 	for key, value := range p.headers {
 		httpReq.Header.Set(key, value)
+	}
+	for key, value := range googleModelHeaders(model) {
+		httpReq.Header.Set(key, value)
+	}
+	if err := p.addAuthHeader(ctx, httpReq, model, opts, config); err != nil {
+		return nil, err
 	}
 	for key, value := range opts.Headers {
 		httpReq.Header.Set(key, value)
@@ -326,6 +329,9 @@ func (p *VertexProvider) requestConfig(model sigma.Model, opts sigma.Options) (v
 }
 
 func (c *vertexRequestConfig) applyMetadata(metadata map[string]any) {
+	if value := modelMetadataString(metadata, "baseURL"); value != "" && !strings.Contains(value, "{location}") {
+		c.BaseURL = value
+	}
 	c.ProjectID = metadataString(metadata, vertexMetadataProjectID, c.ProjectID)
 	c.Location = metadataString(metadata, vertexMetadataLocation, c.Location)
 	c.Location = metadataString(metadata, vertexMetadataRegion, c.Location)

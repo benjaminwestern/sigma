@@ -13,8 +13,10 @@ prompt caching, replay, stream parsing, and Codex OAuth, and adds typed
 provider error classification for safer caller retry and recovery decisions.
 It also broadens the OpenAI image preview surface with edit, variation,
 streaming partial-image, and Responses image-generation tool coverage backed by
-deterministic fixtures. Direct xAI/Grok support remains focused on the preview
-Chat Completions adapter.
+deterministic fixtures. The Google preview adapters now include the scoped
+provider hardening for Vertex credential fallback, model-scoped routing
+metadata, and replayed tool-call IDs. Direct xAI/Grok support remains focused
+on the preview Chat Completions adapter.
 
 ## Added
 
@@ -59,6 +61,13 @@ Chat Completions adapter.
   billing, context overflow, rate limits, transient failures, invalid requests,
   provider failures, and unknown errors, including provider retry-after hints
   where available.
+- Google Generative AI and Vertex AI consume concrete model-scoped `baseURL`
+  and `headers` metadata, preserve request/provider option precedence, and keep
+  generated Vertex `{location}` templates out of request hosts.
+- Google Vertex AI can fall back from placeholder API-key values to configured
+  OAuth/ADC token providers in auto credential mode.
+- Google replay normalizes tool-call IDs for Google-hosted model families that
+  require explicit function IDs and omits empty Gemini function-response IDs.
 
 ## Compatibility
 
@@ -78,6 +87,9 @@ Chat Completions adapter.
 
 ## Deferred work
 
+- Broader Google Gemini API and Vertex AI catalog coverage remains deferred to
+  the catalog refresh workflow with deterministic modeldata, payload, error,
+  and compatibility coverage.
 - Direct xAI/Grok image-provider semantics remain deferred until the request
   and response shape is covered by deterministic fixtures.
 - Live OpenAI image validation remains deferred to opt-in probes; deterministic
