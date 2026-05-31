@@ -7,22 +7,28 @@ checklist see [RELEASING.md](../RELEASING.md).
 
 ## Release summary
 
-v0.3.0 extends Sigma's generated image metadata with an OpenRouter-routed Grok
-Imagine image model, tightens the OpenAI-compatible preview adapters around
-prompt caching, replay, stream parsing, and Codex OAuth, and adds typed
-provider error classification for safer caller retry and recovery decisions.
-It also broadens the OpenAI image preview surface with edit, variation,
-streaming partial-image, and Responses image-generation tool coverage backed by
-deterministic fixtures. The Google preview adapters now include the scoped
-provider hardening for Vertex credential fallback, model-scoped routing
-metadata, and replayed tool-call IDs. Direct xAI/Grok support remains focused
-on the preview Chat Completions adapter.
+v0.3.0 refreshes Sigma's generated model catalog with curated current metadata
+for supported provider IDs, including broader OpenAI, Anthropic, Google, Vertex
+AI, Mistral, Bedrock, OpenCode, and metadata-only OpenAI-compatible rows. It
+also extends generated image metadata with OpenRouter-routed Grok and Gemini
+image routes, tightens the OpenAI-compatible preview adapters around prompt
+caching, replay, stream parsing, and Codex OAuth, and adds typed provider error
+classification for safer caller retry and recovery decisions. The Google
+preview adapters now include the scoped provider hardening for Vertex
+credential fallback, model-scoped routing metadata, and replayed tool-call IDs.
+Direct xAI/Grok support remains focused on the preview Chat Completions adapter.
 
 ## Added
 
 - Generated image model metadata for `x-ai/grok-imagine-image-quality` through
   the existing OpenRouter image-generation adapter, including OpenRouter
   credential discovery and xAI routed-provider metadata.
+- Curated generated text metadata for current OpenAI, Anthropic, Google,
+  Vertex AI, Mistral, Bedrock, OpenCode, and OpenAI-compatible model rows while
+  keeping default registry entries metadata-only until providers are registered.
+- Generated OpenRouter image metadata for the stable Gemini image route and
+  additional current image-generation routes through the existing
+  `openrouter-images` provider path.
 - OpenAI Chat Completions, Responses, and Codex Responses derive bounded
   `prompt_cache_key` values from `sigma.WithSessionID` when prompt caching is
   enabled.
@@ -90,6 +96,12 @@ on the preview Chat Completions adapter.
 - Broader Google Gemini API and Vertex AI catalog coverage remains deferred to
   the catalog refresh workflow with deterministic modeldata, payload, error,
   and compatibility coverage.
+- Broad OpenRouter text expansion, Bedrock regional aliases, and automated
+  catalog ingestion remain deferred to the catalog refresh workflow.
+- Anthropic-compatible Fireworks model routing remains deferred; the built-in
+  Fireworks row stays on the OpenAI-compatible Fire Pass route.
+- Mistral image input remains deferred until the Conversations request shape is
+  covered by deterministic payload fixtures.
 - Direct xAI/Grok image-provider semantics remain deferred until the request
   and response shape is covered by deterministic fixtures.
 - Live OpenAI image validation remains deferred to opt-in probes; deterministic
@@ -106,5 +118,6 @@ on the preview Chat Completions adapter.
 This release should use the validation process in [RELEASING.md](../RELEASING.md).
 No live xAI or OpenRouter provider calls are required for release validation.
 OpenAI provider changes, image generation/edit/variation/streaming behavior,
-Codex OAuth flows, and typed provider error classification are covered by
-deterministic request, response, OAuth, and SSE fixtures.
+Codex OAuth flows, typed provider error classification, and generated catalog
+metadata are covered by deterministic request, response, OAuth, SSE, checksum,
+and registry fixtures.

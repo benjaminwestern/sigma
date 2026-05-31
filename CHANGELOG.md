@@ -15,6 +15,13 @@ See [release notes](docs/release-notes-v0.3.0.md).
 - Generated image metadata now includes the OpenRouter-routed Grok Imagine
   image-quality model, marked with xAI routing metadata and `OPENROUTER_API_KEY`
   credential discovery.
+- Generated text and image metadata has been refreshed with curated current
+  rows for the supported Sigma provider IDs, including broader OpenAI,
+  Anthropic, Google, Vertex AI, Mistral, Bedrock, OpenCode, and metadata-only
+  OpenAI-compatible model coverage.
+- Generated OpenRouter image metadata now includes the stable Gemini image route
+  and additional current image-generation routes while keeping broad OpenRouter
+  text expansion deferred to the catalog refresh workflow.
 - OpenAI Chat Completions, Responses, and Codex Responses now derive bounded
   `prompt_cache_key` values from `sigma.WithSessionID` when prompt caching is
   enabled, and map long-lived cache retention to OpenAI's `24h` retention where
@@ -100,9 +107,11 @@ See [release notes](docs/release-notes-v0.3.0.md).
 - Mistral Conversations image input, built-in connectors, append/restart, and
   broad catalog expansion remain deferred until their request shapes are covered
   by deterministic fixtures.
-- Broad Bedrock catalog expansion, AWS SDK credential-chain integration,
+- Bedrock regional alias expansion, AWS SDK credential-chain integration,
   profiles, SSO, web identity, IMDS, shared AWS config loading, and live
   Bedrock CI coverage remain deferred.
+- Anthropic-compatible Fireworks model routing remains deferred; the built-in
+  Fireworks row continues to target the OpenAI-compatible Fire Pass route.
 - Live Google Gemini API and Vertex AI validation remains deferred; deterministic
   fixtures are the release evidence for the Google preview adapters.
 - The Go package targets server/CLI use; browser-specific behavior is out of

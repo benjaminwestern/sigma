@@ -124,6 +124,24 @@ func TestGeneratedModelMetadataRegistersIntoFreshRegistry(t *testing.T) {
 	if got, ok := reasoning.ProviderThinkingLevel(ThinkingLevelHigh); !ok || got != "high" {
 		t.Fatalf("reasoning high level = %q, %v; want high, true", got, ok)
 	}
+	gpt54, ok := registry.Model(ProviderOpenAI, "gpt-5.4")
+	if !ok {
+		t.Fatal("fresh registry missing generated GPT-5.4 model")
+	}
+	if gpt54.API != APIOpenAIResponses || !gpt54.SupportsTools || !gpt54.SupportsImages() || !gpt54.SupportsReasoning() {
+		t.Fatalf("GPT-5.4 metadata = %+v, want Responses with tools, images, and reasoning", gpt54)
+	}
+	if got, ok := gpt54.ProviderThinkingLevel(ThinkingLevelXHigh); !ok || got != "xhigh" {
+		t.Fatalf("GPT-5.4 xhigh level = %q, %v; want xhigh, true", got, ok)
+	}
+
+	googleFlash, ok := registry.Model(ProviderGoogle, "gemini-3.5-flash")
+	if !ok {
+		t.Fatal("fresh registry missing generated Gemini 3.5 Flash model")
+	}
+	if googleFlash.API != APIGoogleGenerativeAI || !googleFlash.SupportsTools || !googleFlash.SupportsImages() || !googleFlash.SupportsReasoning() {
+		t.Fatalf("Gemini 3.5 Flash metadata = %+v, want Generative AI tools, images, and reasoning", googleFlash)
+	}
 
 	mistralSmall, ok := registry.Model(ProviderMistral, "mistral-small-latest")
 	if !ok {
@@ -145,6 +163,23 @@ func TestGeneratedModelMetadataRegistersIntoFreshRegistry(t *testing.T) {
 		t.Fatalf("Magistral metadata = %+v, want conversations tools and reasoning", magistral)
 	}
 	assertMetadataString(t, magistral.ProviderMetadata, "mistral_reasoning_mode", "prompt_mode")
+	mistralMedium, ok := registry.Model(ProviderMistral, "mistral-medium-2604")
+	if !ok {
+		t.Fatal("fresh registry missing generated Mistral Medium 3.5 model")
+	}
+	if mistralMedium.API != APIMistralConversations || !mistralMedium.SupportsTools || mistralMedium.SupportsImages() || !mistralMedium.SupportsReasoning() {
+		t.Fatalf("Mistral Medium 3.5 metadata = %+v, want text-only conversations tools and reasoning", mistralMedium)
+	}
+	assertMetadataString(t, mistralMedium.ProviderMetadata, "mistral_reasoning_mode", "reasoning_effort")
+
+	nova, ok := registry.Model(ProviderAmazonBedrock, "amazon.nova-2-lite-v1:0")
+	if !ok {
+		t.Fatal("fresh registry missing generated Bedrock Nova 2 Lite model")
+	}
+	if nova.API != APIBedrockConverseStream || !nova.SupportsTools || !nova.SupportsImages() || nova.SupportsReasoning() {
+		t.Fatalf("Bedrock Nova 2 Lite metadata = %+v, want Converse Stream tools and images without reasoning", nova)
+	}
+	assertMetadataString(t, nova.ProviderMetadata, "modelFamily", "nova")
 
 	routed, ok := registry.Model(ProviderOpenRouter, "openai/gpt-4o-mini")
 	if !ok {
@@ -193,6 +228,7 @@ func TestGeneratedModelMetadataRegistersIntoFreshRegistry(t *testing.T) {
 	assertOpenCodeAPI(t, registry, ProviderOpenCode, "claude-opus-4-7", APIAnthropicMessages)
 	assertOpenCodeAPI(t, registry, ProviderOpenCode, "qwen3.6-plus", APIAnthropicMessages)
 	assertOpenCodeAPI(t, registry, ProviderOpenCode, "gpt-5.1-codex", APIOpenAIResponses)
+	assertOpenCodeAPI(t, registry, ProviderOpenCode, "gpt-5.4", APIOpenAIResponses)
 
 	grokBuild, ok := registry.Model(ProviderOpenCode, "grok-build-0.1")
 	if !ok {
@@ -264,6 +300,16 @@ func TestGeneratedModelMetadataRegistersIntoFreshRegistry(t *testing.T) {
 	}
 	assertMetadataString(t, grokImage.ProviderMetadata, "routedProvider", "xai")
 	assertMetadataStrings(t, grokImage.ProviderMetadata, MetadataAPIKeyEnvVars, []string{"OPENROUTER_API_KEY"})
+
+	geminiImage, ok := registry.ImageModel(ProviderOpenRouter, "google/gemini-2.5-flash-image")
+	if !ok {
+		t.Fatal("fresh registry missing generated stable OpenRouter Gemini image model")
+	}
+	if geminiImage.API != ImageAPIOpenRouterImages {
+		t.Fatalf("Gemini image API = %q, want %q", geminiImage.API, ImageAPIOpenRouterImages)
+	}
+	assertMetadataString(t, geminiImage.ProviderMetadata, "routedProvider", "google")
+	assertMetadataStrings(t, geminiImage.ProviderMetadata, MetadataAPIKeyEnvVars, []string{"OPENROUTER_API_KEY"})
 }
 
 func assertProviderConstantsHaveGeneratedTextMetadata(t *testing.T, registry *Registry) {
@@ -313,6 +359,18 @@ func assertGeneratedOpenAICompatibleProviderMetadata(t *testing.T, registry *Reg
 	}
 	if got, ok := deepSeek.ProviderThinkingLevel(ThinkingLevelXHigh); !ok || got != "max" {
 		t.Fatalf("DeepSeek xhigh level = %q, %v; want max, true", got, ok)
+	}
+	deepSeekPro, ok := registry.Model(ProviderDeepSeek, "deepseek-v4-pro")
+	if !ok {
+		t.Fatal("fresh registry missing generated DeepSeek V4 Pro model")
+	}
+	if deepSeekPro.OpenAICompletionsCompat == nil ||
+		deepSeekPro.OpenAICompletionsCompat.ReasoningFormat != OpenAICompletionsReasoningDeepSeek ||
+		deepSeekPro.OpenAICompletionsCompat.RequiresReasoningContentOnAssistantMessages != OpenAICompatSupported {
+		t.Fatalf("DeepSeek V4 Pro compat = %#v, want deepseek reasoning content replay", deepSeekPro.OpenAICompletionsCompat)
+	}
+	if got, ok := deepSeekPro.ProviderThinkingLevel(ThinkingLevelXHigh); !ok || got != "max" {
+		t.Fatalf("DeepSeek V4 Pro xhigh level = %q, %v; want max, true", got, ok)
 	}
 
 	together, ok := registry.Model(ProviderTogether, "Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8")
@@ -416,6 +474,14 @@ func assertGeneratedVertexMetadata(t *testing.T, registry *Registry) {
 	}
 	assertMetadataString(t, vertex.ProviderMetadata, "vertexPublisher", "google")
 	assertMetadataStrings(t, vertex.ProviderMetadata, MetadataAPIKeyEnvVars, []string{"GOOGLE_CLOUD_API_KEY", "GOOGLE_API_KEY"})
+	vertexPro, ok := registry.Model(ProviderGoogleVertex, "gemini-3.1-pro-preview")
+	if !ok {
+		t.Fatal("fresh registry missing generated Vertex Gemini 3.1 Pro Preview model")
+	}
+	if vertexPro.API != APIGoogleVertex || !vertexPro.SupportsTools || !vertexPro.SupportsImages() || !vertexPro.SupportsReasoning() {
+		t.Fatalf("Vertex Gemini 3.1 Pro Preview metadata = %+v, want Vertex tools, images, and reasoning", vertexPro)
+	}
+	assertMetadataString(t, vertexPro.ProviderMetadata, "vertexPublisher", "google")
 }
 
 func TestGeneratedModelMetadataOrder(t *testing.T) {

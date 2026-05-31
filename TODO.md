@@ -75,6 +75,9 @@ That keeps release output reviewable, but refreshes are manual and the default
 catalog is intentionally smaller than the provider/source metadata available
 upstream.
 
+- [x] Refresh the curated v0.3 generated catalog with current rows for
+      supported provider IDs while preserving Sigma runtime contracts and
+      metadata-only default registration.
 - [ ] Add an offline-friendly refresh command that can ingest `models.dev` and
       provider catalog APIs into a candidate catalog file without replacing the
       checked-in review step.
@@ -84,9 +87,9 @@ upstream.
       mismatches.
 - [ ] Emit a refresh report that lists added, removed, changed, skipped, and
       overridden models by provider so catalog review is tractable.
-- [ ] Expand broad OpenRouter text and image metadata only through the catalog
-      refresh workflow, with deterministic diffs and reviewable routing/cost
-      changes instead of ad hoc catalog imports.
+- [ ] Expand broad OpenRouter text metadata only through the catalog refresh
+      workflow, with deterministic diffs and reviewable routing/cost changes
+      instead of ad hoc catalog imports.
 - [ ] Preserve Sigma's current generated-output contract: deterministic order,
       validated `internal/modeldata/catalog.json`, generated Go code, checksum
       tests, and metadata-only default registry entries.
@@ -126,6 +129,9 @@ evidence bar.
       `cmd/sigma-surface-probe`.
 - [ ] Keep live Fireworks probing out of `mise run ci`; use it only for manual
       compatibility investigation with `FIREWORKS_API_KEY`.
+- [ ] Add Fireworks Anthropic-compatible routing before promoting regular
+      Fireworks model rows that do not use the OpenAI-compatible Fire Pass
+      route.
 - [ ] Promote additional Fireworks metadata only after matching deterministic
       modeldata, payload, error, and compatibility coverage exists.
 
