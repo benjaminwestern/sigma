@@ -22,18 +22,20 @@ import (
 const (
 	codexOptionOAuthTokenProvider   = "oauth_token_provider"
 	codexOptionOAuthTokenProviderGo = "oauthTokenProvider"
+	codexDefaultInstructions        = "You are a helpful assistant."
 )
 
 // WithCodexResponsesOAuthTokenProvider supplies the OAuth bearer-token source
-// used by the Codex Responses provider. Interactive OAuth login and device-flow
-// handling are intentionally outside the core provider.
+// used by the Codex Responses provider. Use NewCodexOAuthTokenProvider with
+// LoginOpenAICodexDeviceCode when callers want Sigma-managed refresh without
+// Sigma-managed token persistence.
 func WithCodexResponsesOAuthTokenProvider(provider sigma.ProviderID, tokenProvider sigma.OAuthTokenProvider) sigma.Option {
 	return sigma.WithProviderOption(provider, codexOptionOAuthTokenProviderGo, tokenProvider)
 }
 
 // CodexResponsesProvider adapts OpenAI Codex Responses to sigma. It reuses the
-// OpenAI Responses payload and SSE parsing path, but requires an explicit OAuth
-// token provider instead of reading credentials from environment or global state.
+// OpenAI Responses payload and SSE parsing path, but requires explicit OAuth
+// credentials instead of reading credentials from environment or global state.
 type CodexResponsesProvider struct {
 	base *Provider
 }
@@ -138,6 +140,7 @@ func (p *CodexResponsesProvider) newRequest(ctx context.Context, model sigma.Mod
 	if err != nil {
 		return nil, err
 	}
+	normalizeCodexResponsesPayload(payload)
 	if model.OpenAICodexResponses != nil && model.OpenAICodexResponses.Model != "" {
 		payload["model"] = model.OpenAICodexResponses.Model
 	}
@@ -156,6 +159,8 @@ func (p *CodexResponsesProvider) newRequest(ctx context.Context, model sigma.Mod
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Accept", "text/event-stream")
+	httpReq.Header.Set("OpenAI-Beta", "responses=experimental")
+	httpReq.Header.Set("originator", "sigma")
 	httpReq.Header.Set("User-Agent", "sigma/openai-codex-responses")
 
 	if err := p.addAuthHeader(ctx, httpReq, model, opts); err != nil {
@@ -173,6 +178,16 @@ func (p *CodexResponsesProvider) newRequest(ctx context.Context, model sigma.Mod
 		return nil, err
 	}
 	return httpReq, nil
+}
+
+func normalizeCodexResponsesPayload(payload map[string]any) {
+	payload["store"] = false
+	delete(payload, "max_output_tokens")
+	delete(payload, "previous_response_id")
+	if instructions, _ := payload["instructions"].(string); instructions != "" {
+		return
+	}
+	payload["instructions"] = codexDefaultInstructions
 }
 
 func (p *CodexResponsesProvider) addAuthHeader(ctx context.Context, req *http.Request, model sigma.Model, opts sigma.Options) error {
@@ -205,7 +220,18 @@ func (p *CodexResponsesProvider) addAuthHeader(ctx context.Context, req *http.Re
 			Sources:  []string{"oauth-token-provider"},
 		}
 	}
+	accountID, err := codexAccountIDFromCredential(credential)
+	if err != nil {
+		return &sigma.Error{
+			Code:     sigma.ErrorUnsupported,
+			Message:  "openai codex responses: oauth account id is required",
+			Provider: model.Provider,
+			Model:    model.ID,
+			Err:      err,
+		}
+	}
 	req.Header.Set("Authorization", "Bearer "+credential.Value)
+	req.Header.Set("chatgpt-account-id", accountID)
 	return nil
 }
 
@@ -223,7 +249,20 @@ func (p *CodexResponsesProvider) addProviderHeaders(req *http.Request, provider 
 		} else if header, ok := stringOption(options, providerOptionSessionHeaderGo); ok {
 			req.Header.Set(header, opts.SessionID)
 		}
+		req.Header.Set("session-id", opts.SessionID)
+		req.Header.Set("x-client-request-id", opts.SessionID)
 	}
+}
+
+func codexAccountIDFromCredential(credential sigma.Credential) (string, error) {
+	if credential.Metadata != nil {
+		for _, key := range []string{codexOAuthCredentialAccountID, codexOAuthCredentialChatGPTAcctID} {
+			if value, ok := credential.Metadata[key].(string); ok && value != "" {
+				return value, nil
+			}
+		}
+	}
+	return codexAccountIDFromToken(credential.Value)
 }
 
 func (p *CodexResponsesProvider) endpoint(model sigma.Model, opts sigma.Options) (string, error) {

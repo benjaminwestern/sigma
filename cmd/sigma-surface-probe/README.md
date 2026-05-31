@@ -22,6 +22,7 @@ Common flags:
 -models                 comma-separated model IDs; omitting this discovers models
 -repair                 try targeted repair variants after a failing case
 -include-unavailable    probe known unavailable advertised models instead of skipping
+-codex-oauth            run OpenAI Codex device-code OAuth for openai-codex
 -timeout                overall probe timeout, default 10m
 ```
 
@@ -31,6 +32,8 @@ Default routes are `zen,go`. All other routes must be requested explicitly.
 
 | Route | API shape | Credential | Default model behavior |
 | --- | --- | --- | --- |
+| `openai` | OpenAI Responses | `OPENAI_API_KEY` | Discovers OpenAI models |
+| `openai-codex` | OpenAI Codex Responses | `OPENAI_CODEX_ACCESS_TOKEN`, `OPENAI_CODEX_REFRESH_TOKEN`, or `-codex-oauth` | Uses `gpt-5.3-codex` unless `-models` is set |
 | `zen` | OpenCode routed surfaces | `OPENCODE_API_KEY` | Discovers Zen models |
 | `go` | OpenCode Go routed surfaces | `OPENCODE_API_KEY` | Discovers Go models |
 | `fireworks-openai` | Fireworks OpenAI-compatible Chat Completions | `FIREWORKS_API_KEY` | Discovers Fireworks models |
@@ -93,6 +96,29 @@ XAI_API_KEY=... mise run go:run -- ./cmd/sigma-surface-probe \
   -repair
 ```
 
+Probe OpenAI Responses with a known model:
+
+```bash
+OPENAI_API_KEY=... mise run go:run -- ./cmd/sigma-surface-probe \
+  -routes openai \
+  -models gpt-5.1 \
+  -repair
+```
+
+Probe OpenAI Codex Responses with device-code OAuth:
+
+```bash
+mise run go:run -- ./cmd/sigma-surface-probe \
+  -routes openai-codex \
+  -models gpt-5.3-codex \
+  -codex-oauth \
+  -repair
+```
+
+For non-interactive Codex runs, set `OPENAI_CODEX_ACCESS_TOKEN`, or set
+`OPENAI_CODEX_REFRESH_TOKEN` and let the probe refresh it in memory before the
+run. The probe does not persist refreshed Codex credentials.
+
 Discover and probe every model returned by one provider:
 
 ```bash
@@ -128,6 +154,12 @@ tool_required_file_read
 strict_tool_required_write
 three_turn_file_update
 ```
+
+OpenAI Responses and OpenAI Codex Responses routes run a Responses-shaped subset
+covering text, developer instructions, structured output, cache keys, image
+input, typed reasoning controls, and tool calls. Codex also checks text
+verbosity. The Codex image case uses an HTTPS image URL because the ChatGPT
+Codex backend rejects base64 image payloads.
 
 Anthropic-compatible routes currently run:
 

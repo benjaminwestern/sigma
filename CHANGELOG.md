@@ -28,6 +28,18 @@ See [release notes](docs/release-notes-v0.3.0.md).
 - OpenAI-compatible stream parsing now recognizes Chat Completions
   `reasoning_text` deltas and Responses/Codex refusal and reasoning-text
   events.
+- OpenAI Codex Responses now has stdlib-only device-code OAuth login, token
+  refresh helpers, and an in-memory OAuth token provider that callers can wrap
+  with their own credential persistence.
+- OpenAI Codex Responses now sends Codex backend request headers for OAuth
+  account routing, Responses SSE beta access, originator identity, and
+  session-scoped request IDs, and aligns Codex payloads with ChatGPT backend
+  requirements for required instructions, disabled storage, and unsupported
+  output-token caps and response replay IDs.
+- `cmd/sigma-surface-probe` can run opt-in live OpenAI Responses probes with
+  `OPENAI_API_KEY` and OpenAI Codex Responses probes with device-code OAuth or
+  caller-supplied Codex OAuth tokens, defaulting Codex live probes to
+  `gpt-5.3-codex`.
 - Provider execution errors now expose typed `sigma.ClassifyError` results with
   stable auth, quota, billing, context-overflow, rate-limit, transient,
   invalid-request, provider, and unknown classes plus retry-after hints.
@@ -49,16 +61,17 @@ See [release notes](docs/release-notes-v0.3.0.md).
   streaming partial images, and Responses image-tool generation remain deferred.
 - Preview providers are not part of the first release gate and may change before
   `v1.0.0`.
-- Interactive OAuth login and token persistence are deferred; provider adapters
-  use caller-supplied credentials or injected OAuth token providers only. OpenAI
-  Codex Responses in particular requires a caller-supplied OAuth token provider.
+- OAuth token persistence is caller-owned. OpenAI Codex Responses includes
+  device-code login and refresh helpers, but does not write credentials to disk.
+- Browser callback OAuth login is deferred; OpenAI Codex OAuth support uses the
+  device-code flow.
 - Anthropic Claude Code OAuth identity headers and Claude Code tool-name
   canonicalization are deferred with the broader OAuth/provider-specific
   compatibility work.
 - WebSocket transports are deferred; unsupported transport choices should fail
   locally before network calls.
 - Codex WebSocket session caching/fallback remains deferred; Codex Responses
-  continues to use SSE with a caller-supplied OAuth token provider.
+  continues to use SSE with caller-supplied or helper-managed OAuth tokens.
 - Token usage and cost reporting come from provider usage data and model
   metadata; tokenizer-based token estimates are deferred.
 - Built-in model metadata is still refreshed through the curated checked-in

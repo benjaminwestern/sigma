@@ -7,17 +7,20 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"reflect"
 	"testing"
 
 	"github.com/wintermi/sigma"
+	"github.com/wintermi/sigma/provider/openai"
 	"github.com/wintermi/sigma/sigmatest"
 )
 
-func collectProbeModel(ctx context.Context, route routeSpec, modelID string, apiKey string, cfg config) []probeResult {
+func collectProbeModel(ctx context.Context, route routeSpec, modelID string, credential routeCredential, cfg config) []probeResult {
 	results := make([]probeResult, 0, len(route.Cases(route)))
-	probeModelEach(ctx, route, modelID, apiKey, cfg, func(result probeResult) {
+	probeModelEach(ctx, route, modelID, credential, cfg, func(result probeResult) {
 		results = append(results, result)
 	})
 	return results
@@ -96,6 +99,31 @@ func TestFireworksRoutesBuildExpectedModels(t *testing.T) {
 	assertMetadataStrings(t, anthropic.ProviderMetadata, "apiKeyEnvVars", []string{"FIREWORKS_API_KEY"})
 }
 
+func TestOpenAIRoutesBuildExpectedModels(t *testing.T) {
+	t.Parallel()
+
+	openAIRoute := routes["openai"]
+	openAIModel := openAIRoute.Model(openAIRoute, "gpt-5.1")
+	if openAIModel.Provider != sigma.ProviderOpenAI || openAIModel.API != sigma.APIOpenAIResponses {
+		t.Fatalf("openai model provider/API = %q/%q", openAIModel.Provider, openAIModel.API)
+	}
+	assertMetadataString(t, openAIModel.ProviderMetadata, "baseURL", "https://api.openai.com/v1")
+	assertMetadataString(t, openAIModel.ProviderMetadata, "probeSurface", "openai-responses")
+	assertMetadataStrings(t, openAIModel.ProviderMetadata, "apiKeyEnvVars", []string{"OPENAI_API_KEY"})
+
+	codexRoute := routes["openai-codex"]
+	codexModel := codexRoute.Model(codexRoute, "gpt-5.1-codex")
+	if codexModel.Provider != sigma.ProviderOpenAI || codexModel.API != sigma.APIOpenAICodexResponses {
+		t.Fatalf("openai-codex model provider/API = %q/%q", codexModel.Provider, codexModel.API)
+	}
+	if codexModel.OpenAICodexResponses == nil {
+		t.Fatal("openai-codex model missing OpenAICodexResponses config")
+	}
+	assertMetadataString(t, codexModel.ProviderMetadata, "baseURL", "https://chatgpt.com/backend-api/codex")
+	assertMetadataString(t, codexModel.ProviderMetadata, "probeSurface", "openai-codex-responses")
+	assertMetadataStrings(t, codexModel.ProviderMetadata, "apiKeyEnvVars", []string{"OPENAI_CODEX_ACCESS_TOKEN", "OPENAI_CODEX_REFRESH_TOKEN"})
+}
+
 func TestXAIRouteBuildsExpectedModel(t *testing.T) {
 	t.Parallel()
 
@@ -117,7 +145,7 @@ func TestXAIRouteBuildsExpectedModel(t *testing.T) {
 func TestModelsForRouteUsesSelectedModelsWithoutDiscovery(t *testing.T) {
 	t.Parallel()
 
-	models, err := modelsForRoute(context.Background(), routes["fireworks-anthropic"], "key", map[string]bool{
+	models, err := modelsForRoute(context.Background(), routes["fireworks-anthropic"], routeCredential{apiKey: "key"}, map[string]bool{
 		"z": true,
 		"a": true,
 	})
@@ -126,6 +154,18 @@ func TestModelsForRouteUsesSelectedModelsWithoutDiscovery(t *testing.T) {
 	}
 	if !reflect.DeepEqual(models, []string{"a", "z"}) {
 		t.Fatalf("models = %v, want sorted selected models", models)
+	}
+}
+
+func TestModelsForRouteDefaultsOpenAICodexWithoutDiscovery(t *testing.T) {
+	t.Parallel()
+
+	models, err := modelsForRoute(context.Background(), routes["openai-codex"], routeCredential{apiKey: "token"}, nil)
+	if err != nil {
+		t.Fatalf("modelsForRoute returned error: %v", err)
+	}
+	if !reflect.DeepEqual(models, []string{defaultOpenAICodexProbeModel}) {
+		t.Fatalf("models = %v, want default Codex model", models)
 	}
 }
 
@@ -156,6 +196,70 @@ func TestXAIProbeCasesUseRouteProviderOptions(t *testing.T) {
 	if _, ok := options.ProviderOptions[sigma.ProviderFireworks]; ok {
 		t.Fatalf("unexpected Fireworks provider options: %#v", options.ProviderOptions[sigma.ProviderFireworks])
 	}
+}
+
+func TestOpenAIResponsesProbeCasesUseTypedResponseFormat(t *testing.T) {
+	t.Parallel()
+
+	testCase := findProbeCase(t, openAIResponsesProbeCases(routes["openai"]), "json_schema")
+	options := applyProbeOptions(testCase.Options)
+	if options.OpenAIOptions == nil || options.OpenAIOptions.ResponseFormat == nil {
+		t.Fatalf("OpenAIOptions.ResponseFormat = %#v, want typed response format", options.OpenAIOptions)
+	}
+	if _, ok := options.ProviderOptions[sigma.ProviderOpenAI]["extra_body"]; ok {
+		t.Fatalf("unexpected extra_body for OpenAI Responses: %#v", options.ProviderOptions[sigma.ProviderOpenAI])
+	}
+}
+
+func TestOpenAICodexAuthOptionsUseOAuthTokenProvider(t *testing.T) {
+	t.Parallel()
+
+	route := routes["openai-codex"]
+	options := applyProbeOptions(authOptions(route, routeCredential{
+		codex: openAIProbeTestCredentials(),
+	}))
+	providerOptions := options.ProviderOptions[route.Provider]
+	if providerOptions == nil {
+		t.Fatal("missing provider options")
+	}
+	provider, ok := providerOptions["oauthTokenProvider"].(sigma.OAuthTokenProvider)
+	if !ok {
+		t.Fatalf("oauthTokenProvider type = %T, want sigma.OAuthTokenProvider", providerOptions["oauthTokenProvider"])
+	}
+	credential, err := provider.Token(context.Background(), route.Model(route, "gpt-5.1-codex"), sigma.Options{})
+	if err != nil {
+		t.Fatalf("Token returned error: %v", err)
+	}
+	if credential.Value == "" {
+		t.Fatal("credential value was empty")
+	}
+	if got, want := credential.Metadata["accountID"], "acct_probe"; got != want {
+		t.Fatalf("accountID metadata = %v, want %q", got, want)
+	}
+}
+
+func TestOpenAICodexProbeCasesUseURLImageInput(t *testing.T) {
+	t.Parallel()
+
+	testCase := findProbeCase(t, openAICodexProbeCases(routes["openai-codex"]), "image_input")
+	image := testCase.Request.Messages[0].Content[1]
+	if got, want := image.ImageSource, "url"; got != want {
+		t.Fatalf("image source = %q, want %q", got, want)
+	}
+	if image.URL == "" {
+		t.Fatal("image URL was empty")
+	}
+}
+
+func openAIProbeTestCredentials() *openai.CodexOAuthCredentials {
+	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"none"}`))
+	payload, _ := json.Marshal(map[string]any{
+		"https://api.openai.com/auth": map[string]string{
+			"chatgpt_account_id": "acct_probe",
+		},
+	})
+	token := header + "." + base64.RawURLEncoding.EncodeToString(payload) + ".signature"
+	return &openai.CodexOAuthCredentials{AccessToken: token}
 }
 
 func TestAnthropicProbeCasesDoNotSendRawOpenAIExtraBody(t *testing.T) {
@@ -204,7 +308,7 @@ func TestRunCaseKeepsDistinctRouteNames(t *testing.T) {
 		}
 
 		client := sigma.NewClient(sigma.WithRegistry(registry))
-		result := runCase(context.Background(), route, client, model, singleTurnCase("basic", "", basicRequest("hi"), nil), "key", "basic")
+		result := runCase(context.Background(), route, client, model, singleTurnCase("basic", "", basicRequest("hi"), nil), routeCredential{apiKey: "key"}, "basic")
 		if result.Route != routeName {
 			t.Fatalf("route = %q, want %q", result.Route, routeName)
 		}
@@ -220,7 +324,7 @@ func TestProbeModelEachEmitsEachCompletedCase(t *testing.T) {
 	}, sigmatest.Script{}, sigmatest.Script{})
 
 	var emitted []probeResult
-	probeModelEach(context.Background(), route, "model", "key", config{}, func(result probeResult) {
+	probeModelEach(context.Background(), route, "model", routeCredential{apiKey: "key"}, config{}, func(result probeResult) {
 		emitted = append(emitted, result)
 	})
 	if len(emitted) != 2 {
@@ -243,7 +347,7 @@ func TestProbeModelPrefersTargetedRepairOverAvailabilityCheck(t *testing.T) {
 		sigmatest.Script{},
 		sigmatest.Script{},
 	)
-	results := collectProbeModel(context.Background(), route, "model", "key", config{repair: true})
+	results := collectProbeModel(context.Background(), route, "model", routeCredential{apiKey: "key"}, config{repair: true})
 	if len(results) != 1 {
 		t.Fatalf("results length = %d, want 1", len(results))
 	}
@@ -287,7 +391,7 @@ func TestProbeModelReportsAvailabilityCheckSeparately(t *testing.T) {
 		sigmatest.Script{Err: errors.New("json object failed")},
 		sigmatest.Script{Err: errors.New("manual json failed")},
 	)
-	results := collectProbeModel(context.Background(), route, "model", "key", config{repair: true})
+	results := collectProbeModel(context.Background(), route, "model", routeCredential{apiKey: "key"}, config{repair: true})
 	if len(results) != 1 {
 		t.Fatalf("results length = %d, want 1", len(results))
 	}
@@ -375,6 +479,15 @@ func TestClassifyFailure(t *testing.T) {
 	if got := classifyFailure(route, model, errors.New("unknown parameter: 'thinking'")); got != "sigma_request_shape" {
 		t.Fatalf("unknown parameter classification = %q", got)
 	}
+	if got := classifyFailure(routes["openai-codex"], model, errors.New("status=400 body={\"detail\":\"Unsupported parameter: max_output_tokens\"}")); got != "sigma_request_shape" {
+		t.Fatalf("unsupported-parameter classification = %q", got)
+	}
+	if got := classifyFailure(routes["openai-codex"], model, errors.New("status=400 body={\"detail\":\"Instructions are required\"}")); got != "sigma_request_shape" {
+		t.Fatalf("instructions-required classification = %q", got)
+	}
+	if got := classifyFailure(routes["openai-codex"], model, errors.New("status=400 body={\"detail\":\"Store must be set to false\"}")); got != "sigma_request_shape" {
+		t.Fatalf("store-false classification = %q", got)
+	}
 	if got := classifyFailure(route, model, errors.New("model does not support image input")); got != "provider_capability_limit" {
 		t.Fatalf("image classification = %q", got)
 	}
@@ -385,6 +498,10 @@ func TestClassifyFailure(t *testing.T) {
 	model.ID = "accounts/fireworks/routers/kimi-k2p6-turbo"
 	if got := classifyFailure(routes["fireworks-anthropic"], model, errors.New("status=404 body={\"error\":{\"code\":\"NOT_FOUND\",\"message\":\"Path not found: /messages\"}}")); got != "upstream_availability" {
 		t.Fatalf("path-not-found classification = %q", got)
+	}
+	model.ID = "gpt-5.1-codex"
+	if got := classifyFailure(routes["openai-codex"], model, errors.New("status=400 body={\"detail\":\"The 'gpt-5.1-codex' model is not supported when using Codex with a ChatGPT account.\"}")); got != "upstream_availability" {
+		t.Fatalf("chatgpt-account-unsupported classification = %q", got)
 	}
 }
 

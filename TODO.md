@@ -28,8 +28,10 @@ same local evidence bar.
 
 - [ ] Keep Codex WebSocket transport, session caching, cleanup, and SSE fallback
       deferred until Sigma adopts WebSocket transport semantics.
-- [ ] Keep OpenAI Codex interactive OAuth login and token persistence deferred;
-      the current provider path uses caller-supplied OAuth token providers.
+- [x] Add OpenAI Codex device-code OAuth login and refresh helpers while keeping
+      token persistence caller-owned.
+- [ ] Keep OpenAI Codex browser callback OAuth login and token persistence
+      deferred.
 - [ ] Evaluate GitHub Copilot dynamic headers before making Copilot a
       first-class OpenAI-compatible row.
 - [ ] Evaluate Cloudflare AI Gateway auth header rewriting before adding a
@@ -167,14 +169,16 @@ evidence bar.
 
 ## Authentication and credentials
 
-- [ ] Implement interactive OAuth login (currently MVP uses caller-supplied
-      credentials or injected OAuth token providers only).
+- [x] Implement OpenAI Codex device-code OAuth login with caller-owned
+      credential persistence.
+- [ ] Implement browser callback OAuth login if Sigma adopts first-class
+      interactive login UX.
 - [ ] Implement token persistence for OAuth-based providers.
 - [ ] Add Anthropic Claude Code OAuth identity headers and Claude Code
       tool-name canonicalization if Sigma adopts a first-class Anthropic OAuth
       login path.
-- [ ] Wire interactive login and token persistence into OpenAI Codex Responses,
-      replacing the injected-token-only path.
+- [x] Wire OpenAI Codex device-code login and refresh into Codex Responses
+      through `openai.NewCodexOAuthTokenProvider`.
 - [ ] Add deterministic coverage for login/refresh/persistence flows without
       live network calls.
 

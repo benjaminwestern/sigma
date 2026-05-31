@@ -22,6 +22,7 @@ import (
 	"github.com/wintermi/sigma"
 	"github.com/wintermi/sigma/provider/anthropic"
 	"github.com/wintermi/sigma/provider/fireworks"
+	"github.com/wintermi/sigma/provider/openai"
 	"github.com/wintermi/sigma/provider/opencode"
 	"github.com/wintermi/sigma/provider/xai"
 )
@@ -92,9 +93,33 @@ type config struct {
 	repair             bool
 	includeUnavailable bool
 	timeout            time.Duration
+	codexOAuth         bool
+}
+
+type routeCredential struct {
+	apiKey string
+	codex  *openai.CodexOAuthCredentials
 }
 
 var routes = map[string]routeSpec{
+	"openai": {
+		Name:             "openai",
+		Provider:         sigma.ProviderOpenAI,
+		BaseURL:          openai.DefaultBaseURL,
+		APIKeyEnv:        "OPENAI_API_KEY",
+		RegisterProvider: registerOpenAIResponsesProvider,
+		Model:            discoveredOpenAIResponsesModel,
+		Cases:            openAIResponsesProbeCases,
+	},
+	"openai-codex": {
+		Name:             "openai-codex",
+		Provider:         sigma.ProviderOpenAI,
+		BaseURL:          "https://chatgpt.com/backend-api/codex",
+		APIKeyEnv:        "OPENAI_CODEX_ACCESS_TOKEN",
+		RegisterProvider: registerOpenAICodexProvider,
+		Model:            discoveredOpenAICodexModel,
+		Cases:            openAICodexProbeCases,
+	},
 	"zen": {
 		Name:             "zen",
 		Provider:         sigma.ProviderOpenCode,
@@ -143,7 +168,10 @@ var routes = map[string]routeSpec{
 	},
 }
 
-const jsonTypeKey = "type"
+const (
+	jsonTypeKey                  = "type"
+	defaultOpenAICodexProbeModel = "gpt-5.3-codex"
+)
 
 func main() {
 	cfg := parseConfig()
@@ -163,11 +191,11 @@ func main() {
 		if !ok {
 			fatalf("unknown route %q", routeName)
 		}
-		apiKey := os.Getenv(route.APIKeyEnv)
-		if apiKey == "" {
-			fatalf("%s is required for live %s probing", route.APIKeyEnv, route.Name)
+		credential, err := credentialForRoute(ctx, route, cfg)
+		if err != nil {
+			fatalf("%v", err)
 		}
-		models, err := modelsForRoute(ctx, route, apiKey, cfg.models)
+		models, err := modelsForRoute(ctx, route, credential, cfg.models)
 		if err != nil {
 			fatalf("discover %s models: %v", route.Name, err)
 		}
@@ -175,7 +203,7 @@ func main() {
 			if len(cfg.models) > 0 && !cfg.models[modelID] {
 				continue
 			}
-			probeModelEach(ctx, route, modelID, apiKey, cfg, func(result probeResult) {
+			probeModelEach(ctx, route, modelID, credential, cfg, func(result probeResult) {
 				totals.add(result)
 				if recommendation, ok := recommendationFor(result); ok {
 					recommendations = append(recommendations, recommendation)
@@ -195,10 +223,12 @@ func parseConfig() config {
 	var timeout time.Duration
 	var repair bool
 	var includeUnavailable bool
-	flag.StringVar(&routeList, "routes", "zen,go", "comma-separated routes: zen,go,fireworks-openai,fireworks-anthropic,xai")
+	var codexOAuth bool
+	flag.StringVar(&routeList, "routes", "zen,go", "comma-separated routes: openai,openai-codex,zen,go,fireworks-openai,fireworks-anthropic,xai")
 	flag.StringVar(&modelList, "models", "", "comma-separated model IDs to probe")
 	flag.BoolVar(&repair, "repair", false, "try targeted repair variants after a failing case")
 	flag.BoolVar(&includeUnavailable, "include-unavailable", false, "run known unavailable advertised models instead of skipping them")
+	flag.BoolVar(&codexOAuth, "codex-oauth", false, "run OpenAI Codex device-code OAuth for the openai-codex route")
 	flag.DurationVar(&timeout, "timeout", 10*time.Minute, "overall probe timeout")
 	flag.Parse()
 
@@ -208,10 +238,52 @@ func parseConfig() config {
 		repair:             repair,
 		includeUnavailable: includeUnavailable,
 		timeout:            timeout,
+		codexOAuth:         codexOAuth,
 	}
 }
 
-func modelsForRoute(ctx context.Context, route routeSpec, apiKey string, selected map[string]bool) ([]string, error) {
+func credentialForRoute(ctx context.Context, route routeSpec, cfg config) (routeCredential, error) {
+	if route.Name == "openai-codex" {
+		return openAICodexCredential(ctx, cfg)
+	}
+	apiKey := os.Getenv(route.APIKeyEnv)
+	if apiKey == "" {
+		return routeCredential{}, fmt.Errorf("%s is required for live %s probing", route.APIKeyEnv, route.Name)
+	}
+	return routeCredential{apiKey: apiKey}, nil
+}
+
+func openAICodexCredential(ctx context.Context, cfg config) (routeCredential, error) {
+	if cfg.codexOAuth {
+		credentials, err := openai.LoginOpenAICodexDeviceCode(ctx, openai.CodexDeviceCodeLoginOptions{
+			OnDeviceCode: func(info openai.CodexDeviceCodeInfo) {
+				_, _ = fmt.Fprintf(os.Stderr, "Open %s and enter code %s\n", info.VerificationURI, info.UserCode)
+			},
+		})
+		if err != nil {
+			return routeCredential{}, fmt.Errorf("openai codex oauth: %w", err)
+		}
+		return routeCredential{apiKey: credentials.AccessToken, codex: &credentials}, nil
+	}
+	accessToken := os.Getenv("OPENAI_CODEX_ACCESS_TOKEN")
+	if accessToken != "" {
+		return routeCredential{
+			apiKey: accessToken,
+			codex:  &openai.CodexOAuthCredentials{AccessToken: accessToken},
+		}, nil
+	}
+	refreshToken := os.Getenv("OPENAI_CODEX_REFRESH_TOKEN")
+	if refreshToken != "" {
+		credentials, err := openai.RefreshOpenAICodexToken(ctx, refreshToken, openai.CodexOAuthTokenProviderOptions{})
+		if err != nil {
+			return routeCredential{}, fmt.Errorf("openai codex oauth refresh: %w", err)
+		}
+		return routeCredential{apiKey: credentials.AccessToken, codex: &credentials}, nil
+	}
+	return routeCredential{}, fmt.Errorf("OPENAI_CODEX_ACCESS_TOKEN, OPENAI_CODEX_REFRESH_TOKEN, or -codex-oauth is required for live openai-codex probing")
+}
+
+func modelsForRoute(ctx context.Context, route routeSpec, credential routeCredential, selected map[string]bool) ([]string, error) {
 	if len(selected) > 0 {
 		models := make([]string, 0, len(selected))
 		for modelID := range selected {
@@ -220,7 +292,10 @@ func modelsForRoute(ctx context.Context, route routeSpec, apiKey string, selecte
 		sort.Strings(models)
 		return models, nil
 	}
-	return discoverModels(ctx, route, apiKey)
+	if route.Name == "openai-codex" {
+		return []string{defaultOpenAICodexProbeModel}, nil
+	}
+	return discoverModels(ctx, route, credential.apiKey)
 }
 
 func discoverModels(ctx context.Context, route routeSpec, apiKey string) ([]string, error) {
@@ -285,7 +360,7 @@ func parseModelIDs(body []byte) ([]string, error) {
 	return ids, nil
 }
 
-func probeModelEach(ctx context.Context, route routeSpec, modelID string, apiKey string, cfg config, emit func(probeResult)) {
+func probeModelEach(ctx context.Context, route routeSpec, modelID string, credential routeCredential, cfg config, emit func(probeResult)) {
 	if !cfg.includeUnavailable && knownUnavailable(route.Name, modelID) {
 		emit(probeResult{
 			Route:   route.Name,
@@ -301,7 +376,7 @@ func probeModelEach(ctx context.Context, route routeSpec, modelID string, apiKey
 	model := route.Model(route, modelID)
 	cases := route.Cases(route)
 	for _, testCase := range cases {
-		result := runCase(ctx, route, client, model, testCase, apiKey, testCase.Name)
+		result := runCase(ctx, route, client, model, testCase, credential, testCase.Name)
 		if result.Outcome == "ok" || !cfg.repair {
 			emit(result)
 			continue
@@ -311,7 +386,7 @@ func probeModelEach(ctx context.Context, route routeSpec, modelID string, apiKey
 		availability := probeResult{}
 		failedAttempts := []failedAttempt{{Attempt: result.Attempt, Error: result.Error}}
 		for _, variant := range repairVariants(route, testCase) {
-			attempt := runCase(ctx, route, client, model, variant, apiKey, variant.Name)
+			attempt := runCase(ctx, route, client, model, variant, credential, variant.Name)
 			if attempt.Outcome == "ok" {
 				attempt.Case = testCase.Name
 				attempt.OriginalError = result.Error
@@ -344,6 +419,20 @@ func probeClient(route routeSpec, modelID string) *sigma.Client {
 	_ = route.RegisterProvider(registry, route)
 	_ = registry.RegisterModel(route.Model(route, modelID))
 	return sigma.NewClient(sigma.WithRegistry(registry))
+}
+
+func registerOpenAIResponsesProvider(registry *sigma.Registry, route routeSpec) error {
+	if err := openai.RegisterResponses(registry, route.Provider, openai.WithBaseURL(route.BaseURL)); err != nil {
+		return fmt.Errorf("register openai responses provider: %w", err)
+	}
+	return nil
+}
+
+func registerOpenAICodexProvider(registry *sigma.Registry, route routeSpec) error {
+	if err := openai.RegisterCodexResponses(registry, route.Provider, openai.WithBaseURL(route.BaseURL)); err != nil {
+		return fmt.Errorf("register openai codex responses provider: %w", err)
+	}
+	return nil
 }
 
 func registerOpenCodeProvider(registry *sigma.Registry, route routeSpec) error {
@@ -379,6 +468,55 @@ func registerXAIProvider(registry *sigma.Registry, route routeSpec) error {
 		return fmt.Errorf("register xai provider: %w", err)
 	}
 	return nil
+}
+
+func discoveredOpenAIResponsesModel(route routeSpec, id string) sigma.Model {
+	return sigma.Model{
+		ID:               sigma.ModelID(id),
+		Provider:         route.Provider,
+		API:              sigma.APIOpenAIResponses,
+		SupportedInputs:  []sigma.ContentBlockType{sigma.ContentBlockText, sigma.ContentBlockImage},
+		SupportsTools:    true,
+		SupportsThinking: true,
+		ProviderMetadata: map[string]any{
+			"baseURL":         route.BaseURL,
+			"apiKeyEnvVars":   []string{route.APIKeyEnv},
+			"modelFamily":     modelFamily(id),
+			"probeDiscovered": true,
+			"probeRoute":      route.Name,
+			"probeSurface":    "openai-responses",
+		},
+	}
+}
+
+func discoveredOpenAICodexModel(route routeSpec, id string) sigma.Model {
+	return sigma.Model{
+		ID:               sigma.ModelID(id),
+		Provider:         route.Provider,
+		API:              sigma.APIOpenAICodexResponses,
+		SupportedInputs:  []sigma.ContentBlockType{sigma.ContentBlockText, sigma.ContentBlockImage},
+		SupportsTools:    true,
+		SupportsThinking: true,
+		ThinkingLevelMap: map[sigma.ThinkingLevel]string{
+			sigma.ThinkingLevelLow:    "low",
+			sigma.ThinkingLevelMedium: "medium",
+			sigma.ThinkingLevelHigh:   "high",
+			"off":                     "",
+		},
+		ContextWindow:        400000,
+		MaxOutputTokens:      128000,
+		DefaultTransport:     sigma.TransportSSE,
+		OpenAICodexResponses: &sigma.OpenAICodexResponsesConfig{},
+		ProviderMetadata: map[string]any{
+			"baseURL":         route.BaseURL,
+			"apiKeyEnvVars":   []string{route.APIKeyEnv, "OPENAI_CODEX_REFRESH_TOKEN"},
+			"modelFamily":     modelFamily(id),
+			"probeDiscovered": true,
+			"probeRoute":      route.Name,
+			"probeSurface":    "openai-codex-responses",
+			"requiresOAuth":   true,
+		},
+	}
 }
 
 func discoveredOpenCodeModel(route routeSpec, id string) sigma.Model {
@@ -477,8 +615,8 @@ func discoveredFireworksAnthropicModel(route routeSpec, id string) sigma.Model {
 	}
 }
 
-func runCase(ctx context.Context, route routeSpec, client *sigma.Client, model sigma.Model, testCase probeCase, apiKey string, attempt string) probeResult {
-	options := append([]sigma.Option{sigma.WithAPIKey(apiKey)}, testCase.Options...)
+func runCase(ctx context.Context, route routeSpec, client *sigma.Client, model sigma.Model, testCase probeCase, credential routeCredential, attempt string) probeResult {
+	options := append(authOptions(route, credential), testCase.Options...)
 	_, err := client.Complete(ctx, model, testCase.Request, options...)
 	if err == nil {
 		return probeResult{
@@ -497,6 +635,59 @@ func runCase(ctx context.Context, route routeSpec, client *sigma.Client, model s
 		Outcome: classifyFailure(route, model, err),
 		Error:   err.Error(),
 	}
+}
+
+func authOptions(route routeSpec, credential routeCredential) []sigma.Option {
+	if route.Name == "openai-codex" && credential.codex != nil {
+		return []sigma.Option{
+			openai.WithCodexResponsesOAuthTokenProvider(
+				route.Provider,
+				openai.NewCodexOAuthTokenProvider(*credential.codex, openai.CodexOAuthTokenProviderOptions{}),
+			),
+		}
+	}
+	return []sigma.Option{sigma.WithAPIKey(credential.apiKey)}
+}
+
+func openAIResponsesProbeCases(route routeSpec) []probeCase {
+	return []probeCase{
+		singleTurnCase("basic_text", "plain streaming text", basicRequest("Reply with exactly: sigma-ok."), []sigma.Option{sigma.WithMaxTokens(128)}),
+		singleTurnCase("developer_instruction", "developer instruction handling", sigma.Request{
+			SystemPrompt: "Reply tersely.",
+			Messages:     []sigma.Message{sigma.UserText("Reply with exactly: dev-ok.")},
+		}, []sigma.Option{sigma.WithMaxTokens(128)}),
+		singleTurnCase("json_schema", "strict structured output", basicRequest("Return JSON exactly {\"answer\":\"ok\"}."), []sigma.Option{
+			sigma.WithOpenAIOptions(sigma.OpenAIOptions{ResponseFormat: jsonSchemaTextFormat()}),
+			sigma.WithMaxTokens(512),
+		}),
+		singleTurnCase("cache_ephemeral", "prompt cache marker", basicRequest("Reply with exactly: cache-ok."), []sigma.Option{
+			sigma.WithCacheRetention(sigma.CacheRetentionEphemeral),
+			sigma.WithSessionID("sigma-openai-probe"),
+			sigma.WithMaxTokens(128),
+		}),
+		singleTurnCase("image_input", "text plus image input", imageRequest(), []sigma.Option{sigma.WithMaxTokens(512)}),
+		singleTurnCase("reasoning_level_low", "typed reasoning low", basicRequest("Reply with exactly: 5."), []sigma.Option{sigma.WithOpenAIOptions(sigma.OpenAIOptions{ReasoningEffort: sigma.ThinkingLevelLow}), sigma.WithMaxTokens(512)}),
+		singleTurnCase("reasoning_level_medium", "typed reasoning medium", basicRequest("Reply with exactly: 5."), []sigma.Option{sigma.WithOpenAIOptions(sigma.OpenAIOptions{ReasoningEffort: sigma.ThinkingLevelMedium}), sigma.WithMaxTokens(512)}),
+		singleTurnCase("reasoning_level_high", "typed reasoning high", basicRequest("Reply with exactly: 5."), []sigma.Option{sigma.WithOpenAIOptions(sigma.OpenAIOptions{ReasoningEffort: sigma.ThinkingLevelHigh}), sigma.WithMaxTokens(512)}),
+		toolCase("tool_auto_file_read", "auto read-file tool", "auto"),
+		toolCase("tool_required_file_read", "required read-file tool", "required"),
+	}
+}
+
+func openAICodexProbeCases(route routeSpec) []probeCase {
+	cases := openAIResponsesProbeCases(route)
+	for index := range cases {
+		if cases[index].Name == "image_input" {
+			cases[index].Description = "text plus URL image input"
+			cases[index].Request = imageURLRequest()
+		}
+	}
+	return append(cases,
+		singleTurnCase("text_verbosity_low", "Codex text verbosity low", basicRequest("Reply with exactly: terse-ok."), []sigma.Option{
+			sigma.WithOpenAIOptions(sigma.OpenAIOptions{TextVerbosity: "low"}),
+			sigma.WithMaxTokens(128),
+		}),
+	)
 }
 
 func openAICompatibleProbeCases(route routeSpec) []probeCase {
@@ -683,6 +874,20 @@ func jsonSchemaBody() map[string]any {
 	}}
 }
 
+func jsonSchemaTextFormat() map[string]any {
+	return map[string]any{
+		jsonTypeKey: "json_schema",
+		"name":      "answer",
+		"strict":    true,
+		"schema": map[string]any{
+			jsonTypeKey:            "object",
+			"properties":           map[string]any{"answer": map[string]any{jsonTypeKey: "string"}},
+			"required":             []any{"answer"},
+			"additionalProperties": false,
+		},
+	}
+}
+
 func openCodeRouteAPI(route string, id string) sigma.API {
 	switch route {
 	case "zen":
@@ -739,10 +944,14 @@ func classifyFailure(route routeSpec, model sigma.Model, err error) string {
 	case strings.Contains(message, "free promotion has ended"),
 		strings.Contains(message, "model_not_found"),
 		strings.Contains(message, "path not found"),
-		strings.Contains(message, "no provider available"):
+		strings.Contains(message, "no provider available"),
+		strings.Contains(message, "not supported when using codex with a chatgpt account"):
 		return "upstream_availability"
 	case strings.Contains(message, "unknown parameter"),
 		strings.Contains(message, "missing required parameter"),
+		strings.Contains(message, "unsupported parameter"),
+		strings.Contains(message, "instructions are required"),
+		strings.Contains(message, "store must be set to false"),
 		strings.Contains(message, "not supported for format oa-compat"),
 		strings.Contains(message, "integer below minimum"):
 		return "sigma_request_shape"

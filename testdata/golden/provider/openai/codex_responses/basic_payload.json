@@ -10,8 +10,10 @@
       "role": "user"
     }
   ],
+  "instructions": "You are a helpful assistant.",
   "model": "codex-mini-latest",
   "prompt_cache_retention": "24h",
+  "store": false,
   "stream": true,
   "text": {
     "verbosity": "low"

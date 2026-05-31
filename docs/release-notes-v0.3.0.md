@@ -9,9 +9,10 @@ checklist see [RELEASING.md](../RELEASING.md).
 
 v0.3.0 extends Sigma's generated image metadata with an OpenRouter-routed Grok
 Imagine image model, tightens the OpenAI-compatible preview adapters around
-prompt caching, replay, and stream parsing, and adds typed provider error
-classification for safer caller retry and recovery decisions. Direct xAI/Grok
-support remains focused on the preview Chat Completions adapter.
+prompt caching, replay, stream parsing, and Codex OAuth, and adds typed
+provider error classification for safer caller retry and recovery decisions.
+Direct xAI/Grok support remains focused on the preview Chat Completions
+adapter.
 
 ## Added
 
@@ -29,6 +30,16 @@ support remains focused on the preview Chat Completions adapter.
 - OpenAI-compatible stream parsing recognizes Chat Completions
   `reasoning_text` deltas plus Responses/Codex refusal and reasoning-text
   events.
+- OpenAI Codex Responses includes stdlib-only device-code OAuth login, token
+  refresh helpers, and an in-memory OAuth token provider for caller-managed
+  credentials.
+- OpenAI Codex Responses sends Codex backend headers for OAuth account routing,
+  Responses SSE beta access, originator identity, and session-scoped request
+  IDs, while normalizing request payloads for required instructions, disabled
+  storage, unsupported output-token caps, and unsupported response replay IDs.
+- `cmd/sigma-surface-probe` can run opt-in live OpenAI Responses probes and
+  OpenAI Codex Responses probes, including device-code OAuth for Codex and a
+  `gpt-5.3-codex` default for ChatGPT-backed Codex probing.
 - `sigma.ClassifyError` exposes stable provider error classes for auth, quota,
   billing, context overflow, rate limits, transient failures, invalid requests,
   provider failures, and unknown errors, including provider retry-after hints
@@ -44,21 +55,23 @@ support remains focused on the preview Chat Completions adapter.
 - Anthropic-style OpenAI-compatible cache markers continue to use
   endpoint-specific `cache_control` payload markers. Sigma does not mix those
   payloads with OpenAI-native prompt-cache fields.
-- OpenAI Codex Responses remains SSE-only and still requires a caller-supplied
-  OAuth token provider.
+- OpenAI Codex Responses remains SSE-only. OAuth credential persistence remains
+  caller-owned; Sigma exposes device-code login, refresh, and token-provider
+  helpers but does not write tokens to disk.
 
 ## Deferred work
 
 - Direct xAI/Grok image-provider semantics remain deferred until the request
   and response shape is covered by deterministic fixtures.
-- Codex WebSocket transport, WebSocket session caching/fallback, interactive
-  OAuth login, token persistence, Copilot dynamic headers, and Cloudflare
-  OpenAI-compatible auth rewriting remain deferred.
+- Codex WebSocket transport, WebSocket session caching/fallback, browser
+  callback OAuth login, token persistence, Copilot dynamic headers, and
+  Cloudflare OpenAI-compatible auth rewriting remain deferred.
 - Deferred work continues to be tracked in [TODO.md](../TODO.md).
 
 ## Validation status
 
 This release should use the validation process in [RELEASING.md](../RELEASING.md).
 No live xAI or OpenRouter provider calls are required for release validation.
-OpenAI provider changes and typed provider error classification are covered by
-deterministic request, response, and SSE fixtures.
+OpenAI provider changes, Codex OAuth flows, and typed provider error
+classification are covered by deterministic request, response, OAuth, and SSE
+fixtures.

@@ -76,8 +76,85 @@ func TestCodexResponsesInjectsBearerTokenAndUsesCodexModelName(t *testing.T) {
 		t.Fatalf("path = %q, want %q", got, want)
 	}
 	assertHeader(t, request.Headers, "Authorization", "Bearer codex-oauth-token")
+	assertHeader(t, request.Headers, "chatgpt-account-id", "acct_codex")
+	assertHeader(t, request.Headers, "OpenAI-Beta", "responses=experimental")
+	assertHeader(t, request.Headers, "originator", "sigma")
 	assertHeader(t, request.Headers, "X-Client", "client")
 	goldentest.AssertJSON(t, request.Body, "provider/openai/codex_responses/basic_payload.json")
+}
+
+func TestCodexResponsesPreservesSystemPromptInstructionsAndForcesStoreFalse(t *testing.T) {
+	t.Parallel()
+
+	requests := make(chan capturedRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captureRequest(t, requests, r)
+		writeResponsesSSE(t, w, responsesCompletedEvent)
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("codex-responses-instructions-test")
+	model := codexResponsesTestModel(providerID)
+	client := codexResponsesTestClient(t, providerID, model, server.URL, codexTokenProvider("codex-oauth-token"))
+
+	_, err := client.Complete(
+		context.Background(),
+		model,
+		sigma.Request{
+			SystemPrompt: "Use concise replies.",
+			Messages:     []sigma.Message{sigma.UserText("hi")},
+		},
+		sigma.WithProviderOption(providerID, "store", true),
+	)
+	if err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+
+	request := receiveRequest(t, requests)
+	var payload map[string]any
+	if err := json.Unmarshal(request.Body, &payload); err != nil {
+		t.Fatalf("Unmarshal request body returned error: %v", err)
+	}
+	if got, want := payload["instructions"], "Use concise replies."; got != want {
+		t.Fatalf("instructions = %v, want %q", got, want)
+	}
+	if got, want := payload["store"], false; got != want {
+		t.Fatalf("store = %v, want %v", got, want)
+	}
+}
+
+func TestCodexResponsesOmitsUnsupportedMaxOutputTokens(t *testing.T) {
+	t.Parallel()
+
+	requests := make(chan capturedRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captureRequest(t, requests, r)
+		writeResponsesSSE(t, w, responsesCompletedEvent)
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("codex-responses-max-tokens-test")
+	model := codexResponsesTestModel(providerID)
+	client := codexResponsesTestClient(t, providerID, model, server.URL, codexTokenProvider("codex-oauth-token"))
+
+	_, err := client.Complete(
+		context.Background(),
+		model,
+		sigma.Request{Messages: []sigma.Message{sigma.UserText("hi")}},
+		sigma.WithMaxTokens(128),
+	)
+	if err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+
+	request := receiveRequest(t, requests)
+	var payload map[string]any
+	if err := json.Unmarshal(request.Body, &payload); err != nil {
+		t.Fatalf("Unmarshal request body returned error: %v", err)
+	}
+	if _, ok := payload["max_output_tokens"]; ok {
+		t.Fatalf("max_output_tokens was sent in Codex payload: %#v", payload)
+	}
 }
 
 func TestCodexResponsesDerivesPromptCacheKey(t *testing.T) {
@@ -106,8 +183,9 @@ func TestCodexResponsesDerivesPromptCacheKey(t *testing.T) {
 		t.Fatalf("Complete returned error: %v", err)
 	}
 
+	request := receiveRequest(t, requests)
 	var payload map[string]any
-	if err := json.Unmarshal(receiveRequest(t, requests).Body, &payload); err != nil {
+	if err := json.Unmarshal(request.Body, &payload); err != nil {
 		t.Fatalf("Unmarshal request body returned error: %v", err)
 	}
 	if got, want := payload["prompt_cache_key"], strings.Repeat("x", 64); got != want {
@@ -116,9 +194,11 @@ func TestCodexResponsesDerivesPromptCacheKey(t *testing.T) {
 	if got, want := payload["prompt_cache_retention"], "24h"; got != want {
 		t.Fatalf("prompt_cache_retention = %v, want %q", got, want)
 	}
-	if got, want := payload["previous_response_id"], sessionID; got != want {
-		t.Fatalf("previous_response_id = %v, want session id", got)
+	if _, ok := payload["previous_response_id"]; ok {
+		t.Fatalf("previous_response_id was sent in Codex payload: %#v", payload)
 	}
+	assertHeader(t, request.Headers, "session-id", sessionID)
+	assertHeader(t, request.Headers, "x-client-request-id", sessionID)
 }
 
 func TestCodexResponsesMissingOAuthProviderFailsBeforeNetwork(t *testing.T) {
@@ -137,6 +217,38 @@ func TestCodexResponsesMissingOAuthProviderFailsBeforeNetwork(t *testing.T) {
 	_, err := client.Complete(context.Background(), model, sigma.Request{Messages: []sigma.Message{sigma.UserText("hi")}})
 	if !errors.Is(err, sigma.ErrCredentialUnavailable) {
 		t.Fatalf("error = %v, want ErrCredentialUnavailable", err)
+	}
+	if calls != 0 {
+		t.Fatalf("server calls = %d, want 0", calls)
+	}
+}
+
+func TestCodexResponsesMissingAccountIDFailsBeforeNetwork(t *testing.T) {
+	t.Parallel()
+
+	var calls int
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		calls++
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("codex-responses-missing-account-test")
+	model := codexResponsesTestModel(providerID)
+	client := codexResponsesTestClient(t, providerID, model, server.URL, sigma.OAuthTokenProviderFunc(
+		func(context.Context, sigma.Model, sigma.Options) (sigma.Credential, error) {
+			return sigma.Credential{
+				Type:  sigma.CredentialTypeOAuthToken,
+				Value: "not-a-jwt",
+			}, nil
+		},
+	))
+
+	_, err := client.Complete(context.Background(), model, sigma.Request{Messages: []sigma.Message{sigma.UserText("hi")}})
+	if err == nil {
+		t.Fatal("Complete returned nil error")
+	}
+	if !strings.Contains(err.Error(), "account id") {
+		t.Fatalf("error = %q, want account id context", err.Error())
 	}
 	if calls != 0 {
 		t.Fatalf("server calls = %d, want 0", calls)
@@ -391,6 +503,9 @@ func codexTokenProvider(token string) sigma.OAuthTokenProvider {
 		return sigma.Credential{
 			Type:  sigma.CredentialTypeOAuthToken,
 			Value: token,
+			Metadata: map[string]any{
+				"accountID": "acct_codex",
+			},
 		}, nil
 	})
 }

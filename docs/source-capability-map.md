@@ -14,7 +14,7 @@ packages and metadata fields. It should be read with
 | OpenCode Zen and OpenCode Go OpenAI-compatible Chat Completions | `openai-completions` | [provider/openai](../provider/openai), `Model.OpenAICompletionsCompat` | Curated built-in model metadata for the OpenCode OpenAI-compatible routes using `OPENCODE_API_KEY`; non-OpenAI OpenCode routes remain outside this mapping. |
 | OpenAI Responses | `openai-responses` | [provider/openai](../provider/openai), `Model.API`, `OpenAIOptions` | Separate Responses adapter for response IDs, reasoning summaries, output blocks, tool-result images, bounded replay IDs, and Responses-specific options. |
 | Azure OpenAI Responses | `azure-openai-responses` | [provider/openai](../provider/openai), `Model.AzureOpenAIResponses` | Azure endpoint/deployment/API-version wrapper over Responses semantics. |
-| OpenAI Codex Responses | `openai-codex-responses` | [provider/openai](../provider/openai), `Model.OpenAICodexResponses`, `OpenAIOptions` | Codex-specific Responses wrapper with caller-supplied OAuth token provider, text verbosity, cache-retention payload fields, and transport gating. |
+| OpenAI Codex Responses | `openai-codex-responses` | [provider/openai](../provider/openai), `Model.OpenAICodexResponses`, `OpenAIOptions` | Codex-specific Responses wrapper with device-code OAuth helpers, caller-owned token persistence, text verbosity, cache-retention payload fields, and transport gating. |
 | Anthropic Messages | `anthropic-messages` | [provider/anthropic](../provider/anthropic), `Model.ProviderMetadata["modelFamily"]` | Text adapter for Anthropic and Anthropic-compatible variants such as Kimi, Fireworks, and Xiaomi. |
 | Google Gemini API | `google-generative-ai` | [provider/google](../provider/google) | Text adapter for Gemini API payloads, streaming, tool calls, thinking parts, and usage metadata. |
 | Google Vertex AI | `google-vertex` | [provider/google](../provider/google), Vertex provider config | Vertex routing/auth wrapper that reuses the Google payload and stream parser. |
@@ -29,7 +29,7 @@ packages and metadata fields. It should be read with
 | --- | --- | --- | --- |
 | OpenAI | `openai` | `openai-responses`, `openai-completions`, `openai-images` | Text Responses, Chat Completions, and Images generation adapters exist. |
 | Azure OpenAI | caller-chosen, usually Azure-specific | `azure-openai-responses` | Uses model/request `AzureOpenAIResponses` config rather than generated default metadata. |
-| OpenAI Codex | caller-chosen, usually Codex-specific | `openai-codex-responses` | Requires explicit OAuth token provider; no interactive login. |
+| OpenAI Codex | caller-chosen, usually Codex-specific | `openai-codex-responses` | Uses explicit OAuth token providers; includes device-code login and refresh helpers. |
 | Anthropic | `anthropic` | `anthropic-messages` | Generated metadata includes a Claude text model. |
 | Amazon Bedrock | `amazon-bedrock` | `bedrock-converse-stream` | Generated metadata includes a Claude-on-Bedrock text model. |
 | Google Gemini API | `google` | `google-generative-ai` | Generated metadata includes Gemini text. |
@@ -71,7 +71,7 @@ packages and metadata fields. It should be read with
 
 - OpenAI Images is generation-only; edits, variations, streaming partial images, and Responses image-tool generation are deferred.
 - Automatic provider/model discovery is generated from curated metadata, not live provider listing calls.
-- Interactive OAuth login and credential persistence are intentionally absent.
+- Browser callback OAuth login and credential persistence are intentionally absent.
 - Cross-provider context handoff and capability-loss reporting are future work.
 - Source-level provider breadth is larger than generated default models. Several provider IDs exist only for caller-registered compatible models today, and OpenCode coverage is limited to curated OpenAI-compatible routes.
 - GitHub Copilot dynamic headers, Cloudflare AI Gateway auth header rewriting,
