@@ -44,16 +44,17 @@ Chat Completions adapter.
 - OpenAI-compatible stream parsing recognizes Chat Completions
   `reasoning_text` deltas plus Responses/Codex refusal and reasoning-text
   events.
-- OpenAI Codex Responses includes stdlib-only device-code OAuth login, token
-  refresh helpers, and an in-memory OAuth token provider for caller-managed
-  credentials.
+- OpenAI Codex Responses includes stdlib-only browser callback and device-code
+  OAuth login, token refresh helpers, and an in-memory OAuth token provider for
+  caller-managed credentials.
 - OpenAI Codex Responses sends Codex backend headers for OAuth account routing,
   Responses SSE beta access, originator identity, and session-scoped request
   IDs, while normalizing request payloads for required instructions, disabled
   storage, unsupported output-token caps, and unsupported response replay IDs.
 - `cmd/sigma-surface-probe` can run opt-in live OpenAI Responses probes and
-  OpenAI Codex Responses probes, including device-code OAuth for Codex and a
-  `gpt-5.3-codex` default for ChatGPT-backed Codex probing.
+  OpenAI Codex Responses probes, including browser callback and device-code
+  OAuth for Codex plus a `gpt-5.3-codex` default for ChatGPT-backed Codex
+  probing.
 - `sigma.ClassifyError` exposes stable provider error classes for auth, quota,
   billing, context overflow, rate limits, transient failures, invalid requests,
   provider failures, and unknown errors, including provider retry-after hints
@@ -70,8 +71,8 @@ Chat Completions adapter.
   endpoint-specific `cache_control` payload markers. Sigma does not mix those
   payloads with OpenAI-native prompt-cache fields.
 - OpenAI Codex Responses remains SSE-only. OAuth credential persistence remains
-  caller-owned; Sigma exposes device-code login, refresh, and token-provider
-  helpers but does not write tokens to disk.
+  caller-owned; Sigma exposes browser callback login, device-code login,
+  refresh, and token-provider helpers but does not write tokens to disk.
 - OpenAI image variations are intentionally limited to explicit `dall-e-2`
   requests. Other OpenAI image models use generation or edit operations.
 
@@ -83,9 +84,9 @@ Chat Completions adapter.
   fixtures are the release evidence for image generation, multipart edits,
   reference-only JSON edits, variations, streaming, and Responses
   image-generation tool output.
-- Codex WebSocket transport, WebSocket session caching/fallback, browser
-  callback OAuth login, token persistence, Copilot dynamic headers, and
-  Cloudflare OpenAI-compatible auth rewriting remain deferred.
+- Codex WebSocket transport, WebSocket session caching/fallback, token
+  persistence, Copilot dynamic headers, and Cloudflare OpenAI-compatible auth
+  rewriting remain deferred.
 - Deferred work continues to be tracked in [TODO.md](../TODO.md).
 
 ## Validation status

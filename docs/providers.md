@@ -108,9 +108,9 @@ _ = openai.RegisterCodexResponses(registry, sigma.ProviderGitHubCopilot)
 
 Codex Responses requires OAuth credentials through
 `openai.WithCodexResponsesOAuthTokenProvider`. Use
-`openai.LoginOpenAICodexDeviceCode`, `openai.RefreshOpenAICodexToken`, and
-`openai.NewCodexOAuthTokenProvider` for stdlib-only device-code login and
-refresh. Sigma does not implement browser callback login, token storage, or
+`openai.LoginOpenAICodexBrowser`, `openai.LoginOpenAICodexDeviceCode`,
+`openai.RefreshOpenAICodexToken`, and `openai.NewCodexOAuthTokenProvider` for
+stdlib-only login and refresh. Sigma does not implement token storage or
 WebSocket transport. Codex image input should use HTTPS image URLs; ChatGPT
 Codex rejects base64 image payloads.
 

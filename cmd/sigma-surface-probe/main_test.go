@@ -10,7 +10,10 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"flag"
+	"os"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/wintermi/sigma"
@@ -235,6 +238,40 @@ func TestOpenAICodexAuthOptionsUseOAuthTokenProvider(t *testing.T) {
 	}
 	if got, want := credential.Metadata["accountID"], "acct_probe"; got != want {
 		t.Fatalf("accountID metadata = %v, want %q", got, want)
+	}
+}
+
+func TestParseConfigEnablesOpenAICodexBrowserOAuth(t *testing.T) {
+	oldCommandLine := flag.CommandLine
+	oldArgs := os.Args
+	flag.CommandLine = flag.NewFlagSet("sigma-surface-probe-test", flag.ContinueOnError)
+	os.Args = []string{"sigma-surface-probe", "-routes=openai-codex", "-codex-oauth-browser"}
+	t.Cleanup(func() {
+		flag.CommandLine = oldCommandLine
+		os.Args = oldArgs
+	})
+
+	cfg := parseConfig()
+	if !cfg.codexOAuthBrowser {
+		t.Fatal("codexOAuthBrowser = false, want true")
+	}
+	if cfg.codexOAuth {
+		t.Fatal("codexOAuth = true, want false")
+	}
+	if !reflect.DeepEqual(cfg.routes, []string{"openai-codex"}) {
+		t.Fatalf("routes = %v, want openai-codex", cfg.routes)
+	}
+}
+
+func TestOpenAICodexCredentialRejectsMultipleOAuthModes(t *testing.T) {
+	t.Parallel()
+
+	_, err := openAICodexCredential(context.Background(), config{
+		codexOAuth:        true,
+		codexOAuthBrowser: true,
+	})
+	if err == nil || !strings.Contains(err.Error(), "only one") {
+		t.Fatalf("error = %v, want mutually exclusive OAuth mode error", err)
 	}
 }
 

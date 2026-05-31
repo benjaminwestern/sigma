@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -94,6 +95,7 @@ type config struct {
 	includeUnavailable bool
 	timeout            time.Duration
 	codexOAuth         bool
+	codexOAuthBrowser  bool
 }
 
 type routeCredential struct {
@@ -224,11 +226,13 @@ func parseConfig() config {
 	var repair bool
 	var includeUnavailable bool
 	var codexOAuth bool
+	var codexOAuthBrowser bool
 	flag.StringVar(&routeList, "routes", "zen,go", "comma-separated routes: openai,openai-codex,zen,go,fireworks-openai,fireworks-anthropic,xai")
 	flag.StringVar(&modelList, "models", "", "comma-separated model IDs to probe")
 	flag.BoolVar(&repair, "repair", false, "try targeted repair variants after a failing case")
 	flag.BoolVar(&includeUnavailable, "include-unavailable", false, "run known unavailable advertised models instead of skipping them")
 	flag.BoolVar(&codexOAuth, "codex-oauth", false, "run OpenAI Codex device-code OAuth for the openai-codex route")
+	flag.BoolVar(&codexOAuthBrowser, "codex-oauth-browser", false, "run OpenAI Codex browser callback OAuth for the openai-codex route")
 	flag.DurationVar(&timeout, "timeout", 10*time.Minute, "overall probe timeout")
 	flag.Parse()
 
@@ -239,6 +243,7 @@ func parseConfig() config {
 		includeUnavailable: includeUnavailable,
 		timeout:            timeout,
 		codexOAuth:         codexOAuth,
+		codexOAuthBrowser:  codexOAuthBrowser,
 	}
 }
 
@@ -254,6 +259,24 @@ func credentialForRoute(ctx context.Context, route routeSpec, cfg config) (route
 }
 
 func openAICodexCredential(ctx context.Context, cfg config) (routeCredential, error) {
+	if cfg.codexOAuth && cfg.codexOAuthBrowser {
+		return routeCredential{}, fmt.Errorf("use only one of -codex-oauth or -codex-oauth-browser")
+	}
+	if cfg.codexOAuthBrowser {
+		credentials, err := openai.LoginOpenAICodexBrowser(ctx, openai.CodexBrowserLoginOptions{
+			OnAuth: func(info openai.CodexBrowserAuthInfo) {
+				_, _ = fmt.Fprintf(os.Stderr, "%s\n%s\n", info.Instructions, info.URL)
+			},
+			OnManualCode: func(ctx context.Context, prompt openai.CodexBrowserManualPrompt) (string, error) {
+				_, _ = fmt.Fprintln(os.Stderr, prompt.Message)
+				return readLineContext(ctx, os.Stdin)
+			},
+		})
+		if err != nil {
+			return routeCredential{}, fmt.Errorf("openai codex browser oauth: %w", err)
+		}
+		return routeCredential{apiKey: credentials.AccessToken, codex: &credentials}, nil
+	}
 	if cfg.codexOAuth {
 		credentials, err := openai.LoginOpenAICodexDeviceCode(ctx, openai.CodexDeviceCodeLoginOptions{
 			OnDeviceCode: func(info openai.CodexDeviceCodeInfo) {
@@ -280,7 +303,29 @@ func openAICodexCredential(ctx context.Context, cfg config) (routeCredential, er
 		}
 		return routeCredential{apiKey: credentials.AccessToken, codex: &credentials}, nil
 	}
-	return routeCredential{}, fmt.Errorf("OPENAI_CODEX_ACCESS_TOKEN, OPENAI_CODEX_REFRESH_TOKEN, or -codex-oauth is required for live openai-codex probing")
+	return routeCredential{}, fmt.Errorf("OPENAI_CODEX_ACCESS_TOKEN, OPENAI_CODEX_REFRESH_TOKEN, -codex-oauth, or -codex-oauth-browser is required for live openai-codex probing")
+}
+
+func readLineContext(ctx context.Context, reader io.Reader) (string, error) {
+	type result struct {
+		value string
+		err   error
+	}
+	done := make(chan result, 1)
+	go func() {
+		line, err := bufio.NewReader(reader).ReadString('\n')
+		if err != nil && !errors.Is(err, io.EOF) {
+			done <- result{err: err}
+			return
+		}
+		done <- result{value: strings.TrimSpace(line)}
+	}()
+	select {
+	case <-ctx.Done():
+		return "", ctx.Err()
+	case result := <-done:
+		return result.value, result.err
+	}
 }
 
 func modelsForRoute(ctx context.Context, route routeSpec, credential routeCredential, selected map[string]bool) ([]string, error) {

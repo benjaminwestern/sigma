@@ -7,6 +7,7 @@ package openai
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -19,6 +20,261 @@ import (
 
 	"github.com/wintermi/sigma"
 )
+
+func TestOpenAICodexBrowserAuthorizationURL(t *testing.T) {
+	flow, err := newOpenAICodexBrowserAuthorizationFlow("state-123", codexOAuthBrowserDefaultRedirect)
+	if err != nil {
+		t.Fatalf("newOpenAICodexBrowserAuthorizationFlow returned error: %v", err)
+	}
+	parsed, err := url.Parse(flow.url)
+	if err != nil {
+		t.Fatalf("Parse authorization URL returned error: %v", err)
+	}
+	values := parsed.Query()
+	if got, want := parsed.Scheme+"://"+parsed.Host+parsed.Path, codexOAuthAuthorizeURL; got != want {
+		t.Fatalf("authorize URL = %q, want %q", got, want)
+	}
+	assertQueryValue(t, values, "response_type", "code")
+	assertQueryValue(t, values, "client_id", codexOAuthClientID)
+	assertQueryValue(t, values, "redirect_uri", codexOAuthBrowserDefaultRedirect)
+	assertQueryValue(t, values, "scope", codexOAuthBrowserScope)
+	assertQueryValue(t, values, "code_challenge_method", "S256")
+	assertQueryValue(t, values, "state", "state-123")
+	assertQueryValue(t, values, "id_token_add_organizations", "true")
+	assertQueryValue(t, values, "codex_cli_simplified_flow", "true")
+	assertQueryValue(t, values, "originator", "sigma")
+
+	challenge := sha256.Sum256([]byte(flow.verifier))
+	if got, want := values.Get("code_challenge"), base64.RawURLEncoding.EncodeToString(challenge[:]); got != want {
+		t.Fatalf("code_challenge = %q, want %q", got, want)
+	}
+}
+
+func TestLoginOpenAICodexBrowserCallbackSuccess(t *testing.T) {
+	withCodexBrowserTestServer(t)
+
+	accessToken := codexTestJWT("acct_browser")
+	callbackHTML := make(chan string, 1)
+	var redirectURI string
+	client := codexOAuthTestClient(t, func(r *http.Request) *http.Response {
+		if r.URL.String() != codexOAuthTokenURL {
+			t.Fatalf("unexpected OAuth URL %q", r.URL.String())
+		}
+		assertCodexOAuthFormBody(t, r, map[string]string{
+			"grant_type":   "authorization_code",
+			"client_id":    codexOAuthClientID,
+			"code":         "callback-code",
+			"redirect_uri": redirectURI,
+		})
+		return codexOAuthJSONResponse(http.StatusOK, map[string]any{
+			"access_token":  accessToken,
+			"refresh_token": "refresh-token",
+			"expires_in":    3600,
+		})
+	})
+
+	credentials, err := LoginOpenAICodexBrowser(context.Background(), CodexBrowserLoginOptions{
+		HTTPClient: client,
+		OnAuth: func(info CodexBrowserAuthInfo) {
+			parsed, err := url.Parse(info.URL)
+			if err != nil {
+				callbackHTML <- err.Error()
+				return
+			}
+			redirectURI = parsed.Query().Get("redirect_uri")
+			state := parsed.Query().Get("state")
+			go func() {
+				resp, err := http.Get(redirectURI + "?code=callback-code&state=" + url.QueryEscape(state))
+				if err != nil {
+					callbackHTML <- err.Error()
+					return
+				}
+				defer resp.Body.Close()
+				data, _ := io.ReadAll(resp.Body)
+				callbackHTML <- string(data)
+			}()
+		},
+	})
+	if err != nil {
+		t.Fatalf("LoginOpenAICodexBrowser returned error: %v", err)
+	}
+	if got, want := credentials.AccessToken, accessToken; got != want {
+		t.Fatalf("access token = %q, want %q", got, want)
+	}
+	if got, want := credentials.RefreshToken, "refresh-token"; got != want {
+		t.Fatalf("refresh token = %q, want %q", got, want)
+	}
+	if got, want := credentials.AccountID, "acct_browser"; got != want {
+		t.Fatalf("account id = %q, want %q", got, want)
+	}
+	if got := <-callbackHTML; !strings.Contains(got, "Authentication successful") {
+		t.Fatalf("callback HTML = %q, want success page", got)
+	}
+}
+
+func TestLoginOpenAICodexBrowserCallbackErrorsBeforeExchange(t *testing.T) {
+	tests := []struct {
+		name  string
+		query func(url.Values) string
+		want  string
+	}{
+		{
+			name: "missing code",
+			query: func(values url.Values) string {
+				return "?state=" + url.QueryEscape(values.Get("state"))
+			},
+			want: "missing authorization code",
+		},
+		{
+			name: "state mismatch",
+			query: func(url.Values) string {
+				return "?code=callback-code&state=wrong-state"
+			},
+			want: "state mismatch",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			withCodexBrowserTestServer(t)
+
+			var tokenCalls int
+			client := codexOAuthTestClient(t, func(*http.Request) *http.Response {
+				tokenCalls++
+				return codexOAuthJSONResponse(http.StatusOK, map[string]any{})
+			})
+
+			_, err := LoginOpenAICodexBrowser(context.Background(), CodexBrowserLoginOptions{
+				HTTPClient: client,
+				OnAuth: func(info CodexBrowserAuthInfo) {
+					parsed, err := url.Parse(info.URL)
+					if err != nil {
+						t.Errorf("Parse auth URL returned error: %v", err)
+						return
+					}
+					redirectURI := parsed.Query().Get("redirect_uri")
+					go func() {
+						resp, err := http.Get(redirectURI + tt.query(parsed.Query()))
+						if err == nil {
+							_ = resp.Body.Close()
+						}
+					}()
+				},
+			})
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("error = %v, want %q", err, tt.want)
+			}
+			if tokenCalls != 0 {
+				t.Fatalf("token calls = %d, want 0", tokenCalls)
+			}
+		})
+	}
+}
+
+func TestLoginOpenAICodexBrowserManualCodeFallback(t *testing.T) {
+	withCodexBrowserTestServer(t)
+
+	accessToken := codexTestJWT("acct_manual")
+	var authInfo CodexBrowserAuthInfo
+	var redirectURI string
+	client := codexOAuthTestClient(t, func(r *http.Request) *http.Response {
+		values := readCodexOAuthFormBody(t, r)
+		for key, want := range map[string]string{
+			"grant_type":   "authorization_code",
+			"client_id":    codexOAuthClientID,
+			"code":         "manual-code",
+			"redirect_uri": redirectURI,
+		} {
+			if got := values.Get(key); got != want {
+				t.Fatalf("request form[%q] = %q, want %q", key, got, want)
+			}
+		}
+		if values.Get("code_verifier") == "" {
+			t.Fatal("code_verifier was empty")
+		}
+		return codexOAuthJSONResponse(http.StatusOK, map[string]any{
+			"access_token":  accessToken,
+			"refresh_token": "refresh-token",
+			"expires_in":    3600,
+		})
+	})
+
+	credentials, err := LoginOpenAICodexBrowser(context.Background(), CodexBrowserLoginOptions{
+		HTTPClient: client,
+		OnAuth: func(info CodexBrowserAuthInfo) {
+			authInfo = info
+		},
+		OnManualCode: func(_ context.Context, prompt CodexBrowserManualPrompt) (string, error) {
+			if !strings.Contains(prompt.Message, "authorization code") {
+				return "", errors.New("manual prompt did not mention authorization code")
+			}
+			parsed, err := url.Parse(authInfo.URL)
+			if err != nil {
+				return "", err
+			}
+			redirectURI = parsed.Query().Get("redirect_uri")
+			return redirectURI + "?code=manual-code&state=" + url.QueryEscape(parsed.Query().Get("state")), nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("LoginOpenAICodexBrowser returned error: %v", err)
+	}
+	if got, want := credentials.AccountID, "acct_manual"; got != want {
+		t.Fatalf("account id = %q, want %q", got, want)
+	}
+}
+
+func TestLoginOpenAICodexBrowserManualCodeRejectsStateMismatch(t *testing.T) {
+	withCodexBrowserTestServer(t)
+
+	_, err := LoginOpenAICodexBrowser(context.Background(), CodexBrowserLoginOptions{
+		OnManualCode: func(context.Context, CodexBrowserManualPrompt) (string, error) {
+			return "manual-code#wrong-state", nil
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "state mismatch") {
+		t.Fatalf("error = %v, want state mismatch", err)
+	}
+}
+
+func TestLoginOpenAICodexBrowserCancellation(t *testing.T) {
+	withCodexBrowserTestServer(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	_, err := LoginOpenAICodexBrowser(ctx, CodexBrowserLoginOptions{
+		OnAuth: func(CodexBrowserAuthInfo) {
+			cancel()
+		},
+	})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("error = %v, want context.Canceled", err)
+	}
+}
+
+func TestLoginOpenAICodexBrowserExchangeFailureRedactsBody(t *testing.T) {
+	withCodexBrowserTestServer(t)
+
+	const token = "secret-access-token"
+	client := codexOAuthTestClient(t, func(*http.Request) *http.Response {
+		return codexOAuthJSONResponse(http.StatusUnauthorized, map[string]any{
+			"error":        "invalid_grant",
+			"access_token": token,
+		})
+	})
+
+	_, err := LoginOpenAICodexBrowser(context.Background(), CodexBrowserLoginOptions{
+		HTTPClient: client,
+		OnManualCode: func(context.Context, CodexBrowserManualPrompt) (string, error) {
+			return "manual-code", nil
+		},
+	})
+	if err == nil {
+		t.Fatal("LoginOpenAICodexBrowser returned nil error")
+	}
+	if strings.Contains(err.Error(), token) {
+		t.Fatalf("error leaked token: %v", err)
+	}
+}
 
 func TestLoginOpenAICodexDeviceCodeSuccess(t *testing.T) {
 	t.Parallel()
@@ -445,6 +701,16 @@ func assertCodexOAuthJSONBody(t *testing.T, r *http.Request, want map[string]any
 
 func assertCodexOAuthFormBody(t *testing.T, r *http.Request, want map[string]string) {
 	t.Helper()
+	values := readCodexOAuthFormBody(t, r)
+	for key, wantValue := range want {
+		if gotValue := values.Get(key); gotValue != wantValue {
+			t.Fatalf("request form[%q] = %q, want %q", key, gotValue, wantValue)
+		}
+	}
+}
+
+func readCodexOAuthFormBody(t *testing.T, r *http.Request) url.Values {
+	t.Helper()
 	if got, want := r.Method, http.MethodPost; got != want {
 		t.Fatalf("method = %q, want %q", got, want)
 	}
@@ -459,11 +725,7 @@ func assertCodexOAuthFormBody(t *testing.T, r *http.Request, want map[string]str
 	if err != nil {
 		t.Fatalf("ParseQuery request body returned error: %v", err)
 	}
-	for key, wantValue := range want {
-		if gotValue := values.Get(key); gotValue != wantValue {
-			t.Fatalf("request form[%q] = %q, want %q", key, gotValue, wantValue)
-		}
-	}
+	return values
 }
 
 func codexTestJWT(accountID string) string {
@@ -474,4 +736,18 @@ func codexTestJWT(accountID string) string {
 		},
 	})
 	return header + "." + base64.RawURLEncoding.EncodeToString(payload) + ".signature"
+}
+
+func assertQueryValue(t *testing.T, values url.Values, key string, want string) {
+	t.Helper()
+	if got := values.Get(key); got != want {
+		t.Fatalf("query[%q] = %q, want %q", key, got, want)
+	}
+}
+
+func withCodexBrowserTestServer(t *testing.T) {
+	t.Helper()
+	old := codexOAuthBrowserListenAddr
+	codexOAuthBrowserListenAddr = "127.0.0.1:0"
+	t.Cleanup(func() { codexOAuthBrowserListenAddr = old })
 }

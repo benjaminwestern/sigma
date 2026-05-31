@@ -41,18 +41,18 @@ See [release notes](docs/release-notes-v0.3.0.md).
 - OpenAI-compatible stream parsing now recognizes Chat Completions
   `reasoning_text` deltas and Responses/Codex refusal and reasoning-text
   events.
-- OpenAI Codex Responses now has stdlib-only device-code OAuth login, token
-  refresh helpers, and an in-memory OAuth token provider that callers can wrap
-  with their own credential persistence.
+- OpenAI Codex Responses now has stdlib-only browser callback and device-code
+  OAuth login, token refresh helpers, and an in-memory OAuth token provider that
+  callers can wrap with their own credential persistence.
 - OpenAI Codex Responses now sends Codex backend request headers for OAuth
   account routing, Responses SSE beta access, originator identity, and
   session-scoped request IDs, and aligns Codex payloads with ChatGPT backend
   requirements for required instructions, disabled storage, and unsupported
   output-token caps and response replay IDs.
 - `cmd/sigma-surface-probe` can run opt-in live OpenAI Responses probes with
-  `OPENAI_API_KEY` and OpenAI Codex Responses probes with device-code OAuth or
-  caller-supplied Codex OAuth tokens, defaulting Codex live probes to
-  `gpt-5.3-codex`.
+  `OPENAI_API_KEY` and OpenAI Codex Responses probes with browser callback
+  OAuth, device-code OAuth, or caller-supplied Codex OAuth tokens, defaulting
+  Codex live probes to `gpt-5.3-codex`.
 - Provider execution errors now expose typed `sigma.ClassifyError` results with
   stable auth, quota, billing, context-overflow, rate-limit, transient,
   invalid-request, provider, and unknown classes plus retry-after hints.
@@ -75,9 +75,8 @@ See [release notes](docs/release-notes-v0.3.0.md).
 - Preview providers are not part of the first release gate and may change before
   `v1.0.0`.
 - OAuth token persistence is caller-owned. OpenAI Codex Responses includes
-  device-code login and refresh helpers, but does not write credentials to disk.
-- Browser callback OAuth login is deferred; OpenAI Codex OAuth support uses the
-  device-code flow.
+  browser callback login, device-code login, and refresh helpers, but does not
+  write credentials to disk.
 - Anthropic Claude Code OAuth identity headers and Claude Code tool-name
   canonicalization are deferred with the broader OAuth/provider-specific
   compatibility work.

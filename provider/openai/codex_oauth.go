@@ -8,11 +8,15 @@ package openai
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -26,6 +30,9 @@ import (
 
 const (
 	codexOAuthClientID                = "app_EMoamEEZ73f0CkXaXp7hrann"
+	codexOAuthBrowserCallbackPath     = "/auth/callback"
+	codexOAuthBrowserDefaultRedirect  = "http://localhost:1455/auth/callback"
+	codexOAuthBrowserScope            = "openid profile email offline_access"
 	codexOAuthDeviceVerificationURI   = "https://auth.openai.com/codex/device"
 	codexOAuthDeviceRedirectURI       = "https://auth.openai.com/deviceauth/callback"
 	codexOAuthDefaultPollInterval     = 5 * time.Second
@@ -38,9 +45,11 @@ const (
 )
 
 var (
+	codexOAuthAuthorizeURL      = "https://auth.openai.com/oauth/authorize"
 	codexOAuthTokenURL          = "https://auth.openai.com/oauth/token"
 	codexOAuthDeviceUserCodeURL = "https://auth.openai.com/api/accounts/deviceauth/usercode"
 	codexOAuthDeviceTokenURL    = "https://auth.openai.com/api/accounts/deviceauth/token"
+	codexOAuthBrowserListenAddr = "127.0.0.1:1455"
 	codexOAuthDeviceTimeout     = 15 * time.Minute
 )
 
@@ -68,6 +77,26 @@ type CodexDeviceCodeLoginOptions struct {
 	OnDeviceCode func(CodexDeviceCodeInfo)
 }
 
+// CodexBrowserAuthInfo reports the authorization URL that callers should open
+// in a browser to complete OpenAI Codex OAuth login.
+type CodexBrowserAuthInfo struct {
+	URL          string
+	Instructions string
+}
+
+// CodexBrowserManualPrompt describes the fallback prompt for manually pasting
+// an authorization code or redirect URL.
+type CodexBrowserManualPrompt struct {
+	Message string
+}
+
+// CodexBrowserLoginOptions configures OpenAI Codex browser callback login.
+type CodexBrowserLoginOptions struct {
+	HTTPClient   *http.Client
+	OnAuth       func(CodexBrowserAuthInfo)
+	OnManualCode func(context.Context, CodexBrowserManualPrompt) (string, error)
+}
+
 // CodexOAuthTokenProviderOptions configures the OAuth token provider returned
 // by NewCodexOAuthTokenProvider.
 type CodexOAuthTokenProviderOptions struct {
@@ -86,6 +115,28 @@ type codexDeviceAuthInfo struct {
 type codexDeviceTokenSuccess struct {
 	authorizationCode string
 	codeVerifier      string
+}
+
+type codexBrowserAuthorizationFlow struct {
+	verifier string
+	state    string
+	url      string
+}
+
+type codexBrowserCallbackServer struct {
+	server      *http.Server
+	done        chan codexBrowserCallbackResult
+	redirectURI string
+}
+
+type codexBrowserCallbackResult struct {
+	code string
+	err  error
+}
+
+type codexAuthorizationInput struct {
+	code  string
+	state string
 }
 
 type codexOAuthToken struct {
@@ -125,6 +176,41 @@ func LoginOpenAICodexDeviceCode(ctx context.Context, opts CodexDeviceCodeLoginOp
 		return CodexOAuthCredentials{}, err
 	}
 	token, err := exchangeOpenAICodexAuthorizationCode(ctx, opts.HTTPClient, code.authorizationCode, code.codeVerifier, codexOAuthDeviceRedirectURI)
+	if err != nil {
+		return CodexOAuthCredentials{}, err
+	}
+	return codexCredentialsFromToken(token)
+}
+
+// LoginOpenAICodexBrowser runs the OpenAI Codex browser callback OAuth flow and
+// returns credentials for caller-managed persistence.
+func LoginOpenAICodexBrowser(ctx context.Context, opts CodexBrowserLoginOptions) (CodexOAuthCredentials, error) {
+	state, err := randomBase64URL(16)
+	if err != nil {
+		return CodexOAuthCredentials{}, err
+	}
+	server, err := startOpenAICodexBrowserCallbackServer(state)
+	if err != nil {
+		return CodexOAuthCredentials{}, err
+	}
+	defer server.close()
+
+	flow, err := newOpenAICodexBrowserAuthorizationFlow(state, server.redirectURI)
+	if err != nil {
+		return CodexOAuthCredentials{}, err
+	}
+	if opts.OnAuth != nil {
+		opts.OnAuth(CodexBrowserAuthInfo{
+			URL:          flow.url,
+			Instructions: "Open the URL in a browser and complete login. If the browser is on another machine, paste the final redirect URL or authorization code.",
+		})
+	}
+
+	code, err := waitOpenAICodexBrowserAuthorizationCode(ctx, flow.state, server, opts.OnManualCode)
+	if err != nil {
+		return CodexOAuthCredentials{}, err
+	}
+	token, err := exchangeOpenAICodexAuthorizationCode(ctx, opts.HTTPClient, code, flow.verifier, server.redirectURI)
 	if err != nil {
 		return CodexOAuthCredentials{}, err
 	}
@@ -232,6 +318,203 @@ func (p *codexOAuthTokenProvider) shouldRefresh() bool {
 		return false
 	}
 	return !p.now().Add(p.refreshBefore).Before(p.credentials.Expiry)
+}
+
+func newOpenAICodexBrowserAuthorizationFlow(state string, redirectURI string) (codexBrowserAuthorizationFlow, error) {
+	verifier, challenge, err := newPKCEPair()
+	if err != nil {
+		return codexBrowserAuthorizationFlow{}, err
+	}
+	authURL, err := url.Parse(codexOAuthAuthorizeURL)
+	if err != nil {
+		return codexBrowserAuthorizationFlow{}, fmt.Errorf("openai codex oauth: parse authorize URL: %w", err)
+	}
+	values := authURL.Query()
+	values.Set("response_type", "code")
+	values.Set("client_id", codexOAuthClientID)
+	values.Set("redirect_uri", redirectURI)
+	values.Set("scope", codexOAuthBrowserScope)
+	values.Set("code_challenge", challenge)
+	values.Set("code_challenge_method", "S256")
+	values.Set("state", state)
+	values.Set("id_token_add_organizations", "true")
+	values.Set("codex_cli_simplified_flow", "true")
+	values.Set("originator", "sigma")
+	authURL.RawQuery = values.Encode()
+	return codexBrowserAuthorizationFlow{
+		verifier: verifier,
+		state:    state,
+		url:      authURL.String(),
+	}, nil
+}
+
+func startOpenAICodexBrowserCallbackServer(state string) (*codexBrowserCallbackServer, error) {
+	var listenConfig net.ListenConfig
+	listener, err := listenConfig.Listen(context.Background(), "tcp", codexOAuthBrowserListenAddr)
+	if err != nil {
+		return nil, fmt.Errorf("openai codex oauth: start callback server: %w", err)
+	}
+	result := make(chan codexBrowserCallbackResult, 1)
+	serverInfo := &codexBrowserCallbackServer{
+		done:        result,
+		redirectURI: codexBrowserRedirectURI(listener),
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc(codexOAuthBrowserCallbackPath, func(w http.ResponseWriter, req *http.Request) {
+		if req.URL.Query().Get("state") != state {
+			writeCodexOAuthHTML(w, http.StatusBadRequest, "Authentication failed", "State mismatch.")
+			serverInfo.finish(codexBrowserCallbackResult{err: fmt.Errorf("openai codex oauth: state mismatch")})
+			return
+		}
+		code := req.URL.Query().Get("code")
+		if code == "" {
+			writeCodexOAuthHTML(w, http.StatusBadRequest, "Authentication failed", "Missing authorization code.")
+			serverInfo.finish(codexBrowserCallbackResult{err: fmt.Errorf("openai codex oauth: missing authorization code")})
+			return
+		}
+		writeCodexOAuthHTML(w, http.StatusOK, "Authentication successful", "OpenAI authentication completed. You can close this window.")
+		serverInfo.finish(codexBrowserCallbackResult{code: code})
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		writeCodexOAuthHTML(w, http.StatusNotFound, "Authentication failed", "Callback route not found.")
+	})
+	server := &http.Server{
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+	serverInfo.server = server
+	go func() {
+		if err := server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serverInfo.finish(codexBrowserCallbackResult{err: fmt.Errorf("openai codex oauth: callback server failed: %w", err)})
+		}
+	}()
+	return serverInfo, nil
+}
+
+func (s *codexBrowserCallbackServer) finish(result codexBrowserCallbackResult) {
+	select {
+	case s.done <- result:
+	default:
+	}
+}
+
+func (s *codexBrowserCallbackServer) close() {
+	if s == nil || s.server == nil {
+		return
+	}
+	_ = s.server.Close()
+}
+
+func waitOpenAICodexBrowserAuthorizationCode(
+	ctx context.Context,
+	state string,
+	server *codexBrowserCallbackServer,
+	manual func(context.Context, CodexBrowserManualPrompt) (string, error),
+) (string, error) {
+	manualResult := make(chan codexBrowserCallbackResult, 1)
+	if manual != nil {
+		go func() {
+			input, err := manual(ctx, CodexBrowserManualPrompt{
+				Message: "Paste the authorization code or full redirect URL:",
+			})
+			if err != nil {
+				manualResult <- codexBrowserCallbackResult{err: err}
+				return
+			}
+			parsed := parseCodexAuthorizationInput(input)
+			if parsed.state != "" && parsed.state != state {
+				manualResult <- codexBrowserCallbackResult{err: fmt.Errorf("openai codex oauth: state mismatch")}
+				return
+			}
+			if parsed.code == "" {
+				manualResult <- codexBrowserCallbackResult{err: fmt.Errorf("openai codex oauth: missing authorization code")}
+				return
+			}
+			manualResult <- codexBrowserCallbackResult{code: parsed.code}
+		}()
+	}
+
+	for {
+		select {
+		case result := <-server.done:
+			return result.code, result.err
+		case result := <-manualResult:
+			return result.code, result.err
+		case <-ctx.Done():
+			server.close()
+			return "", ctx.Err()
+		}
+	}
+}
+
+func parseCodexAuthorizationInput(input string) codexAuthorizationInput {
+	value := strings.TrimSpace(input)
+	if value == "" {
+		return codexAuthorizationInput{}
+	}
+	if parsed, err := url.Parse(value); err == nil && (parsed.Scheme != "" || parsed.Host != "") {
+		return codexAuthorizationInput{
+			code:  parsed.Query().Get("code"),
+			state: parsed.Query().Get("state"),
+		}
+	}
+	if strings.Contains(value, "#") && !strings.Contains(value, "://") {
+		parts := strings.SplitN(value, "#", 2)
+		return codexAuthorizationInput{code: parts[0], state: parts[1]}
+	}
+	value = strings.TrimPrefix(value, "?")
+	if strings.Contains(value, "code=") {
+		values, err := url.ParseQuery(value)
+		if err == nil {
+			return codexAuthorizationInput{
+				code:  values.Get("code"),
+				state: values.Get("state"),
+			}
+		}
+	}
+	return codexAuthorizationInput{code: value}
+}
+
+func codexBrowserRedirectURI(listener net.Listener) string {
+	if codexOAuthBrowserListenAddr == "127.0.0.1:1455" {
+		return codexOAuthBrowserDefaultRedirect
+	}
+	host, port, err := net.SplitHostPort(listener.Addr().String())
+	if err != nil {
+		return codexOAuthBrowserDefaultRedirect
+	}
+	return (&url.URL{
+		Scheme: "http",
+		Host:   net.JoinHostPort(host, port),
+		Path:   codexOAuthBrowserCallbackPath,
+	}).String()
+}
+
+func newPKCEPair() (string, string, error) {
+	verifier, err := randomBase64URL(32)
+	if err != nil {
+		return "", "", err
+	}
+	hash := sha256.Sum256([]byte(verifier))
+	return verifier, base64.RawURLEncoding.EncodeToString(hash[:]), nil
+}
+
+func randomBase64URL(size int) (string, error) {
+	buf := make([]byte, size)
+	if _, err := rand.Read(buf); err != nil {
+		return "", fmt.Errorf("openai codex oauth: generate random value: %w", err)
+	}
+	return base64.RawURLEncoding.EncodeToString(buf), nil
+}
+
+func writeCodexOAuthHTML(w http.ResponseWriter, status int, heading string, message string) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
+	_, _ = fmt.Fprintf(w, `<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>%s</title></head>
+<body><main><h1>%s</h1><p>%s</p></main></body>
+</html>`, html.EscapeString(heading), html.EscapeString(heading), html.EscapeString(message))
 }
 
 func startOpenAICodexDeviceAuth(ctx context.Context, client *http.Client) (codexDeviceAuthInfo, error) {
