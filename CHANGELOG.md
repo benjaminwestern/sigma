@@ -26,9 +26,14 @@ See [release notes](docs/release-notes-v0.3.0.md).
   `prompt_cache_key` values from `sigma.WithSessionID` when prompt caching is
   enabled, and map long-lived cache retention to OpenAI's `24h` retention where
   supported.
+- OpenAI-compatible Chat Completions and direct OpenAI Responses now emit
+  session-affinity headers from `sigma.WithSessionID` when prompt caching is
+  enabled, while preserving explicit caller header overrides.
 - OpenAI-compatible Chat Completions replay now normalizes prior Responses-style
   `call_id|item_id` tool-call identifiers before sending Chat Completions
   history.
+- OpenAI Responses replay now omits stale function-call item IDs when carrying
+  same-provider history across different OpenAI Responses models.
 - OpenAI-compatible Chat Completions can carry image tool results forward as a
   single batched follow-up user image message after consecutive tool results
   for image-capable models, while preserving the ordinary text or placeholder
@@ -61,6 +66,9 @@ See [release notes](docs/release-notes-v0.3.0.md).
   stream output starts.
 - OpenAI Responses and Codex Responses usage accounting now reports cached
   input tokens as cache reads instead of ordinary input tokens.
+- OpenAI Responses and Codex Responses cost reporting now accounts for
+  request/response service-tier pricing multipliers for `flex` and `priority`
+  tiers.
 - `cmd/sigma-surface-probe` can run opt-in live OpenAI Responses probes with
   `OPENAI_API_KEY` and OpenAI Codex Responses probes with browser callback
   OAuth, device-code OAuth, or caller-supplied Codex OAuth tokens, defaulting

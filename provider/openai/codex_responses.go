@@ -109,7 +109,7 @@ func (p *CodexResponsesProvider) run(ctx context.Context, writer sigma.StreamWri
 		return
 	}
 
-	final, err = parseResponsesStream(ctx, body, writer, model)
+	final, err = parseResponsesStream(ctx, body, writer, model, codexResponsesStreamOptions(opts))
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || ctx.Err() != nil {
 			final.StopReason = sigma.StopReasonAborted

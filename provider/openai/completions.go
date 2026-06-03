@@ -235,6 +235,10 @@ func (p *Provider) addProviderHeaders(req *http.Request, provider sigma.Provider
 			req.Header.Set(header, opts.SessionID)
 		} else if header, ok := stringOption(options, providerOptionSessionHeaderGo); ok {
 			req.Header.Set(header, opts.SessionID)
+		} else if opts.CacheRetention.CacheEnabled() {
+			req.Header.Set("session_id", opts.SessionID)
+			req.Header.Set("x-client-request-id", opts.SessionID)
+			req.Header.Set("x-session-affinity", opts.SessionID)
 		}
 	}
 }

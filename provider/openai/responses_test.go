@@ -141,6 +141,66 @@ func TestResponsesDerivesPromptCacheKeyWithoutOverridingProviderOption(t *testin
 	}
 }
 
+func TestResponsesSessionAffinityHeaders(t *testing.T) {
+	t.Parallel()
+
+	requests := make(chan capturedRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captureRequest(t, requests, r)
+		writeResponsesSSE(t, w, responsesCompletedEvent)
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("responses-affinity-test")
+	model := responsesTestModel(providerID)
+	client := responsesTestClient(t, providerID, model, server.URL)
+
+	_, err := client.Complete(
+		context.Background(),
+		model,
+		sigma.Request{Messages: []sigma.Message{sigma.UserText("hi")}},
+		sigma.WithSessionID("responses-session"),
+		sigma.WithCacheRetention(sigma.CacheRetentionShort),
+	)
+	if err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+
+	headers := receiveRequest(t, requests).Headers
+	assertHeader(t, headers, "session_id", "responses-session")
+	assertHeader(t, headers, "x-client-request-id", "responses-session")
+}
+
+func TestResponsesOmitsSessionAffinityHeadersWhenCacheDisabled(t *testing.T) {
+	t.Parallel()
+
+	requests := make(chan capturedRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captureRequest(t, requests, r)
+		writeResponsesSSE(t, w, responsesCompletedEvent)
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("responses-affinity-disabled-test")
+	model := responsesTestModel(providerID)
+	client := responsesTestClient(t, providerID, model, server.URL)
+
+	_, err := client.Complete(
+		context.Background(),
+		model,
+		sigma.Request{Messages: []sigma.Message{sigma.UserText("hi")}},
+		sigma.WithSessionID("responses-session"),
+		sigma.WithCacheRetention(sigma.CacheRetentionNone),
+	)
+	if err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+
+	headers := receiveRequest(t, requests).Headers
+	assertHeaderAbsent(t, headers, "session_id")
+	assertHeaderAbsent(t, headers, "x-client-request-id")
+}
+
 func TestResponsesSendsTypedResponseFormatAsTextFormat(t *testing.T) {
 	t.Parallel()
 
@@ -648,6 +708,119 @@ data: {"type":"response.completed","response":{"id":"resp_tool","status":"comple
 	}
 }
 
+func TestResponsesAppliesServiceTierCostMultiplier(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		modelID     sigma.ModelID
+		serviceTier string
+		multiplier  float64
+	}{
+		{name: "flex", modelID: "gpt-test", serviceTier: "flex", multiplier: 0.5},
+		{name: "priority", modelID: "gpt-test", serviceTier: "priority", multiplier: 2},
+		{name: "gpt-5.5 priority", modelID: "gpt-5.5", serviceTier: "priority", multiplier: 2.5},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				writeResponsesSSE(t, w, responsesUsageEvent(tt.serviceTier))
+			}))
+			t.Cleanup(server.Close)
+
+			providerID := sigma.ProviderID("responses-cost-test-" + strings.ReplaceAll(tt.name, " ", "-"))
+			model := responsesTestModel(providerID)
+			model.ID = tt.modelID
+			client := responsesTestClient(t, providerID, model, server.URL)
+
+			final, err := client.Complete(
+				context.Background(),
+				model,
+				sigma.Request{Messages: []sigma.Message{sigma.UserText("hi")}},
+				sigma.WithOpenAIOptions(sigma.OpenAIOptions{ServiceTier: tt.serviceTier}),
+			)
+			if err != nil {
+				t.Fatalf("Complete returned error: %v", err)
+			}
+			if final.Cost == nil {
+				t.Fatal("final cost was nil")
+			}
+			if got, want := final.Cost.InputCost, 1*tt.multiplier; got != want {
+				t.Fatalf("input cost = %v, want %v", got, want)
+			}
+			if got, want := final.Cost.OutputCost, 2*tt.multiplier; got != want {
+				t.Fatalf("output cost = %v, want %v", got, want)
+			}
+			if got, want := final.Cost.TotalCost, 3*tt.multiplier; got != want {
+				t.Fatalf("total cost = %v, want %v", got, want)
+			}
+		})
+	}
+}
+
+func TestResponsesReplayOmitsToolItemIDForSameProviderDifferentModel(t *testing.T) {
+	t.Parallel()
+
+	requests := make(chan capturedRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captureRequest(t, requests, r)
+		writeResponsesSSE(t, w, responsesCompletedEvent)
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("responses-replay-handoff-test")
+	model := responsesTestModel(providerID)
+	client := responsesTestClient(t, providerID, model, server.URL)
+
+	_, err := client.Complete(
+		context.Background(),
+		model,
+		sigma.Request{Messages: []sigma.Message{
+			sigma.UserText("start"),
+			{
+				Role:     sigma.RoleAssistant,
+				Provider: providerID,
+				API:      sigma.APIOpenAIResponses,
+				Model:    "different-responses-model",
+				Content: []sigma.ContentBlock{
+					sigma.ToolCallBlock("call_prev|fc_prev", "lookup", map[string]any{"query": "weather"}),
+				},
+			},
+		}},
+	)
+	if err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(receiveRequest(t, requests).Body, &payload); err != nil {
+		t.Fatalf("Unmarshal request body returned error: %v", err)
+	}
+	input, ok := payload["input"].([]any)
+	if !ok {
+		t.Fatalf("input type = %T, want []any", payload["input"])
+	}
+	functionCall, ok := input[1].(map[string]any)
+	if !ok {
+		t.Fatalf("function call type = %T, want map", input[1])
+	}
+	if got, want := functionCall["type"], "function_call"; got != want {
+		t.Fatalf("type = %v, want %q", got, want)
+	}
+	if got, want := functionCall["call_id"], "call_prev"; got != want {
+		t.Fatalf("call_id = %v, want %q", got, want)
+	}
+	if got, want := functionCall["name"], "lookup"; got != want {
+		t.Fatalf("name = %v, want %q", got, want)
+	}
+	if _, ok := functionCall["id"]; ok {
+		t.Fatalf("function_call.id was sent for same-provider different-model replay: %#v", functionCall)
+	}
+}
+
 func TestResponsesStreamingParsesImageGenerationOutput(t *testing.T) {
 	t.Parallel()
 
@@ -974,3 +1147,8 @@ func errorsContains(err error, text string) bool {
 
 const responsesCompletedEvent = `data: {"type":"response.completed","response":{"id":"resp_complete","model":"gpt-test","status":"completed","output":[{"type":"message","id":"msg_complete","role":"assistant","content":[{"type":"output_text","id":"text_complete","text":"ok"}]}],"usage":{"input_tokens":1,"output_tokens":1,"total_tokens":2}}}
 `
+
+func responsesUsageEvent(serviceTier string) string {
+	return `data: {"type":"response.completed","response":{"id":"resp_usage","model":"gpt-test","status":"completed","service_tier":"` + serviceTier + `","output":[{"type":"message","id":"msg_usage","role":"assistant","content":[{"type":"output_text","id":"text_usage","text":"ok"}]}],"usage":{"input_tokens":1000000,"output_tokens":1000000,"total_tokens":2000000,"input_tokens_details":{"cached_tokens":0}}}}
+`
+}

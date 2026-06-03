@@ -88,7 +88,7 @@ func (p *ResponsesProvider) run(ctx context.Context, writer sigma.StreamWriter, 
 		return
 	}
 
-	final, err = parseResponsesStream(ctx, body, writer, model)
+	final, err = parseResponsesStream(ctx, body, writer, model, openAIResponsesStreamOptions(opts))
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || ctx.Err() != nil {
 			final.StopReason = sigma.StopReasonAborted
@@ -169,6 +169,9 @@ func (p *ResponsesProvider) addProviderHeaders(req *http.Request, provider sigma
 			req.Header.Set(header, opts.SessionID)
 		} else if header, ok := stringOption(options, providerOptionSessionHeaderGo); ok {
 			req.Header.Set(header, opts.SessionID)
+		} else if opts.CacheRetention.CacheEnabled() {
+			req.Header.Set("session_id", opts.SessionID)
+			req.Header.Set("x-client-request-id", opts.SessionID)
 		}
 	}
 }

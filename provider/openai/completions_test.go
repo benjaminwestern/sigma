@@ -216,6 +216,106 @@ func TestChatCompletionsDerivesPromptCacheFields(t *testing.T) {
 	}
 }
 
+func TestChatCompletionsSessionAffinityHeaders(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		retention   sigma.CacheRetention
+		support     sigma.OpenAICompatSupport
+		options     []sigma.Option
+		wantHeaders map[string]string
+		wantAbsent  []string
+	}{
+		{
+			name:      "generated when supported and caching enabled",
+			retention: sigma.CacheRetentionShort,
+			support:   sigma.OpenAICompatSupported,
+			wantHeaders: map[string]string{
+				"session_id":          "session-affinity",
+				"x-client-request-id": "session-affinity",
+				"x-session-affinity":  "session-affinity",
+			},
+		},
+		{
+			name:      "suppressed when caching disabled",
+			retention: sigma.CacheRetentionNone,
+			support:   sigma.OpenAICompatSupported,
+			wantAbsent: []string{
+				"session_id",
+				"x-client-request-id",
+				"x-session-affinity",
+			},
+		},
+		{
+			name:      "suppressed when unsupported",
+			retention: sigma.CacheRetentionShort,
+			support:   sigma.OpenAICompatUnsupported,
+			wantAbsent: []string{
+				"session_id",
+				"x-client-request-id",
+				"x-session-affinity",
+			},
+		},
+		{
+			name:      "caller headers override generated values",
+			retention: sigma.CacheRetentionShort,
+			support:   sigma.OpenAICompatSupported,
+			options: []sigma.Option{
+				sigma.WithHeader("session_id", "override-session"),
+				sigma.WithHeader("x-client-request-id", "override-request"),
+				sigma.WithHeader("x-session-affinity", "override-affinity"),
+			},
+			wantHeaders: map[string]string{
+				"session_id":          "override-session",
+				"x-client-request-id": "override-request",
+				"x-session-affinity":  "override-affinity",
+			},
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			requests := make(chan capturedRequest, 1)
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				captureRequest(t, requests, r)
+				writeFixture(t, w, "text_usage.sse")
+			}))
+			t.Cleanup(server.Close)
+
+			providerID := sigma.ProviderID("openai-affinity-test-" + strings.ReplaceAll(tt.name, " ", "-"))
+			model := openAITestModel(providerID)
+			model.OpenAICompletionsCompat.SupportsSessionAffinity = tt.support
+			client := openAITestClient(t, providerID, model, server.URL)
+			options := []sigma.Option{
+				sigma.WithSessionID("session-affinity"),
+				sigma.WithCacheRetention(tt.retention),
+			}
+			options = append(options, tt.options...)
+
+			_, err := client.Complete(
+				context.Background(),
+				model,
+				sigma.Request{Messages: []sigma.Message{sigma.UserText("hi")}},
+				options...,
+			)
+			if err != nil {
+				t.Fatalf("Complete returned error: %v", err)
+			}
+
+			headers := receiveRequest(t, requests).Headers
+			for key, value := range tt.wantHeaders {
+				assertHeader(t, headers, key, value)
+			}
+			for _, key := range tt.wantAbsent {
+				assertHeaderAbsent(t, headers, key)
+			}
+		})
+	}
+}
+
 func TestChatCompletionsNormalizesReplayToolIDsAndCarriesToolResultImages(t *testing.T) {
 	t.Parallel()
 
@@ -1004,5 +1104,13 @@ func assertHeader(t *testing.T, headers http.Header, key, value string) {
 
 	if got := headers.Get(key); got != value {
 		t.Fatalf("header %q = %q, want %q", key, got, value)
+	}
+}
+
+func assertHeaderAbsent(t *testing.T, headers http.Header, key string) {
+	t.Helper()
+
+	if got := headers.Get(key); got != "" {
+		t.Fatalf("header %q = %q, want absent", key, got)
 	}
 }

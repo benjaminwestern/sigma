@@ -147,7 +147,7 @@ func (p *CodexResponsesProvider) runSSE(ctx context.Context, writer sigma.Stream
 		return
 	}
 
-	final, err = parseResponsesStream(ctx, body, writer, model)
+	final, err = parseResponsesStream(ctx, body, writer, model, codexResponsesStreamOptions(opts))
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || ctx.Err() != nil {
 			final.StopReason = sigma.StopReasonAborted
@@ -187,7 +187,7 @@ func (p *CodexResponsesProvider) processWebSocket(ctx context.Context, writer si
 		return nil, err
 	}
 	keepConnection := false
-	parser := newResponsesStreamParser(writer, model)
+	parser := newResponsesStreamParser(writer, model, codexResponsesStreamOptions(opts))
 	defer func() {
 		acquired.release(keepConnection)
 	}()
@@ -229,7 +229,7 @@ func (p *CodexResponsesProvider) processWebSocket(ctx context.Context, writer si
 		acquired.entry.continuation = &codexWebSocketContinuation{
 			lastRequestBody:   fullBody,
 			lastResponseID:    parser.responseID,
-			lastResponseItems: codexResponsesAssistantInputItems(final),
+			lastResponseItems: codexResponsesAssistantInputItems(model, final),
 		}
 		keepConnection = true
 	}
@@ -415,8 +415,15 @@ func codexRequestWithoutInput(body map[string]any) map[string]any {
 	return copied
 }
 
-func codexResponsesAssistantInputItems(final sigma.AssistantMessage) []any {
-	items, err := responsesAssistantItems(final.Content, 0)
+func codexResponsesAssistantInputItems(model sigma.Model, final sigma.AssistantMessage) []any {
+	message := sigma.Message{
+		Role:     sigma.RoleAssistant,
+		Content:  final.Content,
+		Provider: final.Provider,
+		API:      model.API,
+		Model:    final.Model,
+	}
+	items, err := responsesAssistantItems(model, message, 0)
 	if err != nil {
 		return nil
 	}

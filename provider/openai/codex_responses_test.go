@@ -208,6 +208,60 @@ func TestCodexResponsesDerivesPromptCacheKey(t *testing.T) {
 	assertHeader(t, request.Headers, "x-client-request-id", sessionID)
 }
 
+func TestCodexResponsesAppliesRequestServiceTierWhenResponseReportsDefault(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		modelID     sigma.ModelID
+		serviceTier string
+		multiplier  float64
+	}{
+		{name: "flex", modelID: "codex-test", serviceTier: "flex", multiplier: 0.5},
+		{name: "priority", modelID: "codex-test", serviceTier: "priority", multiplier: 2},
+		{name: "gpt-5.5 priority", modelID: "gpt-5.5", serviceTier: "priority", multiplier: 2.5},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				writeResponsesSSE(t, w, responsesUsageEvent("default"))
+			}))
+			t.Cleanup(server.Close)
+
+			providerID := sigma.ProviderID("codex-responses-cost-test-" + strings.ReplaceAll(tt.name, " ", "-"))
+			model := codexResponsesTestModel(providerID)
+			model.ID = tt.modelID
+			model.OpenAICodexResponses.Model = string(tt.modelID)
+			client := codexResponsesTestClient(t, providerID, model, server.URL, codexTokenProvider("codex-oauth-token"))
+
+			final, err := client.Complete(
+				context.Background(),
+				model,
+				sigma.Request{Messages: []sigma.Message{sigma.UserText("hi")}},
+				sigma.WithOpenAIOptions(sigma.OpenAIOptions{ServiceTier: tt.serviceTier}),
+			)
+			if err != nil {
+				t.Fatalf("Complete returned error: %v", err)
+			}
+			if final.Cost == nil {
+				t.Fatal("final cost was nil")
+			}
+			if got, want := final.Cost.InputCost, 1*tt.multiplier; got != want {
+				t.Fatalf("input cost = %v, want %v", got, want)
+			}
+			if got, want := final.Cost.OutputCost, 2*tt.multiplier; got != want {
+				t.Fatalf("output cost = %v, want %v", got, want)
+			}
+			if got, want := final.Cost.TotalCost, 3*tt.multiplier; got != want {
+				t.Fatalf("total cost = %v, want %v", got, want)
+			}
+		})
+	}
+}
+
 func TestCodexResponsesMissingOAuthProviderFailsBeforeNetwork(t *testing.T) {
 	t.Parallel()
 

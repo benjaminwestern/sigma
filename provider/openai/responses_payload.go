@@ -94,7 +94,7 @@ func responsesMessage(model sigma.Model, message sigma.Message, messageIndex int
 			"content": content,
 		}}, nil
 	case sigma.RoleAssistant:
-		return responsesAssistantItems(message.Content, messageIndex)
+		return responsesAssistantItems(model, message, messageIndex)
 	case sigma.RoleTool:
 		output, err := responsesToolOutput(model, message)
 		if err != nil {
@@ -142,7 +142,7 @@ func responsesInputContent(message sigma.Message) ([]map[string]any, error) {
 	return parts, nil
 }
 
-func responsesAssistantItems(blocks []sigma.ContentBlock, messageIndex int) ([]map[string]any, error) {
+func responsesAssistantItems(model sigma.Model, message sigma.Message, messageIndex int) ([]map[string]any, error) {
 	var items []map[string]any
 	var content []map[string]any
 	var messageID string
@@ -164,7 +164,8 @@ func responsesAssistantItems(blocks []sigma.ContentBlock, messageIndex int) ([]m
 		messageOrdinal++
 	}
 
-	for _, block := range blocks {
+	omitToolItemID := sameProviderDifferentModel(model, message)
+	for _, block := range message.Content {
 		switch block.Type {
 		case sigma.ContentBlockText:
 			messageID = firstNonEmpty(messageID, providerID(block.ProviderMetadata))
@@ -208,10 +209,12 @@ func responsesAssistantItems(blocks []sigma.ContentBlock, messageIndex int) ([]m
 			callID, itemID := responsesToolCallIDs(block, fmt.Sprintf("fc_sigma_%d", messageIndex))
 			item := map[string]any{
 				"type":      "function_call",
-				"id":        itemID,
 				"call_id":   callID,
 				"name":      block.ToolName,
 				"arguments": arguments,
+			}
+			if !omitToolItemID {
+				item["id"] = itemID
 			}
 			if block.ProviderSignature != "" {
 				item["encrypted_content"] = block.ProviderSignature
@@ -223,6 +226,13 @@ func responsesAssistantItems(blocks []sigma.ContentBlock, messageIndex int) ([]m
 	}
 	flushMessage()
 	return items, nil
+}
+
+func sameProviderDifferentModel(model sigma.Model, message sigma.Message) bool {
+	return message.Provider == model.Provider &&
+		message.API == model.API &&
+		message.Model != "" &&
+		message.Model != model.ID
 }
 
 func responsesTools(tools []sigma.Tool) ([]map[string]any, error) {

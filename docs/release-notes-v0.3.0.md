@@ -35,9 +35,14 @@ Chat Completions adapter.
   enabled.
 - Long-lived OpenAI prompt-cache retention maps to `24h` retention unless a
   request supplies an explicit OpenAI provider option.
+- OpenAI-compatible Chat Completions and direct OpenAI Responses emit
+  session-affinity headers from `sigma.WithSessionID` when prompt caching is
+  enabled, while explicit request headers retain precedence.
 - Chat Completions replay normalizes prior Responses-style
   `call_id|item_id` tool-call identifiers and batches image tool results after
   consecutive tool-result messages for image-capable models.
+- OpenAI Responses replay avoids stale function-call item IDs when
+  same-provider conversation history crosses OpenAI Responses model IDs.
 - OpenAI Responses emits explicit automatic image detail on user image inputs
   and image-capable `function_call_output` image parts.
 - OpenAI Images supports generation, reference-image edits through
@@ -65,6 +70,9 @@ Chat Completions adapter.
   before stream output starts.
 - OpenAI Responses and Codex Responses usage accounting separates cached input
   tokens from ordinary input tokens so cache reads flow into `sigma.Usage`.
+- OpenAI Responses and Codex Responses cost reporting applies `flex` and
+  `priority` service-tier pricing multipliers when the provider reports or the
+  Codex request selects those tiers.
 - `cmd/sigma-surface-probe` can run opt-in live OpenAI Responses probes and
   OpenAI Codex Responses probes, including browser callback and device-code
   OAuth for Codex plus a `gpt-5.3-codex` default for ChatGPT-backed Codex

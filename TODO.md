@@ -22,6 +22,13 @@ v0.3 prompt-cache, replay, stream-shape, cached-token accounting, and Codex
 WebSocket gaps with deterministic fixtures. Broader provider-specific
 integrations remain future work until they have the same local evidence bar.
 
+- [x] Add cache-affinity headers for OpenAI-compatible Chat Completions and
+      direct OpenAI Responses when prompt caching and `sigma.WithSessionID` are
+      enabled.
+- [x] Add OpenAI Responses/Codex service-tier cost accounting for `flex` and
+      `priority` request tiers.
+- [x] Harden OpenAI Responses replay when same-provider history crosses model
+      IDs with prior function-call item IDs.
 - [x] Add Codex WebSocket transport, session caching, cleanup helpers, and SSE
       fallback while keeping the implementation stdlib-only.
 - [ ] Keep proxy-aware Codex WebSocket dialing deferred; proxy-constrained

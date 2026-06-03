@@ -44,6 +44,7 @@ type responsesResponse struct {
 	ID                string                `json:"id"`
 	Model             string                `json:"model"`
 	Status            string                `json:"status"`
+	ServiceTier       string                `json:"service_tier"`
 	Output            []responsesOutputItem `json:"output"`
 	Usage             *responsesUsage       `json:"usage"`
 	Error             *responsesError       `json:"error"`
@@ -108,20 +109,28 @@ type incompleteDetails struct {
 }
 
 type responsesStreamParser struct {
-	writer        sigma.StreamWriter
-	model         sigma.Model
-	final         sigma.AssistantMessage
-	started       bool
-	nextBlock     int
-	text          map[int]*responsesTextState
-	thinking      map[int]*responsesThinkingState
-	images        map[int]*responsesImageState
-	toolCalls     map[int]*streamblocks.ToolCall
-	toolItemIDs   map[int]string
-	responseID    string
-	providerModel string
-	usage         *sigma.Usage
-	stopReason    sigma.StopReason
+	writer              sigma.StreamWriter
+	model               sigma.Model
+	options             responsesStreamOptions
+	final               sigma.AssistantMessage
+	started             bool
+	nextBlock           int
+	text                map[int]*responsesTextState
+	thinking            map[int]*responsesThinkingState
+	images              map[int]*responsesImageState
+	toolCalls           map[int]*streamblocks.ToolCall
+	toolItemIDs         map[int]string
+	responseID          string
+	providerModel       string
+	responseServiceTier string
+	usage               *sigma.Usage
+	stopReason          sigma.StopReason
+}
+
+type responsesStreamOptions struct {
+	requestServiceTier          string
+	applyServiceTierCosts       bool
+	useCodexServiceTierFallback bool
 }
 
 type responsesTextState struct {
@@ -145,8 +154,8 @@ type responsesImageState struct {
 	Closed       bool
 }
 
-func parseResponsesStream(ctx context.Context, r io.Reader, writer sigma.StreamWriter, model sigma.Model) (sigma.AssistantMessage, error) {
-	parser := newResponsesStreamParser(writer, model)
+func parseResponsesStream(ctx context.Context, r io.Reader, writer sigma.StreamWriter, model sigma.Model, opts responsesStreamOptions) (sigma.AssistantMessage, error) {
+	parser := newResponsesStreamParser(writer, model, opts)
 	err := sse.Parse(ctx, r, func(event sse.Event) error {
 		if event.Done {
 			return sse.ErrStop
@@ -162,10 +171,11 @@ func parseResponsesStream(ctx context.Context, r io.Reader, writer sigma.StreamW
 	return parser.finalize(ctx), nil
 }
 
-func newResponsesStreamParser(writer sigma.StreamWriter, model sigma.Model) *responsesStreamParser {
+func newResponsesStreamParser(writer sigma.StreamWriter, model sigma.Model, opts responsesStreamOptions) *responsesStreamParser {
 	return &responsesStreamParser{
 		writer:      writer,
 		model:       model,
+		options:     opts,
 		text:        make(map[int]*responsesTextState),
 		thinking:    make(map[int]*responsesThinkingState),
 		images:      make(map[int]*responsesImageState),
@@ -319,6 +329,9 @@ func (p *responsesStreamParser) captureResponse(response responsesResponse) {
 	}
 	if response.Model != "" {
 		p.providerModel = response.Model
+	}
+	if response.ServiceTier != "" {
+		p.responseServiceTier = response.ServiceTier
 	}
 	if response.Usage != nil {
 		usage := response.Usage.sigmaUsage()
@@ -613,6 +626,9 @@ func (p *responsesStreamParser) finalize(ctx context.Context) sigma.AssistantMes
 		usage := *p.usage
 		p.final.Usage = &usage
 		cost := sigma.CostForUsage(p.model, usage)
+		if p.options.applyServiceTierCosts {
+			applyResponsesServiceTierCost(&cost, p.model, p.resolvedServiceTier())
+		}
 		p.final.Cost = &cost
 	}
 	p.final.ProviderMetadata = responseMetadata(p.responseID, p.providerModel, p.model.ID)
@@ -819,6 +835,74 @@ func responseMetadata(responseID string, providerModel string, modelID sigma.Mod
 		return nil
 	}
 	return metadata
+}
+
+func openAIResponsesStreamOptions(opts sigma.Options) responsesStreamOptions {
+	return responsesStreamOptions{
+		requestServiceTier:    openAIRequestServiceTier(opts),
+		applyServiceTierCosts: true,
+	}
+}
+
+func codexResponsesStreamOptions(opts sigma.Options) responsesStreamOptions {
+	return responsesStreamOptions{
+		requestServiceTier:          openAIRequestServiceTier(opts),
+		applyServiceTierCosts:       true,
+		useCodexServiceTierFallback: true,
+	}
+}
+
+func openAIRequestServiceTier(opts sigma.Options) string {
+	if opts.OpenAIOptions == nil {
+		return ""
+	}
+	return opts.OpenAIOptions.ServiceTier
+}
+
+func (p *responsesStreamParser) resolvedServiceTier() string {
+	if p.options.useCodexServiceTierFallback && p.responseServiceTier == "default" {
+		switch p.options.requestServiceTier {
+		case "flex", "priority":
+			return p.options.requestServiceTier
+		}
+	}
+	if p.responseServiceTier != "" {
+		return p.responseServiceTier
+	}
+	return p.options.requestServiceTier
+}
+
+func applyResponsesServiceTierCost(cost *sigma.Cost, model sigma.Model, serviceTier string) {
+	multiplier := responsesServiceTierCostMultiplier(model, serviceTier)
+	if multiplier == 1 {
+		return
+	}
+	cost.InputCost *= multiplier
+	cost.OutputCost *= multiplier
+	cost.CacheReadInputCost *= multiplier
+	cost.CacheWriteInputCost *= multiplier
+	cost.TotalCost = cost.InputCost + cost.OutputCost + cost.CacheReadInputCost + cost.CacheWriteInputCost
+}
+
+func responsesServiceTierCostMultiplier(model sigma.Model, serviceTier string) float64 {
+	switch serviceTier {
+	case "flex":
+		return 0.5
+	case "priority":
+		if openAIServiceTierModelID(model) == "gpt-5.5" {
+			return 2.5
+		}
+		return 2
+	default:
+		return 1
+	}
+}
+
+func openAIServiceTierModelID(model sigma.Model) string {
+	if model.OpenAICodexResponses != nil && model.OpenAICodexResponses.Model != "" {
+		return model.OpenAICodexResponses.Model
+	}
+	return string(model.ID)
 }
 
 func responsesMetadata(itemID string, partID string, callID string) map[string]any {
