@@ -187,6 +187,27 @@ func TestOpenAICompatibleProbeCasesUseRouteProviderOptions(t *testing.T) {
 	}
 }
 
+func TestFireworksOpenAIProbeCasesSkipScalarThinkingControls(t *testing.T) {
+	t.Parallel()
+
+	cases := openAICompatibleProbeCases(routes["fireworks-openai"])
+	if hasRepairVariant(cases, "thinking_string_none") {
+		t.Fatal("fireworks-openai should not probe scalar thinking string controls")
+	}
+	if hasRepairVariant(cases, "thinking_bool_false") {
+		t.Fatal("fireworks-openai should not probe scalar thinking bool controls")
+	}
+	if hasRepairVariant(cases, "enable_thinking_false") {
+		t.Fatal("fireworks-openai should not probe unsupported enable_thinking controls")
+	}
+	if !hasRepairVariant(cases, "thinking_object_disabled") {
+		t.Fatal("fireworks-openai should still probe object disabled thinking")
+	}
+	if !hasRepairVariant(openAICompatibleProbeCases(routes["xai"]), "thinking_string_none") {
+		t.Fatal("non-Fireworks OpenAI-compatible routes should keep scalar thinking probes")
+	}
+}
+
 func TestXAIProbeCasesUseRouteProviderOptions(t *testing.T) {
 	t.Parallel()
 

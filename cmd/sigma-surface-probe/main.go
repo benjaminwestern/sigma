@@ -736,7 +736,7 @@ func openAICodexProbeCases(route routeSpec) []probeCase {
 }
 
 func openAICompatibleProbeCases(route routeSpec) []probeCase {
-	return []probeCase{
+	cases := []probeCase{
 		singleTurnCase("basic_text", "plain streaming text", basicRequest("Reply with exactly: sigma-ok."), []sigma.Option{sigma.WithMaxTokens(128)}),
 		singleTurnCase("developer_instruction", "developer instruction handling", sigma.Request{
 			SystemPrompt: "Reply tersely.",
@@ -771,6 +771,19 @@ func openAICompatibleProbeCases(route routeSpec) []probeCase {
 		toolCase("strict_tool_required_write", "required strict write-file tool", "required"),
 		toolCase("three_turn_file_update", "multi-turn file update", "auto"),
 	}
+	if route.Provider != sigma.ProviderFireworks {
+		return cases
+	}
+	filtered := cases[:0]
+	for _, testCase := range cases {
+		switch testCase.Name {
+		case "thinking_string_none", "thinking_bool_false", "enable_thinking_false":
+			continue
+		default:
+			filtered = append(filtered, testCase)
+		}
+	}
+	return filtered
 }
 
 func anthropicCompatibleProbeCases(_ routeSpec) []probeCase {

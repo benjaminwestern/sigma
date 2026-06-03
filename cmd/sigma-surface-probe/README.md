@@ -159,7 +159,9 @@ OpenAI Responses and OpenAI Codex Responses routes run a Responses-shaped subset
 covering text, developer instructions, structured output, cache keys, image
 input, typed reasoning controls, and tool calls. Codex also checks text
 verbosity. The Codex image case uses an HTTPS image URL because the ChatGPT
-Codex backend rejects base64 image payloads.
+Codex backend rejects base64 image payloads. Fireworks OpenAI-compatible probes
+omit unsupported raw thinking-disable variants and keep the object-disabled case
+because Fireworks expects `thinking` to be an object.
 
 Anthropic-compatible routes currently run:
 
