@@ -361,8 +361,12 @@ func assertProviderConstantsHaveGeneratedTextMetadata(t *testing.T, registry *Re
 	}
 	for _, provider := range []ProviderID{
 		ProviderAmazonBedrock,
+		ProviderAntLing,
 		ProviderAnthropic,
+		ProviderAzureOpenAIResponses,
 		ProviderCerebras,
+		ProviderCloudflareAIGateway,
+		ProviderCloudflareWorkersAI,
 		ProviderDeepSeek,
 		ProviderFireworks,
 		ProviderGitHubCopilot,
@@ -371,13 +375,22 @@ func assertProviderConstantsHaveGeneratedTextMetadata(t *testing.T, registry *Re
 		ProviderGroq,
 		ProviderKimi,
 		ProviderMistral,
+		ProviderMiniMax,
+		ProviderMiniMaxCN,
+		ProviderMoonshotAI,
+		ProviderMoonshotAICN,
+		ProviderNVIDIA,
+		ProviderOpenAICodex,
 		ProviderOpenAI,
 		ProviderOpenCode,
 		ProviderOpenCodeGo,
 		ProviderOpenRouter,
 		ProviderTogether,
+		ProviderVercelAIGateway,
 		ProviderXAI,
 		ProviderXiaomi,
+		ProviderZAI,
+		ProviderZAICodingCN,
 	} {
 		if !providers[provider] {
 			t.Fatalf("generated text metadata missing provider %q", provider)
@@ -469,10 +482,15 @@ func assertGeneratedOpenAICompatibleProviderMetadata(t *testing.T, registry *Reg
 		baseURL  string
 		envVars  []string
 	}{
+		{provider: ProviderAntLing, id: "Ring-2.6-1T", baseURL: "https://api.ant-ling.com/v1", envVars: []string{"ANT_LING_API_KEY"}},
+		{provider: ProviderCloudflareWorkersAI, id: "@cf/meta/llama-4-scout-17b-16e-instruct", baseURL: "https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai/v1", envVars: []string{"CLOUDFLARE_API_KEY"}},
 		{provider: ProviderCerebras, id: "llama3.1-8b", baseURL: "https://api.cerebras.ai/v1", envVars: []string{"CEREBRAS_API_KEY"}},
 		{provider: ProviderGroq, id: "llama-3.3-70b-versatile", baseURL: "https://api.groq.com/openai/v1", envVars: []string{"GROQ_API_KEY"}},
+		{provider: ProviderMoonshotAI, id: "kimi-k2-thinking", baseURL: "https://api.moonshot.ai/v1", envVars: []string{"MOONSHOT_API_KEY"}},
+		{provider: ProviderNVIDIA, id: "openai/gpt-oss-20b", baseURL: "https://integrate.api.nvidia.com/v1", envVars: []string{"NVIDIA_API_KEY"}},
 		{provider: ProviderXAI, id: "grok-3", baseURL: "https://api.x.ai/v1", envVars: []string{"XAI_API_KEY"}},
 		{provider: ProviderGitHubCopilot, id: "gpt-5.2-codex", baseURL: "https://api.individual.githubcopilot.com", envVars: []string{"COPILOT_GITHUB_TOKEN"}},
+		{provider: ProviderZAI, id: "glm-5.1", baseURL: "https://api.z.ai/api/coding/paas/v4", envVars: []string{"ZAI_API_KEY"}},
 	} {
 		model, ok := registry.Model(tt.provider, tt.id)
 		if !ok {
@@ -481,6 +499,63 @@ func assertGeneratedOpenAICompatibleProviderMetadata(t *testing.T, registry *Reg
 		assertMetadataString(t, model.ProviderMetadata, "baseURL", tt.baseURL)
 		assertMetadataStrings(t, model.ProviderMetadata, MetadataAPIKeyEnvVars, tt.envVars)
 	}
+
+	antLing, ok := registry.Model(ProviderAntLing, "Ring-2.6-1T")
+	if !ok {
+		t.Fatal("fresh registry missing generated Ant Ling model")
+	}
+	if antLing.OpenAICompletionsCompat == nil ||
+		antLing.OpenAICompletionsCompat.ReasoningFormat != OpenAICompletionsReasoningAntLing ||
+		antLing.OpenAICompletionsCompat.SupportsReasoningEffort != OpenAICompatUnsupported {
+		t.Fatalf("Ant Ling compat = %#v, want ant-ling reasoning without reasoning_effort", antLing.OpenAICompletionsCompat)
+	}
+	if antLing.SupportsThinkingLevel(ThinkingLevelLow) {
+		t.Fatal("Ant Ling low reasoning level unexpectedly supported")
+	}
+	if got, ok := antLing.ProviderThinkingLevel(ThinkingLevelXHigh); !ok || got != "xhigh" {
+		t.Fatalf("Ant Ling xhigh level = %q, %v; want xhigh, true", got, ok)
+	}
+
+	zai, ok := registry.Model(ProviderZAI, "glm-5.1")
+	if !ok {
+		t.Fatal("fresh registry missing generated Z.ai model")
+	}
+	if zai.OpenAICompletionsCompat == nil ||
+		zai.OpenAICompletionsCompat.ReasoningFormat != OpenAICompletionsReasoningZAI ||
+		zai.OpenAICompletionsCompat.SupportsToolStream != OpenAICompatSupported {
+		t.Fatalf("Z.ai compat = %#v, want zai reasoning and tool_stream", zai.OpenAICompletionsCompat)
+	}
+
+	cloudflare, ok := registry.Model(ProviderCloudflareAIGateway, "gpt-5.4")
+	if !ok {
+		t.Fatal("fresh registry missing generated Cloudflare AI Gateway model")
+	}
+	if cloudflare.API != APIOpenAIResponses || !cloudflare.SupportsTools || !cloudflare.SupportsImages() || !cloudflare.SupportsReasoning() {
+		t.Fatalf("Cloudflare AI Gateway model capabilities = %+v, want Responses tools, images, and reasoning", cloudflare)
+	}
+	assertMetadataString(t, cloudflare.ProviderMetadata, "baseURL", "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/openai")
+	assertMetadataStrings(t, cloudflare.ProviderMetadata, MetadataAPIKeyEnvVars, []string{"CLOUDFLARE_API_KEY"})
+
+	azure, ok := registry.Model(ProviderAzureOpenAIResponses, "gpt-5.4")
+	if !ok {
+		t.Fatal("fresh registry missing generated Azure OpenAI Responses model")
+	}
+	if azure.API != APIAzureOpenAIResponses || azure.AzureOpenAIResponses == nil ||
+		azure.AzureOpenAIResponses.Deployment != "gpt-5.4" ||
+		azure.AzureOpenAIResponses.APIKeyEnvVar != "AZURE_OPENAI_API_KEY" {
+		t.Fatalf("Azure OpenAI metadata = %+v, want deployment and API key metadata", azure)
+	}
+	assertMetadataString(t, azure.ProviderMetadata, "baseURL", "https://{resource}.openai.azure.com")
+	assertMetadataStrings(t, azure.ProviderMetadata, MetadataAPIKeyEnvVars, []string{"AZURE_OPENAI_API_KEY"})
+
+	codex, ok := registry.Model(ProviderOpenAICodex, "gpt-5.4")
+	if !ok {
+		t.Fatal("fresh registry missing generated OpenAI Codex model")
+	}
+	if codex.API != APIOpenAICodexResponses || codex.OpenAICodexResponses == nil || codex.OpenAICodexResponses.Model != "gpt-5.4" {
+		t.Fatalf("OpenAI Codex metadata = %+v, want Codex Responses model mapping", codex)
+	}
+	assertMetadataStrings(t, codex.ProviderMetadata, MetadataAPIKeyEnvVars, []string{"OPENAI_CODEX_OAUTH_TOKEN"})
 }
 
 func assertGeneratedAnthropicCompatibleProviderMetadata(t *testing.T, registry *Registry) {
@@ -500,6 +575,31 @@ func assertGeneratedAnthropicCompatibleProviderMetadata(t *testing.T, registry *
 	}
 	assertMetadataString(t, kimi.ProviderMetadata, "baseURL", "https://api.kimi.com/coding/v1")
 	assertMetadataStrings(t, kimi.ProviderMetadata, MetadataAPIKeyEnvVars, []string{"KIMI_API_KEY"})
+
+	minimax, ok := registry.Model(ProviderMiniMax, "MiniMax-M3")
+	if !ok {
+		t.Fatal("fresh registry missing generated MiniMax model")
+	}
+	if minimax.API != APIAnthropicMessages || !minimax.SupportsTools || !minimax.SupportsReasoning() {
+		t.Fatalf("MiniMax model capabilities were not generated: %+v", minimax)
+	}
+	assertMetadataString(t, minimax.ProviderMetadata, "baseURL", "https://api.minimax.io/anthropic")
+	assertMetadataStrings(t, minimax.ProviderMetadata, MetadataAPIKeyEnvVars, []string{"MINIMAX_API_KEY"})
+
+	vercel, ok := registry.Model(ProviderVercelAIGateway, "anthropic/claude-opus-4.8")
+	if !ok {
+		t.Fatal("fresh registry missing generated Vercel AI Gateway model")
+	}
+	if vercel.API != APIAnthropicMessages || !vercel.SupportsTools || !vercel.SupportsImages() || !vercel.SupportsReasoning() {
+		t.Fatalf("Vercel AI Gateway model capabilities were not generated: %+v", vercel)
+	}
+	if vercel.AnthropicMessagesCompat == nil ||
+		vercel.AnthropicMessagesCompat.ThinkingFormat != AnthropicThinkingAdaptive ||
+		vercel.AnthropicMessagesCompat.SupportsTemperature != AnthropicCompatUnsupported {
+		t.Fatalf("Vercel AI Gateway compat = %#v, want adaptive thinking and temperature suppression", vercel.AnthropicMessagesCompat)
+	}
+	assertMetadataString(t, vercel.ProviderMetadata, "baseURL", "https://ai-gateway.vercel.sh")
+	assertMetadataStrings(t, vercel.ProviderMetadata, MetadataAPIKeyEnvVars, []string{"AI_GATEWAY_API_KEY"})
 }
 
 func assertGeneratedVertexMetadata(t *testing.T, registry *Registry) {

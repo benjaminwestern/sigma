@@ -8,14 +8,23 @@
 // Source snapshot date: 2026-06-01.
 // Source URLs:
 // - Amazon Bedrock model catalog: https://docs.aws.amazon.com/bedrock/latest/userguide/models-supported.html
+// - Ant Ling model catalog: https://api.ant-ling.com/v1/models
 // - Anthropic models and pricing: https://docs.anthropic.com/en/docs/about-claude/models/overview
+// - Azure OpenAI model catalog: https://learn.microsoft.com/azure/ai-services/openai/concepts/models
+// - Cloudflare AI Gateway models: https://developers.cloudflare.com/ai-gateway/
+// - Cloudflare Workers AI models: https://developers.cloudflare.com/workers-ai/models/
 // - Fireworks Fire Pass setup: https://docs.fireworks.ai/firepass
 // - Google Gemini models: https://ai.google.dev/gemini-api/docs/models
+// - MiniMax models: https://platform.minimaxi.com/document/models
 // - Mistral models: https://docs.mistral.ai/getting-started/models/models_overview/
+// - Moonshot AI models: https://platform.moonshot.ai/docs/pricing/chat
+// - NVIDIA NIM models: https://integrate.api.nvidia.com/v1/models
 // - OpenAI models and pricing: https://platform.openai.com/docs/models
 // - OpenCode Zen models: https://opencode.ai/zen
 // - OpenRouter models: https://openrouter.ai/models
+// - Vercel AI Gateway models: https://ai-gateway.vercel.sh/v1/models
 // - xAI models: https://docs.x.ai/developers/models
+// - Z.ai models: https://docs.z.ai/
 
 package sigma
 

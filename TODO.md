@@ -56,6 +56,17 @@ metadata-only and backed by compatibility checks.
 - [ ] Cerebras — promote to a first-class provider row with fixtures.
 - [ ] Together — promote to a first-class provider row with fixtures.
 - [ ] GitHub Copilot — promote to a first-class provider row with fixtures.
+- [ ] Cloudflare AI Gateway and Cloudflare Workers AI — promote to first-class
+      provider rows with fixtures.
+- [ ] NVIDIA NIM — promote to a first-class provider row with fixtures.
+- [ ] Z.ai and Z.ai Coding CN — promote to first-class provider rows with
+      fixtures.
+- [ ] Ant Ling — promote to a first-class provider row with fixtures.
+- [ ] Moonshot AI and Moonshot AI CN — promote to first-class provider rows
+      with fixtures.
+- [ ] MiniMax and MiniMax CN — promote to first-class provider rows with
+      fixtures.
+- [ ] Vercel AI Gateway — promote to a first-class provider row with fixtures.
 - [ ] Kimi — promote to a first-class provider row with fixtures.
 - [ ] Xiaomi — promote to a first-class provider row with fixtures.
 - [ ] For each promoted provider, add streaming, tools, usage, typed error
@@ -87,6 +98,14 @@ upstream.
 - [x] Refresh the curated v0.3 generated catalog with current rows for
       supported provider IDs while preserving Sigma runtime contracts and
       metadata-only default registration.
+- [x] Add focused metadata-only provider-family rows for existing adapter
+      paths, including Azure OpenAI Responses, OpenAI Codex Responses,
+      Cloudflare AI Gateway, Cloudflare Workers AI, NVIDIA NIM, Z.ai, Ant Ling,
+      Moonshot AI, MiniMax, Vercel AI Gateway, and expanded GitHub Copilot
+      routes.
+- [x] Add focused Chat Completions reasoning-format support for generated
+      Together, Qwen, Z.ai, and Ant Ling metadata, including Z.ai `tool_stream`
+      payloads.
 - [ ] Add an offline-friendly refresh command that can ingest `models.dev` and
       provider catalog APIs into a candidate catalog file without replacing the
       checked-in review step.

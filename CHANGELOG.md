@@ -19,6 +19,14 @@ See [release notes](docs/release-notes-v0.3.0.md).
   rows for the supported Sigma provider IDs, including broader OpenAI,
   Anthropic, Google, Vertex AI, Mistral, Bedrock, OpenCode, and metadata-only
   OpenAI-compatible model coverage.
+- Generated text metadata now includes focused metadata-only rows for Azure
+  OpenAI Responses, OpenAI Codex Responses, Cloudflare AI Gateway,
+  Cloudflare Workers AI, NVIDIA NIM, Z.ai, Ant Ling, Moonshot AI, MiniMax,
+  Vercel AI Gateway, and expanded GitHub Copilot routes where existing Sigma
+  adapters can carry the API shape.
+- OpenAI-compatible Chat Completions reasoning metadata now supports Together,
+  Qwen, Z.ai, and Ant Ling request formats, including Z.ai `tool_stream`
+  payloads for tool-enabled requests.
 - OpenCode Zen and OpenCode Go generated metadata now includes the promoted
   DeepSeek V4 Flash and MiniMax M3 routed rows, stricter unsupported thinking
   levels for known OpenCode reasoning models, adaptive Anthropic thinking
@@ -146,9 +154,10 @@ See [release notes](docs/release-notes-v0.3.0.md).
 - Agent runtime orchestration and cross-provider context handoff with
   capability-loss reporting are deferred to later integration work; this release
   exposes only provider-neutral primitives.
-- DeepSeek, Groq, Cerebras, Together, GitHub Copilot, Cloudflare, Kimi, and Xiaomi are
-  not yet first-class provider rows; generated metadata and routing may exist,
-  but independent provider-quality claims still need fixtures.
+- DeepSeek, Groq, Cerebras, Together, GitHub Copilot, Cloudflare, NVIDIA,
+  Z.ai, Ant Ling, Moonshot AI, MiniMax, Kimi, and Xiaomi are not yet
+  first-class provider rows; generated metadata and routing may exist, but
+  independent provider-quality claims still need fixtures.
 - Future xAI/Grok catalog refreshes and provider-specific Grok
   request semantics beyond the preview Chat Completions adapter remain
   deferred until they have deterministic coverage.

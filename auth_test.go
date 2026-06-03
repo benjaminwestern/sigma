@@ -76,12 +76,20 @@ func TestEnvironmentAuthResolverCommonStaticKeys(t *testing.T) {
 		env      string
 	}{
 		{name: "openai", provider: sigma.ProviderOpenAI, env: "OPENAI_API_KEY"},
+		{name: "azure openai", provider: sigma.ProviderAzureOpenAIResponses, env: "AZURE_OPENAI_API_KEY"},
 		{name: "anthropic", provider: sigma.ProviderAnthropic, env: "ANTHROPIC_API_KEY"},
 		{name: "google", provider: sigma.ProviderGoogle, env: "GOOGLE_API_KEY"},
 		{name: "google cloud", provider: sigma.ProviderGoogleVertex, env: "GOOGLE_CLOUD_API_KEY"},
 		{name: "mistral", provider: sigma.ProviderMistral, env: "MISTRAL_API_KEY"},
 		{name: "openrouter", provider: sigma.ProviderOpenRouter, env: "OPENROUTER_API_KEY"},
 		{name: "xai", provider: sigma.ProviderXAI, env: "XAI_API_KEY"},
+		{name: "cloudflare ai gateway", provider: sigma.ProviderCloudflareAIGateway, env: "CLOUDFLARE_API_KEY"},
+		{name: "nvidia", provider: sigma.ProviderNVIDIA, env: "NVIDIA_API_KEY"},
+		{name: "zai", provider: sigma.ProviderZAI, env: "ZAI_API_KEY"},
+		{name: "ant ling", provider: sigma.ProviderAntLing, env: "ANT_LING_API_KEY"},
+		{name: "moonshot", provider: sigma.ProviderMoonshotAI, env: "MOONSHOT_API_KEY"},
+		{name: "minimax", provider: sigma.ProviderMiniMax, env: "MINIMAX_API_KEY"},
+		{name: "vercel ai gateway", provider: sigma.ProviderVercelAIGateway, env: "AI_GATEWAY_API_KEY"},
 	}
 
 	for _, tt := range tests {

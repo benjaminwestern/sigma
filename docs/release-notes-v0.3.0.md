@@ -10,14 +10,18 @@ checklist see [RELEASING.md](../RELEASING.md).
 v0.3.0 refreshes Sigma's generated model catalog with curated current metadata
 for supported provider IDs, including broader OpenAI, Anthropic, Google, Vertex
 AI, Mistral, Bedrock, OpenCode, and metadata-only OpenAI-compatible rows. It
-also extends generated image metadata with OpenRouter-routed Grok and Gemini
-image routes, tightens the OpenAI-compatible preview adapters around prompt
-caching, replay, stream parsing, Codex OAuth, and Codex WebSocket session
-reuse, and adds typed provider error classification for safer caller retry and
-recovery decisions. The Google preview adapters now include the scoped provider
-hardening for Vertex credential fallback, model-scoped routing metadata, and
-replayed tool-call IDs. Direct xAI/Grok support remains focused on the preview
-Chat Completions adapter.
+also adds focused metadata-only rows for adapter-backed provider families such
+as Azure OpenAI Responses, OpenAI Codex Responses, Cloudflare AI Gateway,
+Cloudflare Workers AI, NVIDIA NIM, Z.ai, Ant Ling, Moonshot AI, MiniMax, Vercel
+AI Gateway, and expanded GitHub Copilot routes. The release extends generated
+image metadata with OpenRouter-routed Grok and Gemini image routes, tightens
+the OpenAI-compatible preview adapters around prompt caching, replay, stream
+parsing, provider-specific reasoning formats, Codex OAuth, and Codex WebSocket
+session reuse, and adds typed provider error classification for safer caller
+retry and recovery decisions. The Google preview adapters now include the
+scoped provider hardening for Vertex credential fallback, model-scoped routing
+metadata, and replayed tool-call IDs. Direct xAI/Grok support remains focused
+on the preview Chat Completions adapter.
 
 ## Added
 
@@ -27,6 +31,13 @@ Chat Completions adapter.
 - Curated generated text metadata for current OpenAI, Anthropic, Google,
   Vertex AI, Mistral, Bedrock, OpenCode, and OpenAI-compatible model rows while
   keeping default registry entries metadata-only until providers are registered.
+- Focused metadata-only text rows for Azure OpenAI Responses, OpenAI Codex
+  Responses, Cloudflare AI Gateway, Cloudflare Workers AI, NVIDIA NIM, Z.ai,
+  Ant Ling, Moonshot AI, MiniMax, Vercel AI Gateway, and expanded GitHub
+  Copilot routes where existing Sigma adapters can express the API surface.
+- OpenAI-compatible Chat Completions reasoning metadata supports Together,
+  Qwen, Z.ai, and Ant Ling payload formats, including Z.ai `tool_stream` for
+  tool-enabled requests.
 - OpenCode Zen and OpenCode Go metadata now includes the promoted DeepSeek V4
   Flash and MiniMax M3 routed rows, stricter unsupported thinking-level
   metadata for known reasoning models, adaptive Anthropic thinking metadata for
@@ -117,6 +128,8 @@ Chat Completions adapter.
   write tokens to disk.
 - OpenAI image variations are intentionally limited to explicit `dall-e-2`
   requests. Other OpenAI image models use generation or edit operations.
+- Newly added provider-family rows are metadata-only until callers register the
+  matching existing adapter or a custom provider for that `ProviderID`.
 
 ## Deferred work
 
@@ -138,8 +151,10 @@ Chat Completions adapter.
   fixtures are the release evidence for image generation, multipart edits,
   reference-only JSON edits, variations, streaming, and Responses
   image-generation tool output.
-- Proxy-aware Codex WebSocket dialing, token persistence, and first-class
-  Copilot or Cloudflare provider-row promotion remain deferred.
+- Proxy-aware Codex WebSocket dialing, token persistence, broad OpenRouter text
+  expansion, automated catalog ingestion, and first-class promotion for the
+  new metadata-only provider families remain deferred until they have
+  deterministic fixtures.
 - Deferred work continues to be tracked in [TODO.md](../TODO.md).
 
 ## Validation status
@@ -149,5 +164,6 @@ No live xAI or OpenRouter provider calls are required for release validation.
 OpenAI provider changes, image generation/edit/variation/streaming behavior,
 Codex OAuth and WebSocket flows, typed provider error classification, and
 generated catalog metadata, including strict OpenCode thinking and routed model
-metadata, are covered by deterministic request, response, OAuth, SSE/WebSocket,
-checksum, and registry fixtures.
+metadata plus the focused provider-family registry refresh, are covered by
+deterministic request, response, OAuth, SSE/WebSocket, checksum, payload, and
+registry fixtures.

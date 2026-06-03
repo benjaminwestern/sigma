@@ -1112,6 +1112,115 @@ func TestStreamCloseCancelsStreamingRequest(t *testing.T) {
 	receiveSignal(t, stream.Done())
 }
 
+func TestChatCompletionsProviderReasoningFormats(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		format   sigma.OpenAICompletionsReasoningFormat
+		level    sigma.ThinkingLevel
+		tool     bool
+		assert   func(t *testing.T, body map[string]any)
+		thinking map[sigma.ThinkingLevel]string
+	}{
+		{
+			name:   "together toggles reasoning and sends effort",
+			format: sigma.OpenAICompletionsReasoningTogether,
+			level:  sigma.ThinkingLevelHigh,
+			assert: func(t *testing.T, body map[string]any) {
+				t.Helper()
+				reasoning, ok := body["reasoning"].(map[string]any)
+				if !ok || reasoning["enabled"] != true {
+					t.Fatalf("reasoning = %#v, want enabled true", body["reasoning"])
+				}
+				if got, want := body["reasoning_effort"], "provider-high"; got != want {
+					t.Fatalf("reasoning_effort = %#v, want %q", got, want)
+				}
+			},
+			thinking: map[sigma.ThinkingLevel]string{sigma.ThinkingLevelHigh: "provider-high"},
+		},
+		{
+			name:   "zai sends enable thinking and tool stream",
+			format: sigma.OpenAICompletionsReasoningZAI,
+			level:  sigma.ThinkingLevelHigh,
+			tool:   true,
+			assert: func(t *testing.T, body map[string]any) {
+				t.Helper()
+				if got := body["enable_thinking"]; got != true {
+					t.Fatalf("enable_thinking = %#v, want true", got)
+				}
+				if got := body["tool_stream"]; got != true {
+					t.Fatalf("tool_stream = %#v, want true", got)
+				}
+			},
+		},
+		{
+			name:   "qwen disables thinking when no level is requested",
+			format: sigma.OpenAICompletionsReasoningQwen,
+			assert: func(t *testing.T, body map[string]any) {
+				t.Helper()
+				if got := body["enable_thinking"]; got != false {
+					t.Fatalf("enable_thinking = %#v, want false", got)
+				}
+			},
+		},
+		{
+			name:   "ant ling sends mapped explicit effort",
+			format: sigma.OpenAICompletionsReasoningAntLing,
+			level:  sigma.ThinkingLevelXHigh,
+			assert: func(t *testing.T, body map[string]any) {
+				t.Helper()
+				reasoning, ok := body["reasoning"].(map[string]any)
+				if !ok || reasoning["effort"] != "xhigh" {
+					t.Fatalf("reasoning = %#v, want xhigh effort", body["reasoning"])
+				}
+			},
+			thinking: map[sigma.ThinkingLevel]string{sigma.ThinkingLevelXHigh: "xhigh"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			requests := make(chan capturedRequest, 1)
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				captureRequest(t, requests, r)
+				writeFixture(t, w, "text_usage.sse")
+			}))
+			t.Cleanup(server.Close)
+
+			providerID := sigma.ProviderID("reasoning-format-" + strings.ReplaceAll(tt.name, " ", "-"))
+			model := openAITestModel(providerID)
+			model.OpenAICompletionsCompat.ReasoningFormat = tt.format
+			model.OpenAICompletionsCompat.SupportsReasoningEffort = sigma.OpenAICompatSupported
+			model.OpenAICompletionsCompat.SupportsToolStream = sigma.OpenAICompatSupported
+			if tt.thinking != nil {
+				model.ThinkingLevelMap = tt.thinking
+			}
+			client := openAITestClient(t, providerID, model, server.URL)
+
+			req := sigma.Request{Messages: []sigma.Message{sigma.UserText("hi")}}
+			if tt.tool {
+				req.Tools = []sigma.Tool{{Name: "lookup", Description: "Lookup", InputSchema: sigma.Schema{"type": "object"}}}
+			}
+			opts := []sigma.Option{}
+			if tt.level != "" {
+				opts = append(opts, sigma.WithReasoningLevel(tt.level))
+			}
+			if _, err := client.Complete(context.Background(), model, req, opts...); err != nil {
+				t.Fatalf("Complete returned error: %v", err)
+			}
+
+			var body map[string]any
+			if err := json.Unmarshal(receiveRequest(t, requests).Body, &body); err != nil {
+				t.Fatalf("decode request body: %v", err)
+			}
+			tt.assert(t, body)
+		})
+	}
+}
+
 func openAITestClient(t *testing.T, providerID sigma.ProviderID, model sigma.Model, baseURL string, opts ...openai.ProviderOption) *sigma.Client {
 	t.Helper()
 

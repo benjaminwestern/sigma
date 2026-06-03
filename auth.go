@@ -39,22 +39,38 @@ const (
 
 const (
 	defaultOpenAIAPIKeyEnv      = "OPENAI_API_KEY"
+	defaultAzureOpenAIAPIKeyEnv = "AZURE_OPENAI_API_KEY"
 	defaultAnthropicAPIKeyEnv   = "ANTHROPIC_API_KEY"
 	defaultGoogleAPIKeyEnv      = "GOOGLE_API_KEY"
 	defaultGoogleCloudAPIKeyEnv = "GOOGLE_CLOUD_API_KEY"
 	defaultMistralAPIKeyEnv     = "MISTRAL_API_KEY"
 	defaultOpenRouterAPIKeyEnv  = "OPENROUTER_API_KEY"
 	defaultXAIAPIKeyEnv         = "XAI_API_KEY"
+	defaultCloudflareAPIKeyEnv  = "CLOUDFLARE_API_KEY"
+	defaultNVIDIAAPIKeyEnv      = "NVIDIA_API_KEY"
+	defaultMoonshotAPIKeyEnv    = "MOONSHOT_API_KEY"
 )
 
 var defaultProviderEnvNames = map[ProviderID][]string{
-	ProviderOpenAI:       {defaultOpenAIAPIKeyEnv},
-	ProviderAnthropic:    {defaultAnthropicAPIKeyEnv},
-	ProviderGoogle:       {defaultGoogleAPIKeyEnv, defaultGoogleCloudAPIKeyEnv},
-	ProviderGoogleVertex: {defaultGoogleCloudAPIKeyEnv, defaultGoogleAPIKeyEnv},
-	ProviderMistral:      {defaultMistralAPIKeyEnv},
-	ProviderOpenRouter:   {defaultOpenRouterAPIKeyEnv},
-	ProviderXAI:          {defaultXAIAPIKeyEnv},
+	ProviderOpenAI:               {defaultOpenAIAPIKeyEnv},
+	ProviderAzureOpenAIResponses: {defaultAzureOpenAIAPIKeyEnv},
+	ProviderAnthropic:            {defaultAnthropicAPIKeyEnv},
+	ProviderGoogle:               {defaultGoogleAPIKeyEnv, defaultGoogleCloudAPIKeyEnv},
+	ProviderGoogleVertex:         {defaultGoogleCloudAPIKeyEnv, defaultGoogleAPIKeyEnv},
+	ProviderMistral:              {defaultMistralAPIKeyEnv},
+	ProviderOpenRouter:           {defaultOpenRouterAPIKeyEnv},
+	ProviderXAI:                  {defaultXAIAPIKeyEnv},
+	ProviderCloudflareAIGateway:  {defaultCloudflareAPIKeyEnv},
+	ProviderCloudflareWorkersAI:  {defaultCloudflareAPIKeyEnv},
+	ProviderNVIDIA:               {defaultNVIDIAAPIKeyEnv},
+	ProviderZAI:                  {"ZAI_API_KEY"},
+	ProviderZAICodingCN:          {"ZAI_CODING_CN_API_KEY"},
+	ProviderAntLing:              {"ANT_LING_API_KEY"},
+	ProviderMoonshotAI:           {defaultMoonshotAPIKeyEnv},
+	ProviderMoonshotAICN:         {defaultMoonshotAPIKeyEnv},
+	ProviderMiniMax:              {"MINIMAX_API_KEY"},
+	ProviderMiniMaxCN:            {"MINIMAX_CN_API_KEY"},
+	ProviderVercelAIGateway:      {"AI_GATEWAY_API_KEY"},
 }
 
 // Credential carries authentication material for a provider.

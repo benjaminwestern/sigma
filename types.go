@@ -86,6 +86,10 @@ const (
 const (
 	// ProviderOpenAI identifies OpenAI.
 	ProviderOpenAI ProviderID = "openai"
+	// ProviderAzureOpenAIResponses identifies Azure OpenAI Responses.
+	ProviderAzureOpenAIResponses ProviderID = "azure-openai-responses"
+	// ProviderOpenAICodex identifies OpenAI Codex.
+	ProviderOpenAICodex ProviderID = "openai-codex"
 	// ProviderAnthropic identifies Anthropic.
 	ProviderAnthropic ProviderID = "anthropic"
 	// ProviderGoogle identifies Google Generative AI.
@@ -108,8 +112,30 @@ const (
 	ProviderXAI ProviderID = "xai"
 	// ProviderTogether identifies Together AI.
 	ProviderTogether ProviderID = "together"
+	// ProviderCloudflareAIGateway identifies Cloudflare AI Gateway.
+	ProviderCloudflareAIGateway ProviderID = "cloudflare-ai-gateway"
+	// ProviderCloudflareWorkersAI identifies Cloudflare Workers AI.
+	ProviderCloudflareWorkersAI ProviderID = "cloudflare-workers-ai"
 	// ProviderGitHubCopilot identifies GitHub Copilot.
 	ProviderGitHubCopilot ProviderID = "github-copilot"
+	// ProviderNVIDIA identifies NVIDIA NIM.
+	ProviderNVIDIA ProviderID = "nvidia"
+	// ProviderZAI identifies Z.ai.
+	ProviderZAI ProviderID = "zai"
+	// ProviderZAICodingCN identifies Z.ai Coding CN.
+	ProviderZAICodingCN ProviderID = "zai-coding-cn"
+	// ProviderAntLing identifies Ant Ling.
+	ProviderAntLing ProviderID = "ant-ling"
+	// ProviderMoonshotAI identifies Moonshot AI.
+	ProviderMoonshotAI ProviderID = "moonshotai"
+	// ProviderMoonshotAICN identifies Moonshot AI CN.
+	ProviderMoonshotAICN ProviderID = "moonshotai-cn"
+	// ProviderMiniMax identifies MiniMax.
+	ProviderMiniMax ProviderID = "minimax"
+	// ProviderMiniMaxCN identifies MiniMax CN.
+	ProviderMiniMaxCN ProviderID = "minimax-cn"
+	// ProviderVercelAIGateway identifies Vercel AI Gateway.
+	ProviderVercelAIGateway ProviderID = "vercel-ai-gateway"
 	// ProviderOpenCode identifies OpenCode Zen.
 	ProviderOpenCode ProviderID = "opencode"
 	// ProviderOpenCodeGo identifies OpenCode Go.
@@ -236,6 +262,16 @@ const (
 	// OpenAICompletionsReasoningStringThinking sends a top-level thinking
 	// string such as "none" or a provider-specific level.
 	OpenAICompletionsReasoningStringThinking OpenAICompletionsReasoningFormat = "string-thinking"
+	// OpenAICompletionsReasoningTogether sends Together's reasoning toggle
+	// plus optional reasoning_effort.
+	OpenAICompletionsReasoningTogether OpenAICompletionsReasoningFormat = "together"
+	// OpenAICompletionsReasoningQwen sends a top-level Qwen enable_thinking flag.
+	OpenAICompletionsReasoningQwen OpenAICompletionsReasoningFormat = "qwen"
+	// OpenAICompletionsReasoningZAI sends a top-level Z.ai enable_thinking flag.
+	OpenAICompletionsReasoningZAI OpenAICompletionsReasoningFormat = "zai"
+	// OpenAICompletionsReasoningAntLing sends Ant Ling's reasoning object only
+	// for explicitly supported effort levels.
+	OpenAICompletionsReasoningAntLing OpenAICompletionsReasoningFormat = "ant-ling"
 )
 
 const (
