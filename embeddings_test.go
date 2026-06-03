@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -121,6 +122,243 @@ func TestEmbedWithFauxProvider(t *testing.T) {
 	}
 }
 
+func TestEmbedBatchReusesDuplicateInputs(t *testing.T) {
+	t.Parallel()
+
+	provider := sigmatest.NewFauxEmbeddingProvider(sigmatest.EmbeddingScript{
+		Response: sigma.Embeddings{
+			Vectors: []sigma.Embedding{
+				{Index: 0, Vector: []float32{1}},
+				{Index: 1, Vector: []float32{2}},
+			},
+			Usage: &sigma.Usage{InputTokens: 4, TotalTokens: 4},
+		},
+	})
+	registry, err := sigmatest.EmbeddingRegistry(provider)
+	if err != nil {
+		t.Fatalf("EmbeddingRegistry returned error: %v", err)
+	}
+	client := sigma.NewClient(sigma.WithRegistry(registry))
+
+	got, err := client.EmbedBatch(
+		context.Background(),
+		sigmatest.EmbeddingModel(),
+		sigma.EmbeddingRequest{Inputs: []string{"alpha", "beta", "alpha"}},
+		sigma.EmbeddingBatchConfig{ReuseDuplicateInputs: true},
+	)
+	if err != nil {
+		t.Fatalf("EmbedBatch returned error: %v", err)
+	}
+	wantVectors := []sigma.Embedding{
+		{Index: 0, Vector: []float32{1}},
+		{Index: 1, Vector: []float32{2}},
+		{Index: 2, Vector: []float32{1}},
+	}
+	if !reflect.DeepEqual(got.Embeddings.Vectors, wantVectors) {
+		t.Fatalf("vectors = %#v, want %#v", got.Embeddings.Vectors, wantVectors)
+	}
+	if !reflect.DeepEqual(got.Reused, []bool{false, false, true}) {
+		t.Fatalf("reused = %#v, want duplicate marker", got.Reused)
+	}
+	if got.Summary.RequestCount != 1 || got.Summary.VectorCount != 2 {
+		t.Fatalf("summary = %#v, want one provider request and two provider vectors", got.Summary)
+	}
+	requests := provider.Requests()
+	if len(requests) != 1 {
+		t.Fatalf("requests = %d, want 1", len(requests))
+	}
+	if !reflect.DeepEqual(requests[0].Request.Inputs, []string{"alpha", "beta"}) {
+		t.Fatalf("provider inputs = %#v, want unique inputs", requests[0].Request.Inputs)
+	}
+}
+
+func TestEmbedBatchSplitsRetryableBatchFailure(t *testing.T) {
+	t.Parallel()
+
+	providerErr := sigma.NewProviderError(
+		sigmatest.ProviderID,
+		sigma.API(sigmatest.EmbeddingAPI),
+		sigmatest.EmbeddingModelID,
+		429,
+		"",
+		0,
+		[]byte(`{"error":{"message":"rate limited"}}`),
+		sigma.ErrProviderResponse,
+	)
+	provider := sigmatest.NewFauxEmbeddingProvider(
+		sigmatest.EmbeddingScript{Err: providerErr},
+		sigmatest.EmbeddingScript{Response: sigma.Embeddings{
+			Vectors: []sigma.Embedding{{Index: 0, Vector: []float32{1}}},
+			Usage:   &sigma.Usage{InputTokens: 2, TotalTokens: 2},
+		}},
+		sigmatest.EmbeddingScript{Response: sigma.Embeddings{
+			Vectors: []sigma.Embedding{{Index: 0, Vector: []float32{2}}},
+			Usage:   &sigma.Usage{InputTokens: 3, TotalTokens: 3},
+		}},
+	)
+	registry, err := sigmatest.EmbeddingRegistry(provider)
+	if err != nil {
+		t.Fatalf("EmbeddingRegistry returned error: %v", err)
+	}
+	client := sigma.NewClient(sigma.WithRegistry(registry))
+
+	got, err := client.EmbedBatch(
+		context.Background(),
+		sigmatest.EmbeddingModel(),
+		sigma.EmbeddingRequest{Inputs: []string{"alpha", "beta"}},
+		sigma.EmbeddingBatchConfig{MaxRetries: 1},
+	)
+	if err != nil {
+		t.Fatalf("EmbedBatch returned error: %v", err)
+	}
+	wantVectors := []sigma.Embedding{
+		{Index: 0, Vector: []float32{1}},
+		{Index: 1, Vector: []float32{2}},
+	}
+	if !reflect.DeepEqual(got.Embeddings.Vectors, wantVectors) {
+		t.Fatalf("vectors = %#v, want %#v", got.Embeddings.Vectors, wantVectors)
+	}
+	if got.Summary.RequestCount != 2 || got.Summary.ErrorCount != 1 {
+		t.Fatalf("summary counts = %#v, want two successes and one error", got.Summary)
+	}
+	if got.Summary.Usage == nil || got.Summary.Usage.InputTokens != 5 || got.Embeddings.Usage.InputTokens != 5 {
+		t.Fatalf("usage = summary:%#v embeddings:%#v, want aggregated input tokens", got.Summary.Usage, got.Embeddings.Usage)
+	}
+	if got.Summary.Cost == nil || got.Summary.Cost.InputCost != 0.00000005 {
+		t.Fatalf("cost = %#v, want aggregated embedding cost", got.Summary.Cost)
+	}
+	requests := provider.Requests()
+	if len(requests) != 3 {
+		t.Fatalf("requests = %d, want original plus split requests", len(requests))
+	}
+	if !reflect.DeepEqual(requests[0].Request.Inputs, []string{"alpha", "beta"}) ||
+		!reflect.DeepEqual(requests[1].Request.Inputs, []string{"alpha"}) ||
+		!reflect.DeepEqual(requests[2].Request.Inputs, []string{"beta"}) {
+		t.Fatalf("requests = %#v, want original batch then split singleton calls", requests)
+	}
+}
+
+func TestEmbedBatchSplitsOversizedSingleton(t *testing.T) {
+	t.Parallel()
+
+	overflowErr := sigma.NewProviderError(
+		sigmatest.ProviderID,
+		sigma.API(sigmatest.EmbeddingAPI),
+		sigmatest.EmbeddingModelID,
+		400,
+		"",
+		0,
+		[]byte(`{"error":{"code":"context_length_exceeded","message":"too many tokens"}}`),
+		sigma.ErrContextOverflow,
+	)
+	provider := sigmatest.NewFauxEmbeddingProvider(
+		sigmatest.EmbeddingScript{Err: overflowErr},
+		sigmatest.EmbeddingScript{Response: sigma.Embeddings{
+			Vectors: []sigma.Embedding{
+				{Index: 0, Vector: []float32{1}},
+				{Index: 1, Vector: []float32{3}},
+			},
+		}},
+	)
+	registry, err := sigmatest.EmbeddingRegistry(provider)
+	if err != nil {
+		t.Fatalf("EmbeddingRegistry returned error: %v", err)
+	}
+	client := sigma.NewClient(sigma.WithRegistry(registry))
+
+	var phases []sigma.EmbeddingBatchPhase
+	got, err := client.EmbedBatch(
+		context.Background(),
+		sigmatest.EmbeddingModel(),
+		sigma.EmbeddingRequest{Inputs: []string{"abcd"}},
+		sigma.EmbeddingBatchConfig{
+			MaxRetries:     2,
+			SplitOversized: true,
+			Progress: func(progress sigma.EmbeddingBatchProgress) error {
+				phases = append(phases, progress.Phase)
+				return nil
+			},
+		},
+	)
+	if err != nil {
+		t.Fatalf("EmbedBatch returned error: %v", err)
+	}
+	wantVectors := []sigma.Embedding{{Index: 0, Vector: []float32{2}}}
+	if !reflect.DeepEqual(got.Embeddings.Vectors, wantVectors) {
+		t.Fatalf("vectors = %#v, want weighted average", got.Embeddings.Vectors)
+	}
+	if !containsEmbeddingBatchPhase(phases, sigma.EmbeddingBatchPhaseSplit) {
+		t.Fatalf("progress phases = %#v, want split phase", phases)
+	}
+	requests := provider.Requests()
+	if len(requests) != 2 {
+		t.Fatalf("requests = %d, want original plus split request", len(requests))
+	}
+	if !reflect.DeepEqual(requests[1].Request.Inputs, []string{"ab", "cd"}) {
+		t.Fatalf("split inputs = %#v, want rune midpoint split", requests[1].Request.Inputs)
+	}
+}
+
+func TestEmbedBatchRejectsVectorCountMismatch(t *testing.T) {
+	t.Parallel()
+
+	provider := sigmatest.NewFauxEmbeddingProvider(sigmatest.EmbeddingScript{
+		Response: sigma.Embeddings{
+			Vectors: []sigma.Embedding{{Index: 0, Vector: []float32{1}}},
+		},
+	})
+	registry, err := sigmatest.EmbeddingRegistry(provider)
+	if err != nil {
+		t.Fatalf("EmbeddingRegistry returned error: %v", err)
+	}
+	client := sigma.NewClient(sigma.WithRegistry(registry))
+
+	_, err = client.EmbedBatch(
+		context.Background(),
+		sigmatest.EmbeddingModel(),
+		sigma.EmbeddingRequest{Inputs: []string{"alpha", "beta"}},
+		sigma.EmbeddingBatchConfig{},
+	)
+	if err == nil {
+		t.Fatal("EmbedBatch returned nil error")
+	}
+	if !strings.Contains(err.Error(), "returned 1 vectors for 2 inputs") {
+		t.Fatalf("error = %v, want vector-count mismatch", err)
+	}
+}
+
+func TestEmbedBatchProgressCanAbort(t *testing.T) {
+	t.Parallel()
+
+	provider := sigmatest.NewFauxEmbeddingProvider()
+	registry, err := sigmatest.EmbeddingRegistry(provider)
+	if err != nil {
+		t.Fatalf("EmbeddingRegistry returned error: %v", err)
+	}
+	client := sigma.NewClient(sigma.WithRegistry(registry))
+	abortErr := errors.New("stop embedding batch")
+
+	_, err = client.EmbedBatch(
+		context.Background(),
+		sigmatest.EmbeddingModel(),
+		sigma.EmbeddingRequest{Inputs: []string{"alpha"}},
+		sigma.EmbeddingBatchConfig{
+			Progress: func(progress sigma.EmbeddingBatchProgress) error {
+				if progress.Phase == sigma.EmbeddingBatchPhaseBatchStart {
+					return abortErr
+				}
+				return nil
+			},
+		},
+	)
+	if !errors.Is(err, abortErr) {
+		t.Fatalf("error = %v, want progress abort", err)
+	}
+	if len(provider.Requests()) != 0 {
+		t.Fatalf("provider requests = %d, want none after progress abort", len(provider.Requests()))
+	}
+}
+
 func TestEmbedValidation(t *testing.T) {
 	t.Parallel()
 
@@ -197,4 +435,13 @@ func TestEmbedCancellation(t *testing.T) {
 	if got, want := response.Model, sigmatest.EmbeddingModelID; got != want {
 		t.Fatalf("model = %q, want %q", got, want)
 	}
+}
+
+func containsEmbeddingBatchPhase(phases []sigma.EmbeddingBatchPhase, want sigma.EmbeddingBatchPhase) bool {
+	for _, phase := range phases {
+		if phase == want {
+			return true
+		}
+	}
+	return false
 }

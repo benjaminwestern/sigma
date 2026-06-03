@@ -19,17 +19,23 @@ cancellation/error coverage (see the coverage standards in
 
 Sigma now has a first-class provider-neutral embeddings surface with OpenAI
 `/v1/embeddings` support and generated metadata for the current OpenAI text
-embedding models. Broader retrieval workflows remain future work until they
+embedding models. Resilient batch hardening is available through
+`Client.EmbedBatch`; broader retrieval workflows remain future work until they
 have narrow APIs and deterministic tests.
 
+- [x] Add resilient embedding batch helpers for duplicate input reuse,
+      retry-aware batch splitting, optional oversized-input splitting, progress
+      callbacks, and aggregate usage/cost summaries.
 - [ ] Add vector-store integration only as an explicit new surface, not as part
       of provider dispatch.
-- [ ] Add text chunking helpers only after settling chunk metadata, overlap, and
-      tokenizer-estimation semantics.
+- [ ] Add general text chunking helpers only after settling chunk metadata,
+      overlap, and tokenizer-estimation semantics.
 - [ ] Add similarity/ranking helpers with deterministic numeric fixtures before
       documenting them as reusable retrieval primitives.
 - [ ] Add tokenizer-based embedding input estimates without making provider
       tokenizers a hidden runtime dependency.
+- [ ] Add provider-selection fallback only after settling provider/model
+      precedence semantics for embeddings.
 - [ ] Add non-OpenAI embedding adapters only after each provider has request,
       response, usage, error, and cancellation fixtures.
 - [ ] Add opt-in live embedding probes without making live provider calls part

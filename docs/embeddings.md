@@ -71,12 +71,40 @@ Provider usage maps prompt tokens to `Usage.InputTokens`. When model pricing is
 available, Sigma calculates `Cost.InputCost` and `Cost.TotalCost` from input
 tokens and `EmbeddingModel.InputCostPerMillion`.
 
+For larger batches, `Client.EmbedBatch` keeps the same provider-neutral model
+and request shape while adding duplicate input reuse, retry-aware batch
+splitting, optional oversized-input splitting, progress callbacks, and aggregate
+usage/cost summaries:
+
+```go
+result, err := client.EmbedBatch(ctx, model, sigma.EmbeddingRequest{
+	Inputs: []string{"alpha", "beta", "alpha"},
+}, sigma.EmbeddingBatchConfig{
+	ReuseDuplicateInputs: true,
+	MaxRetries:           2,
+	SplitOversized:       true,
+	Progress: func(progress sigma.EmbeddingBatchProgress) error {
+		return nil
+	},
+})
+if err != nil {
+	return err
+}
+
+for _, embedding := range result.Embeddings.Vectors {
+	fmt.Println(embedding.Index, len(embedding.Vector))
+}
+```
+
+`MaxRetries` controls batch-level split attempts after the underlying provider
+call returns. It does not replace `WithEmbeddingMaxRetries`, which still
+controls HTTP retry behaviour inside provider adapters.
+
 ## Current Scope
 
 The first embedding provider is OpenAI's `/v1/embeddings` API, with generated
 metadata for `text-embedding-3-small` and `text-embedding-3-large`.
 
-Vector stores, text chunking, tokenizer-based estimates, similarity/ranking
-helpers, and non-OpenAI embedding providers are intentionally outside this
-surface.
-
+Vector stores, general text chunking, tokenizer-based estimates,
+similarity/ranking helpers, provider-selection fallback, and non-OpenAI
+embedding providers are intentionally outside this surface.

@@ -116,6 +116,9 @@ on the preview Chat Completions adapter.
   discovery, request-scoped embedding options, redacted embedding debug hooks,
   OpenAI `/v1/embeddings` support, and generated metadata for
   `text-embedding-3-small` and `text-embedding-3-large`.
+- `Client.EmbedBatch` adds resilient embedding batch execution with duplicate
+  input reuse, retry-aware batch splitting, optional oversized-input splitting,
+  progress callbacks, and aggregate usage/cost summaries.
 
 ## Compatibility
 
@@ -150,9 +153,9 @@ on the preview Chat Completions adapter.
   Fireworks row stays on the OpenAI-compatible Fire Pass route.
 - Mistral image input remains deferred until the Conversations request shape is
   covered by deterministic payload fixtures.
-- Embedding vector stores, text chunking, similarity/ranking helpers,
-  tokenizer-based input estimates, non-OpenAI embedding adapters, and live
-  embedding probes remain deferred.
+- Embedding vector stores, general text chunking, similarity/ranking helpers,
+  tokenizer-based input estimates, provider-selection fallback, non-OpenAI
+  embedding adapters, and live embedding probes remain deferred.
 - Direct xAI/Grok image-provider semantics remain deferred until the request
   and response shape is covered by deterministic fixtures.
 - Live OpenAI image validation remains deferred to opt-in probes; deterministic
