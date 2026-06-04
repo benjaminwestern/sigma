@@ -130,6 +130,24 @@ provider metadata conventions as `OpenAICompatibleModel`, but returns an
 default to one input per batch; set `MaxBatchInputs` after fixture-testing that
 the endpoint accepts larger input arrays.
 
+For the common local OpenAI-compatible embedding shape, `RegisterLocalEmbeddings`
+registers both the provider and model with Ollama-friendly defaults:
+
+```go
+registry := sigma.NewRegistry()
+model, err := openai.RegisterLocalEmbeddings(registry, openai.LocalEmbeddingConfig{})
+if err != nil {
+	return err
+}
+
+client := sigma.NewClient(sigma.WithRegistry(registry))
+result, err := client.Embed(ctx, model, sigma.EmbeddingQuery("local search"))
+```
+
+The zero-value config uses provider `ollama`, model `nomic-embed-text`, and
+`http://127.0.0.1:11434/v1`. Custom `BaseURL` values are normalized to a `/v1`
+endpoint; set `APIKeyEnv` only for endpoints that require bearer-token auth.
+
 ## Metadata Only
 
 `sigma.WithMetadataOnly` allows registration of model metadata without a

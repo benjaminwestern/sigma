@@ -114,6 +114,9 @@ See [release notes](docs/release-notes-v0.3.0.md).
 - `sigma.OpenAICompatibleEmbeddingModel` now constructs metadata for caller-
   registered OpenAI-compatible embedding endpoints without hand-written model
   metadata maps.
+- `openai.RegisterLocalEmbeddings` now registers an explicit local
+  OpenAI-compatible embeddings provider/model pair with Ollama-friendly
+  defaults and normalized `/v1` base URLs.
 - Embedding model metadata now exposes supported dimension ranges alongside
   default dimensions, max input tokens, and input-token pricing.
 - Embedding batches can now use `Client.EmbedBatch` for duplicate input reuse,

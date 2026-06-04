@@ -19,7 +19,8 @@ the OpenAI-compatible preview adapters around prompt caching, replay, stream
 parsing, provider-specific reasoning formats, Codex OAuth, and Codex WebSocket
 session reuse, adds a provider-neutral embeddings surface for OpenAI text
 embedding models plus typed embedding telemetry and custom OpenAI-compatible
-embedding metadata, hardens resilient embedding batches with limits, cache
+embedding metadata, adds an explicit local OpenAI-compatible embedding
+registration helper, hardens resilient embedding batches with limits, cache
 hooks, safer splitting, and trace metadata, adds query/document embedding
 intent plus a compact query/document embedder helper, deterministic vector
 scoring helpers, and compact in-memory retrieval primitives, and adds typed
@@ -126,6 +127,9 @@ Direct xAI/Grok support remains focused on the preview Chat Completions adapter.
 - `sigma.OpenAICompatibleEmbeddingModel` now constructs metadata for
   caller-registered OpenAI-compatible embedding endpoints, including base URL,
   headers, dimensions, token limits, and input-token pricing.
+- `openai.RegisterLocalEmbeddings` now registers explicit local
+  OpenAI-compatible embedding endpoints with Ollama-friendly defaults, optional
+  API-key environment metadata, and normalized `/v1` base URLs.
 - Embedding model metadata now records supported dimension ranges alongside
   default dimensions, max input tokens, and cost metadata for routing.
 - `Client.EmbedBatch` adds resilient embedding batch execution with duplicate

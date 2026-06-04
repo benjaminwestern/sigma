@@ -41,6 +41,8 @@ remain future work.
       events for caller aggregation.
 - [x] Add OpenAI-compatible embedding model construction for caller-registered
       local or private embedding endpoints.
+- [x] Add an explicit local OpenAI-compatible embedding registration helper
+      with Ollama-friendly defaults and normalized `/v1` base URLs.
 - [x] Add explicit embedding dimension-range metadata for discovery and routing.
 - [x] Add retrieval document/chunk types, deterministic character-based
       splitting, and in-memory cosine search routed through `Client.EmbedBatch`.
@@ -55,7 +57,7 @@ remain future work.
 - [ ] Add tokenizer-based embedding input estimates without making provider
       tokenizers a hidden runtime dependency.
 - [ ] Add provider-selection fallback only after settling provider/model
-      precedence semantics for embeddings.
+      precedence semantics for embeddings as a separate public API decision.
 - [ ] Add non-OpenAI embedding adapters only after each provider has request,
       response, usage, error, and cancellation fixtures.
 - [ ] Add opt-in live embedding probes without making live provider calls part
