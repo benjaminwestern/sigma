@@ -634,6 +634,7 @@ func (b *embeddingBatcher) embedOversizedSingleton(job embeddingBatchJob, attemp
 	if err != nil {
 		return nil, err
 	}
+	partVectors = orderEmbeddingsByIndex(partVectors)
 	weights := make([]int, 0, len(parts))
 	for _, part := range parts {
 		weights = append(weights, len([]rune(part)))

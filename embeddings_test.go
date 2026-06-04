@@ -679,6 +679,67 @@ func TestEmbedBatchSplitsOversizedSingleton(t *testing.T) {
 	}
 }
 
+func TestEmbedBatchOrdersCachedOversizedSplitPartsBeforeAveraging(t *testing.T) {
+	t.Parallel()
+
+	overflowErr := sigma.NewProviderError(
+		sigmatest.ProviderID,
+		sigma.API(sigmatest.EmbeddingAPI),
+		sigmatest.EmbeddingModelID,
+		400,
+		"",
+		0,
+		[]byte(`{"error":{"code":"context_length_exceeded","message":"too many tokens"}}`),
+		sigma.ErrContextOverflow,
+	)
+	provider := sigmatest.NewFauxEmbeddingProvider(
+		sigmatest.EmbeddingScript{Err: overflowErr},
+		sigmatest.EmbeddingScript{Response: sigma.Embeddings{
+			Vectors: []sigma.Embedding{{Index: 0, Vector: []float32{1}}},
+		}},
+	)
+	registry, err := sigmatest.EmbeddingRegistry(provider)
+	if err != nil {
+		t.Fatalf("EmbeddingRegistry returned error: %v", err)
+	}
+	cache := newTestEmbeddingCache()
+	partHash := fmt.Sprintf("%x", sha256.Sum256([]byte("cde")))
+	cache.values[sigma.EmbeddingCacheKey{
+		Provider:    sigmatest.ProviderID,
+		API:         sigmatest.EmbeddingAPI,
+		Model:       sigmatest.EmbeddingModelID,
+		InputSHA256: partHash,
+	}] = sigma.Embedding{Vector: []float32{10}}
+	client := sigma.NewClient(sigma.WithRegistry(registry))
+
+	got, err := client.EmbedBatch(
+		context.Background(),
+		sigmatest.EmbeddingModel(),
+		sigma.EmbeddingRequest{Inputs: []string{"abcde"}},
+		sigma.EmbeddingBatchConfig{
+			MaxRetries:     2,
+			SplitOversized: true,
+			Cache:          cache,
+		},
+	)
+	if err != nil {
+		t.Fatalf("EmbedBatch returned error: %v", err)
+	}
+	if len(got.Embeddings.Vectors) != 1 || len(got.Embeddings.Vectors[0].Vector) != 1 {
+		t.Fatalf("vectors = %#v, want one averaged vector", got.Embeddings.Vectors)
+	}
+	if got, want := got.Embeddings.Vectors[0].Vector[0], float32(6.4); math.Abs(float64(got-want)) > 0.0001 {
+		t.Fatalf("averaged vector = %v, want %v", got, want)
+	}
+	requests := provider.Requests()
+	if len(requests) != 2 {
+		t.Fatalf("requests = %d, want original plus uncached split part", len(requests))
+	}
+	if !reflect.DeepEqual(requests[1].Request.Inputs, []string{"ab"}) {
+		t.Fatalf("provider split inputs = %#v, want only uncached split part", requests[1].Request.Inputs)
+	}
+}
+
 func TestEmbedBatchSplitPolicyUsesSafeBoundaries(t *testing.T) {
 	t.Parallel()
 
