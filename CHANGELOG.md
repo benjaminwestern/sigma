@@ -133,6 +133,15 @@ See [release notes](docs/release-notes-v0.3.0.md).
 - Embedding vector utilities now provide deterministic dot product, cosine
   similarity, normalization, weighted vector combination, and cosine-ranking
   helpers with typed errors for numeric edge cases.
+- Embedding retrieval primitives now include `RetrievalDocument`,
+  `RetrievalChunk`, deterministic character-based splitting, metadata-copying
+  document splitting, and `RetrievalResult` values that do not expose stored
+  vectors.
+- `InMemoryRetrievalIndex` now provides a compact in-memory retrieval helper
+  that embeds documents with `EmbeddingInputTypeDocument`, embeds searches with
+  `EmbeddingInputTypeQuery`, routes provider work through `Client.EmbedBatch`,
+  stores normalized vectors internally, and returns stable cosine-ranked
+  results.
 
 ### Compatibility
 
@@ -165,9 +174,9 @@ See [release notes](docs/release-notes-v0.3.0.md).
 - Token usage and cost reporting come from provider usage data and model
   metadata; tokenizer-based token estimates are deferred.
 - Built-in embeddings are currently limited to OpenAI text embedding models.
-  Vector stores, general chunking, tokenizer estimates, provider-selection
-  fallback, non-OpenAI embedding adapters, and live embedding probes remain
-  deferred.
+  External vector stores, tokenizer-aware chunking and estimates,
+  provider-selection fallback, non-OpenAI embedding adapters, and live embedding
+  probes remain deferred.
 - Built-in model metadata is still refreshed through the curated checked-in
   catalog; automated `models.dev`/provider-catalog ingestion is deferred until
   it can preserve deterministic review and fixtures.

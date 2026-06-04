@@ -21,8 +21,9 @@ the OpenAI-compatible preview adapters around prompt caching, replay, stream
   embedding models plus typed embedding telemetry and custom OpenAI-compatible
   embedding metadata, hardens resilient embedding batches with limits, cache
   hooks, safer splitting, and trace metadata, adds query/document embedding
-  intent plus deterministic vector scoring helpers, and adds typed provider
-  error classification for safer caller retry and recovery decisions. The Google
+  intent plus deterministic vector scoring helpers and compact in-memory
+  retrieval primitives, and adds typed provider error classification for safer
+  caller retry and recovery decisions. The Google
   preview adapters now include the scoped provider hardening for Vertex
   credential fallback, model-scoped routing metadata, and replayed tool-call IDs.
   Direct xAI/Grok support remains focused on the preview Chat Completions adapter.
@@ -149,6 +150,15 @@ the OpenAI-compatible preview adapters around prompt caching, replay, stream
 - Deterministic embedding vector utilities now cover dot product, cosine
   similarity, vector normalization, weighted vector combination, and
   cosine-based ranking with typed numeric error sentinels.
+- Embedding retrieval primitives now include `RetrievalDocument`,
+  `RetrievalChunk`, deterministic character-based splitting, metadata-copying
+  document splitting, and `RetrievalResult` values that do not expose stored
+  vectors.
+- `InMemoryRetrievalIndex` provides a compact in-memory retrieval helper that
+  embeds documents with `EmbeddingInputTypeDocument`, embeds searches with
+  `EmbeddingInputTypeQuery`, routes provider work through `Client.EmbedBatch`,
+  stores normalized vectors internally, and returns stable cosine-ranked
+  results.
 
 ## Compatibility
 
@@ -183,7 +193,7 @@ the OpenAI-compatible preview adapters around prompt caching, replay, stream
   Fireworks row stays on the OpenAI-compatible Fire Pass route.
 - Mistral image input remains deferred until the Conversations request shape is
   covered by deterministic payload fixtures.
-- Embedding vector stores, general text chunking, tokenizer-based input
+- External embedding vector stores, tokenizer-aware chunking and input
   estimates, provider-selection fallback, non-OpenAI embedding adapters, and
   live embedding probes remain deferred.
 - Direct xAI/Grok image-provider semantics remain deferred until the request
@@ -208,7 +218,7 @@ Codex OAuth and WebSocket flows, typed provider error classification, and
   metadata plus the focused provider-family registry refresh and OpenAI
   embedding support, typed embedding telemetry, custom OpenAI-compatible
   embedding metadata, embedding capability metadata, and resilient embedding
-  batch hardening plus query/document intent, newline normalization, and vector
-  scoring helpers are covered by deterministic request, response, OAuth,
-  SSE/WebSocket, checksum, payload, registry, cache, split, trace, and numeric
-  fixtures.
+  batch hardening plus query/document intent, newline normalization, vector
+  scoring helpers, and in-memory retrieval primitives are covered by
+  deterministic request, response, OAuth, SSE/WebSocket, checksum, payload,
+  registry, cache, split, trace, numeric, and retrieval fixtures.

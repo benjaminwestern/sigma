@@ -193,7 +193,44 @@ for _, score := range scores {
 `CombineEmbeddingVectors`, and `RankEmbeddingsByCosine` return typed sentinel
 errors for mismatched dimensions, zero-norm vectors, weight mismatches, and
 zero total weight. These helpers are deterministic numeric utilities; they do
-not perform vector-store persistence, chunking, or provider token estimation.
+not perform vector-store persistence or provider token estimation.
+
+## Retrieval Primitives
+
+Sigma includes compact in-memory retrieval helpers for applications that need
+small local search flows without adopting an external vector database:
+
+```go
+index := sigma.NewInMemoryRetrievalIndex(client, model, sigma.InMemoryRetrievalIndexConfig{
+	Splitter: sigma.RetrievalSplitterConfig{
+		ChunkSize:    1000,
+		ChunkOverlap: 200,
+	},
+})
+
+err := index.AddDocuments(ctx, []sigma.RetrievalDocument{
+	{ID: "intro", Text: "Sigma generates vector embeddings."},
+})
+if err != nil {
+	return err
+}
+
+results, err := index.Search(ctx, "embedding support", 3)
+if err != nil {
+	return err
+}
+for _, result := range results {
+	fmt.Println(result.Chunk.ID, result.Score)
+}
+```
+
+`SplitRetrievalText` and `SplitRetrievalDocuments` provide deterministic
+character-based splitting with rune-safe byte offsets, overlap, separator
+preference, and metadata copying. `InMemoryRetrievalIndex` embeds chunks as
+`EmbeddingInputTypeDocument`, embeds searches as `EmbeddingInputTypeQuery`,
+routes provider work through `Client.EmbedBatch`, stores normalized vectors
+internally, and returns `RetrievalResult` values without exposing stored
+vectors.
 
 ## Current Scope
 
@@ -202,6 +239,6 @@ generated metadata for `text-embedding-3-small` and
 `text-embedding-3-large`, plus `sigma.OpenAICompatibleEmbeddingModel` for
 caller-registered OpenAI-compatible embedding endpoints.
 
-Vector stores, general text chunking, tokenizer-based estimates,
+External vector stores, tokenizer-aware chunking and estimates,
 provider-selection fallback, and non-OpenAI embedding providers are
 intentionally outside this surface.
