@@ -1,13 +1,13 @@
 # Release notes: sigma v0.3.0
 
-This is the maintainer-facing release note for the next `sigma` tag. It records
-the v0.3.0 summary and scope as changes land. For the itemized change list see
+This is the maintainer-facing release note for the `sigma` v0.3.0 tag. It
+records the v0.3.0 summary and scope. For the itemized change list see
 [CHANGELOG.md](../CHANGELOG.md); for the validation commands and pre-tag
 checklist see [RELEASING.md](../RELEASING.md).
 
 ## Release summary
 
-v0.3.0 refreshes Sigma's generated model catalog with curated current metadata
+`sigma` v0.3.0 refreshes Sigma's generated model catalog with curated metadata
 for supported provider IDs, including broader OpenAI, Anthropic, Google, Vertex
 AI, Mistral, Bedrock, OpenCode, and metadata-only OpenAI-compatible rows. It
 also adds focused metadata-only rows for adapter-backed provider families such
@@ -25,8 +25,7 @@ hooks, safer splitting, and trace metadata, adds query/document embedding
 intent plus a compact query/document embedder helper, deterministic vector
 scoring helpers, and compact in-memory retrieval primitives, and adds typed
 provider error classification for safer caller retry and recovery decisions.
-The Google
-preview adapters now include the scoped provider hardening for Vertex
+Google preview adapters now include scoped provider hardening for Vertex
 credential fallback, model-scoped routing metadata, and replayed tool-call IDs.
 Direct xAI/Grok support remains focused on the preview Chat Completions adapter.
 
@@ -218,7 +217,7 @@ Direct xAI/Grok support remains focused on the preview Chat Completions adapter.
 
 ## Validation status
 
-This release should use the validation process in [RELEASING.md](../RELEASING.md).
+Release validation follows the process in [RELEASING.md](../RELEASING.md).
 No live xAI or OpenRouter provider calls are required for release validation.
 OpenAI provider changes, image generation/edit/variation/streaming behavior,
 Codex OAuth and WebSocket flows, typed provider error classification, and
@@ -228,6 +227,6 @@ embedding support, typed embedding telemetry, custom OpenAI-compatible
 embedding metadata, embedding capability metadata, and resilient embedding
 batch hardening plus query/document intent, embedder helper ergonomics,
 newline normalization, vector scoring helpers, and in-memory retrieval
-primitives are covered by
-deterministic request, response, OAuth, SSE/WebSocket, checksum, payload,
-registry, cache, split, trace, numeric, and retrieval fixtures.
+primitives are covered by deterministic request, response, OAuth,
+SSE/WebSocket, checksum, payload, registry, cache, split, trace, numeric, and
+retrieval fixtures.
