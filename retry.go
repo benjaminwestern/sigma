@@ -31,6 +31,14 @@ const (
 // response body has not been consumed.
 type HTTPResponseHook func(*http.Response) error
 
+// HTTPAttempt records provider-neutral facts about one HTTP request attempt.
+type HTTPAttempt struct {
+	Attempt    int
+	StatusCode int
+	RequestID  string
+	Latency    time.Duration
+}
+
 type retryPolicy struct {
 	maxRetries    int
 	baseDelay     time.Duration
@@ -62,6 +70,20 @@ func DoHTTPWithRetry(
 	providerError func(*http.Response) *ProviderError,
 	hooks ...HTTPResponseHook,
 ) (*http.Response, error) {
+	resp, _, err := DoHTTPWithRetryAttempts(ctx, client, opts, newRequest, providerError, hooks...)
+	return resp, err
+}
+
+// DoHTTPWithRetryAttempts sends a request with sigma's shared HTTP retry policy
+// and returns metadata for every attempted HTTP request.
+func DoHTTPWithRetryAttempts(
+	ctx context.Context,
+	client *http.Client,
+	opts Options,
+	newRequest func(context.Context) (*http.Request, error),
+	providerError func(*http.Response) *ProviderError,
+	hooks ...HTTPResponseHook,
+) (*http.Response, []HTTPAttempt, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -71,47 +93,60 @@ func DoHTTPWithRetry(
 	policy := retryPolicyFromOptions(opts)
 	attempts := policy.attempts()
 
+	httpAttempts := make([]HTTPAttempt, 0, attempts)
 	var lastErr error
 	for attempt := 0; attempt < attempts; attempt++ {
 		if err := ctx.Err(); err != nil {
-			return nil, err
+			return nil, httpAttempts, err
 		}
 		httpReq, err := newRequest(ctx)
 		if err != nil {
-			return nil, err
+			return nil, httpAttempts, err
 		}
+		started := time.Now()
 		resp, err := client.Do(httpReq)
+		latency := time.Since(started)
 		if err != nil {
+			httpAttempts = append(httpAttempts, HTTPAttempt{
+				Attempt: attempt,
+				Latency: latency,
+			})
 			if isContextError(ctx, err) || !RetryableNetworkError(err) || attempt+1 == attempts {
-				return nil, err
+				return nil, httpAttempts, err
 			}
 			lastErr = err
 			if err := policy.wait(ctx, attempt, 0); err != nil {
-				return nil, err
+				return nil, httpAttempts, err
 			}
 			continue
 		}
+		httpAttempts = append(httpAttempts, HTTPAttempt{
+			Attempt:    attempt,
+			StatusCode: resp.StatusCode,
+			RequestID:  requestIDFromHeaders(resp.Header),
+			Latency:    latency,
+		})
 
 		if err := runResponseHooks(resp, hooks); err != nil {
 			_ = resp.Body.Close()
-			return nil, err
+			return nil, httpAttempts, err
 		}
 		if !RetryableStatusCode(resp.StatusCode) || attempt+1 == attempts {
-			return resp, nil
+			return resp, httpAttempts, nil
 		}
 
 		retryAfter := RetryAfter(resp.Header)
 		if policy.retryAfterExceedsCap(retryAfter) {
 			err := retryAfterCapError(resp, providerError, retryAfter, policy.maxRetryDelay)
 			_ = resp.Body.Close()
-			return nil, err
+			return nil, httpAttempts, err
 		}
 		drainAndClose(resp.Body)
 		if err := policy.wait(ctx, attempt, retryAfter); err != nil {
-			return nil, err
+			return nil, httpAttempts, err
 		}
 	}
-	return nil, lastErr
+	return nil, httpAttempts, lastErr
 }
 
 // RetryableStatusCode reports whether status is safe for pre-body-consumption

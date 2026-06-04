@@ -629,11 +629,29 @@ func validateEmbeddingModel(model EmbeddingModel) error {
 	if model.DefaultDimensions < 0 {
 		return registryError("embedding default dimensions must be non-negative")
 	}
+	if model.MinDimensions < 0 {
+		return registryError("embedding min dimensions must be non-negative")
+	}
+	if model.MaxDimensions < 0 {
+		return registryError("embedding max dimensions must be non-negative")
+	}
+	if model.MinDimensions > 0 && model.MaxDimensions > 0 && model.MinDimensions > model.MaxDimensions {
+		return registryError("embedding min dimensions must be less than or equal to max dimensions")
+	}
+	if model.DefaultDimensions > 0 && model.MinDimensions > 0 && model.DefaultDimensions < model.MinDimensions {
+		return registryError("embedding default dimensions must be within supported dimensions")
+	}
+	if model.DefaultDimensions > 0 && model.MaxDimensions > 0 && model.DefaultDimensions > model.MaxDimensions {
+		return registryError("embedding default dimensions must be within supported dimensions")
+	}
 	if model.MaxInputTokens < 0 {
 		return registryError("embedding max input tokens must be non-negative")
 	}
 	if model.InputCostPerMillion < 0 {
 		return registryError("embedding input cost per million must be non-negative")
+	}
+	if err := validateOpenAICompatibleEmbeddingModel(model); err != nil {
+		return err
 	}
 	return nil
 }
@@ -693,6 +711,25 @@ func validateOpenAICompatibleModel(model Model) error {
 	parsed, err := url.Parse(baseURL)
 	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
 		return registryError("openai-compatible model base URL must be absolute")
+	}
+	return validateOpenAICompatibleHeaders(model.ProviderMetadata[MetadataOpenAICompatibleHeaders])
+}
+
+func validateOpenAICompatibleEmbeddingModel(model EmbeddingModel) error {
+	if compatible, _ := model.ProviderMetadata[MetadataOpenAICompatible].(bool); !compatible {
+		return nil
+	}
+	if model.API != EmbeddingAPIOpenAIEmbeddings {
+		return registryError("openai-compatible embedding model api must be openai-embeddings")
+	}
+	baseURL, _ := model.ProviderMetadata[MetadataOpenAICompatibleBaseURL].(string)
+	baseURL = strings.TrimSpace(baseURL)
+	if baseURL == "" {
+		return registryError("openai-compatible embedding model base URL is required")
+	}
+	parsed, err := url.Parse(baseURL)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return registryError("openai-compatible embedding model base URL must be absolute")
 	}
 	return validateOpenAICompatibleHeaders(model.ProviderMetadata[MetadataOpenAICompatibleHeaders])
 }

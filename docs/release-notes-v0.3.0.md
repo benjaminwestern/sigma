@@ -18,8 +18,9 @@ image metadata with OpenRouter-routed Grok and Gemini image routes, tightens
 the OpenAI-compatible preview adapters around prompt caching, replay, stream
 parsing, provider-specific reasoning formats, Codex OAuth, and Codex WebSocket
 session reuse, adds a provider-neutral embeddings surface for OpenAI text
-embedding models, and adds typed provider error classification for safer caller
-retry and recovery decisions. The Google preview adapters now include the
+embedding models plus typed embedding telemetry and custom OpenAI-compatible
+embedding metadata, and adds typed provider error classification for safer
+caller retry and recovery decisions. The Google preview adapters now include the
 scoped provider hardening for Vertex credential fallback, model-scoped routing
 metadata, and replayed tool-call IDs. Direct xAI/Grok support remains focused
 on the preview Chat Completions adapter.
@@ -116,9 +117,16 @@ on the preview Chat Completions adapter.
   discovery, request-scoped embedding options, redacted embedding debug hooks,
   OpenAI `/v1/embeddings` support, and generated metadata for
   `text-embedding-3-small` and `text-embedding-3-large`.
+- Embedding responses now include typed SDK-level attempt metadata for provider,
+  API, model, retry attempt, status code, request ID, and per-attempt latency.
+- `sigma.OpenAICompatibleEmbeddingModel` now constructs metadata for
+  caller-registered OpenAI-compatible embedding endpoints, including base URL,
+  headers, dimensions, token limits, and input-token pricing.
+- Embedding model metadata now records supported dimension ranges alongside
+  default dimensions, max input tokens, and cost metadata for routing.
 - `Client.EmbedBatch` adds resilient embedding batch execution with duplicate
   input reuse, retry-aware batch splitting, optional oversized-input splitting,
-  progress callbacks, and aggregate usage/cost summaries.
+  progress callbacks, and aggregate status/request/usage/cost summaries.
 
 ## Compatibility
 
@@ -176,5 +184,7 @@ OpenAI provider changes, image generation/edit/variation/streaming behavior,
 Codex OAuth and WebSocket flows, typed provider error classification, and
 generated catalog metadata, including strict OpenCode thinking and routed model
 metadata plus the focused provider-family registry refresh and OpenAI
-embedding support, are covered by deterministic request, response, OAuth,
-SSE/WebSocket, checksum, payload, and registry fixtures.
+embedding support, typed embedding telemetry, custom OpenAI-compatible
+embedding metadata, and embedding capability metadata, are covered by
+deterministic request, response, OAuth, SSE/WebSocket, checksum, payload, and
+registry fixtures.

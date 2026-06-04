@@ -186,14 +186,36 @@ func TestEmbedBatchSplitsRetryableBatchFailure(t *testing.T) {
 		sigma.ErrProviderResponse,
 	)
 	provider := sigmatest.NewFauxEmbeddingProvider(
-		sigmatest.EmbeddingScript{Err: providerErr},
+		sigmatest.EmbeddingScript{Response: sigma.Embeddings{
+			Attempts: []sigma.EmbeddingAttempt{{
+				Provider:   sigmatest.ProviderID,
+				API:        sigmatest.EmbeddingAPI,
+				Model:      sigmatest.EmbeddingModelID,
+				StatusCode: 429,
+				RequestID:  "req_failed",
+			}},
+		}, Err: providerErr},
 		sigmatest.EmbeddingScript{Response: sigma.Embeddings{
 			Vectors: []sigma.Embedding{{Index: 0, Vector: []float32{1}}},
 			Usage:   &sigma.Usage{InputTokens: 2, TotalTokens: 2},
+			Attempts: []sigma.EmbeddingAttempt{{
+				Provider:   sigmatest.ProviderID,
+				API:        sigmatest.EmbeddingAPI,
+				Model:      sigmatest.EmbeddingModelID,
+				StatusCode: 200,
+				RequestID:  "req_alpha",
+			}},
 		}},
 		sigmatest.EmbeddingScript{Response: sigma.Embeddings{
 			Vectors: []sigma.Embedding{{Index: 0, Vector: []float32{2}}},
 			Usage:   &sigma.Usage{InputTokens: 3, TotalTokens: 3},
+			Attempts: []sigma.EmbeddingAttempt{{
+				Provider:   sigmatest.ProviderID,
+				API:        sigmatest.EmbeddingAPI,
+				Model:      sigmatest.EmbeddingModelID,
+				StatusCode: 200,
+				RequestID:  "req_beta",
+			}},
 		}},
 	)
 	registry, err := sigmatest.EmbeddingRegistry(provider)
@@ -220,6 +242,18 @@ func TestEmbedBatchSplitsRetryableBatchFailure(t *testing.T) {
 	}
 	if got.Summary.RequestCount != 2 || got.Summary.ErrorCount != 1 {
 		t.Fatalf("summary counts = %#v, want two successes and one error", got.Summary)
+	}
+	if got.Summary.TotalRequestCount != 3 {
+		t.Fatalf("total request count = %d, want 3", got.Summary.TotalRequestCount)
+	}
+	if got.Summary.StatusBuckets[429] != 1 || got.Summary.StatusBuckets[200] != 2 {
+		t.Fatalf("status buckets = %#v, want one 429 and two 200s", got.Summary.StatusBuckets)
+	}
+	if !reflect.DeepEqual(got.Summary.RequestIDs, []string{"req_failed", "req_alpha", "req_beta"}) {
+		t.Fatalf("request ids = %#v, want attempt order", got.Summary.RequestIDs)
+	}
+	if len(got.Summary.Attempts) != 3 || len(got.Embeddings.Attempts) != 3 {
+		t.Fatalf("attempts = summary:%#v embeddings:%#v, want aggregate attempts", got.Summary.Attempts, got.Embeddings.Attempts)
 	}
 	if got.Summary.Usage == nil || got.Summary.Usage.InputTokens != 5 || got.Embeddings.Usage.InputTokens != 5 {
 		t.Fatalf("usage = summary:%#v embeddings:%#v, want aggregated input tokens", got.Summary.Usage, got.Embeddings.Usage)

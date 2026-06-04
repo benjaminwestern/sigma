@@ -26,6 +26,13 @@ have narrow APIs and deterministic tests.
 - [x] Add resilient embedding batch helpers for duplicate input reuse,
       retry-aware batch splitting, optional oversized-input splitting, progress
       callbacks, and aggregate usage/cost summaries.
+- [x] Add typed embedding attempt telemetry with request IDs, status codes,
+      provider/API/model identity, retry attempts, and per-attempt latency.
+- [x] Add generic batch telemetry for total request attempts, status buckets,
+      request IDs, attempts, usage, and cost.
+- [x] Add OpenAI-compatible embedding model construction for caller-registered
+      local or private embedding endpoints.
+- [x] Add explicit embedding dimension-range metadata for discovery and routing.
 - [ ] Add vector-store integration only as an explicit new surface, not as part
       of provider dispatch.
 - [ ] Add general text chunking helpers only after settling chunk metadata,

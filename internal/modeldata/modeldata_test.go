@@ -21,7 +21,7 @@ func TestCatalogFileChecksumAndValidation(t *testing.T) {
 		t.Fatalf("ReadFile returned error: %v", err)
 	}
 	sum := sha256.Sum256(data)
-	if got, want := hex.EncodeToString(sum[:]), "e80ec6985781980c343aac0af7c644fa6c6b2d76b1e4ba97bb7fb22f44deaf67"; got != want {
+	if got, want := hex.EncodeToString(sum[:]), "cac6c5c06f98879c282fa3049693fb7517073e6daebb6777386f52af15ed048b"; got != want {
 		t.Fatalf("catalog checksum = %s, want %s", got, want)
 	}
 	if _, err := Decode(strings.NewReader(string(data))); err != nil {
@@ -68,6 +68,8 @@ func TestCatalogValidationReportsMissingRequiredFields(t *testing.T) {
 			"api": "openai-embeddings",
 			"baseURL": "https://api.openai.com/v1",
 			"defaultDimensions": 1536,
+			"minDimensions": 1,
+			"maxDimensions": 1536,
 			"maxInputTokens": 8192,
 			"inputCostPerMillion": 0.02,
 			"currency": "USD",

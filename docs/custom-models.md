@@ -92,6 +92,41 @@ roles only after fixture-testing the endpoint.
 The runnable [custom model example](../examples/custom-model/main.go) shows
 Ollama, vLLM, LM Studio, and generic presets.
 
+## OpenAI-Compatible Embeddings
+
+Use `OpenAICompatibleEmbeddingModel` for local or private embedding endpoints
+that implement OpenAI's `/v1/embeddings` shape:
+
+```go
+registry := sigma.NewRegistry()
+providerID := sigma.ProviderID("local-embeddings")
+
+if err := openai.RegisterEmbeddings(registry, providerID); err != nil {
+	return err
+}
+
+model := sigma.OpenAICompatibleEmbeddingModel(sigma.OpenAICompatibleEmbeddingModelConfig{
+	ID:                  "embedding-model",
+	Provider:            providerID,
+	BaseURL:             "http://localhost:8000/v1",
+	DefaultDimensions:   1024,
+	MinDimensions:       1,
+	MaxDimensions:       1024,
+	MaxInputTokens:      8192,
+	InputCostPerMillion: 0.01,
+	CostCurrency:        "USD",
+})
+if err := registry.RegisterEmbeddingModel(model); err != nil {
+	return err
+}
+
+client := sigma.NewClient(sigma.WithRegistry(registry))
+```
+
+The embedding constructor uses the same model-scoped `BaseURL`, `Headers`, and
+provider metadata conventions as `OpenAICompatibleModel`, but returns an
+`EmbeddingModel` with the OpenAI embeddings API.
+
 ## Metadata Only
 
 `sigma.WithMetadataOnly` allows registration of model metadata without a

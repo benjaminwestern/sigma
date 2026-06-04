@@ -52,14 +52,38 @@ matching provider before runtime dispatch:
 _ = openai.RegisterEmbeddings(registry, sigma.ProviderOpenAI)
 ```
 
+`EmbeddingModel` records routing metadata for dimensions, input limits, and
+cost. `DefaultDimensions` is the provider default, `MinDimensions` and
+`MaxDimensions` describe the supported reduction range when known,
+`MaxInputTokens` records the provider input limit, and
+`InputCostPerMillion` plus `CostCurrency` drive deterministic embedding cost
+calculation.
+
 ## Dimensions
 
 `EmbeddingRequest.Dimensions` requests a smaller embedding vector when the
 provider and model support dimensionality reduction. Leave it at zero to use the
 model default recorded in `EmbeddingModel.DefaultDimensions`.
 
-Sigma validates that dimensions are non-negative. Providers may still reject
-unsupported dimensions.
+Sigma validates that dimensions are non-negative. Dimension ranges are model
+metadata for discovery and routing; providers may still reject unsupported
+dimensions.
+
+## Attempt Metadata
+
+Embedding responses include SDK-level attempt metadata when the provider can
+report it:
+
+```go
+for _, attempt := range result.Attempts {
+	fmt.Println(attempt.Provider, attempt.API, attempt.Model)
+	fmt.Println(attempt.Attempt, attempt.StatusCode, attempt.RequestID, attempt.Latency)
+}
+```
+
+`EmbeddingAttempt` records provider, API, model, zero-based retry attempt,
+status code, request ID, and per-attempt latency. These are SDK transport facts,
+not provider-specific response payload fields.
 
 ## Batching, Usage, And Cost
 
@@ -100,10 +124,17 @@ for _, embedding := range result.Embeddings.Vectors {
 call returns. It does not replace `WithEmbeddingMaxRetries`, which still
 controls HTTP retry behaviour inside provider adapters.
 
+`EmbeddingBatchSummary` keeps aggregate batch telemetry: successful provider
+result count, total request attempts, error count, vector count, status buckets,
+request IDs, attempts, usage, and cost. `RequestIDs` preserves attempt order and
+omits empty request IDs.
+
 ## Current Scope
 
-The first embedding provider is OpenAI's `/v1/embeddings` API, with generated
-metadata for `text-embedding-3-small` and `text-embedding-3-large`.
+The first embedding provider is OpenAI's `/v1/embeddings` API. Sigma includes
+generated metadata for `text-embedding-3-small` and
+`text-embedding-3-large`, plus `sigma.OpenAICompatibleEmbeddingModel` for
+caller-registered OpenAI-compatible embedding endpoints.
 
 Vector stores, general text chunking, tokenizer-based estimates,
 similarity/ranking helpers, provider-selection fallback, and non-OpenAI

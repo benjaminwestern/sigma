@@ -53,11 +53,15 @@ type EmbeddingBatchConfig struct {
 
 // EmbeddingBatchSummary reports aggregate provider work from EmbedBatch.
 type EmbeddingBatchSummary struct {
-	RequestCount int
-	ErrorCount   int
-	VectorCount  int
-	Usage        *Usage
-	Cost         *Cost
+	RequestCount      int
+	TotalRequestCount int
+	ErrorCount        int
+	VectorCount       int
+	StatusBuckets     map[int]int
+	RequestIDs        []string
+	Attempts          []EmbeddingAttempt
+	Usage             *Usage
+	Cost              *Cost
 }
 
 // EmbeddingBatchResult is ordered embedding output plus batch metadata.
@@ -267,6 +271,7 @@ func (c *Client) EmbedBatch(ctx context.Context, model EmbeddingModel, req Embed
 		cost := *result.Summary.Cost
 		result.Embeddings.Cost = &cost
 	}
+	result.Embeddings.Attempts = append([]EmbeddingAttempt(nil), result.Summary.Attempts...)
 	if err != nil {
 		return result, err
 	}
@@ -358,7 +363,7 @@ func (b *embeddingBatcher) embedJobs(jobs []embeddingBatchJob, attempt int) ([]E
 		return expandJobEmbeddings(jobs, jobVectors), nil
 	}
 
-	b.addError()
+	b.addError(embeddings)
 	if err := b.progress(EmbeddingBatchProgress{
 		Phase:        EmbeddingBatchPhaseBatchError,
 		Attempt:      attempt,
@@ -530,6 +535,7 @@ func (b *embeddingBatcher) addResult(embeddings Embeddings) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.summary.RequestCount++
+	b.addAttemptsLocked(embeddings.Attempts, 1)
 	b.summary.VectorCount += len(embeddings.Vectors)
 	if embeddings.Usage != nil {
 		if b.summary.Usage == nil {
@@ -557,16 +563,42 @@ func (b *embeddingBatcher) addResult(embeddings Embeddings) {
 	}
 }
 
-func (b *embeddingBatcher) addError() {
+func (b *embeddingBatcher) addError(embeddings Embeddings) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	b.addAttemptsLocked(embeddings.Attempts, 1)
 	b.summary.ErrorCount++
+}
+
+func (b *embeddingBatcher) addAttemptsLocked(attempts []EmbeddingAttempt, fallbackCount int) {
+	if len(attempts) == 0 {
+		b.summary.TotalRequestCount += fallbackCount
+		return
+	}
+	b.summary.TotalRequestCount += len(attempts)
+	b.summary.Attempts = append(b.summary.Attempts, attempts...)
+	for _, attempt := range attempts {
+		if attempt.StatusCode != 0 {
+			if b.summary.StatusBuckets == nil {
+				b.summary.StatusBuckets = make(map[int]int)
+			}
+			b.summary.StatusBuckets[attempt.StatusCode]++
+		}
+		if attempt.RequestID != "" {
+			b.summary.RequestIDs = append(b.summary.RequestIDs, attempt.RequestID)
+		}
+	}
 }
 
 func (b *embeddingBatcher) batchSummary() EmbeddingBatchSummary {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	summary := b.summary
+	if summary.StatusBuckets != nil {
+		summary.StatusBuckets = copyIntIntMap(summary.StatusBuckets)
+	}
+	summary.RequestIDs = append([]string(nil), summary.RequestIDs...)
+	summary.Attempts = append([]EmbeddingAttempt(nil), summary.Attempts...)
 	if summary.Usage != nil {
 		usage := *summary.Usage
 		summary.Usage = &usage
@@ -576,6 +608,17 @@ func (b *embeddingBatcher) batchSummary() EmbeddingBatchSummary {
 		summary.Cost = &cost
 	}
 	return summary
+}
+
+func copyIntIntMap(values map[int]int) map[int]int {
+	if len(values) == 0 {
+		return nil
+	}
+	copied := make(map[int]int, len(values))
+	for key, value := range values {
+		copied[key] = value
+	}
+	return copied
 }
 
 func inputsForJobs(jobs []embeddingBatchJob) []string {

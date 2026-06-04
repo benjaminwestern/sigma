@@ -178,6 +178,8 @@ func writeEmbeddingModel(b *bytes.Buffer, model modeldata.EmbeddingModel) {
 	writeStringField(b, "API", "EmbeddingAPI", model.API)
 	writeStringField(b, "Name", "", model.Name)
 	writeIntField(b, "DefaultDimensions", model.DefaultDimensions)
+	writeIntField(b, "MinDimensions", model.MinDimensions)
+	writeIntField(b, "MaxDimensions", model.MaxDimensions)
 	writeIntField(b, "MaxInputTokens", model.MaxInputTokens)
 	writeFloatField(b, "InputCostPerMillion", model.InputCostPerMillion)
 	writeStringField(b, "CostCurrency", "", model.Currency)

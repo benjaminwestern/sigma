@@ -22,6 +22,7 @@ packages and metadata fields. It should be read with
 | Amazon Bedrock Converse Stream | `bedrock-converse-stream` | [provider/bedrock](../provider/bedrock) | AWS-isolated text adapter with stdlib SigV4/EventStream transport, injectable Converse Stream client, and credential detector. |
 | OpenAI Images | `openai-images` | [provider/openai](../provider/openai), [image_models_generated.go](../image_models_generated.go) | Generation-only adapter over OpenAI's dedicated Images API plus generated image model metadata. |
 | OpenRouter image generation through Chat Completions | `openrouter-images` | [provider/openrouter](../provider/openrouter), `ImageModel.ProviderMetadata` | Image-generation adapter over OpenRouter chat-completions image responses. |
+| OpenAI Embeddings | `openai-embeddings` | [provider/openai](../provider/openai), [embedding_models_generated.go](../embedding_models_generated.go), `EmbeddingModel` | Vector embedding adapter over OpenAI's `/v1/embeddings` API plus generated and caller-registered embedding model metadata. |
 
 ## Provider ID mapping
 
@@ -66,6 +67,7 @@ packages and metadata fields. It should be read with
 | Azure Responses configuration | `Model.AzureOpenAIResponses` | Azure endpoint, deployment, API version, and credential-source selection. |
 | Codex Responses configuration | `Model.OpenAICodexResponses` | Codex model-name override and OAuth-token provider requirement. |
 | Image shape limits | `ImageModel.MaxWidth`, `MaxHeight`, `SupportedSizes`, `SupportedFormats` | Image model discovery and request validation docs. |
+| Embedding limits | `EmbeddingModel.DefaultDimensions`, `MinDimensions`, `MaxDimensions`, `MaxInputTokens`, `InputCostPerMillion`, `CostCurrency` | Embedding model discovery, routing metadata, and deterministic cost reporting. |
 
 ## Source capabilities not yet represented as complete Go parity
 

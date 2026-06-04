@@ -87,6 +87,151 @@ func TestOpenAICompatibleModelValidation(t *testing.T) {
 	}
 }
 
+func TestOpenAICompatibleEmbeddingModelValidation(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		model sigma.EmbeddingModel
+		want  string
+	}{
+		{
+			name:  "missing model id",
+			model: sigma.OpenAICompatibleEmbeddingModel(sigma.OpenAICompatibleEmbeddingModelConfig{Provider: "local", BaseURL: "http://localhost:11434/v1"}),
+			want:  "model id is required",
+		},
+		{
+			name:  "missing provider",
+			model: sigma.OpenAICompatibleEmbeddingModel(sigma.OpenAICompatibleEmbeddingModelConfig{ID: "embed", BaseURL: "http://localhost:11434/v1"}),
+			want:  "provider is required",
+		},
+		{
+			name:  "missing base url",
+			model: sigma.OpenAICompatibleEmbeddingModel(sigma.OpenAICompatibleEmbeddingModelConfig{ID: "embed", Provider: "local"}),
+			want:  "base URL is required",
+		},
+		{
+			name: "invalid base url",
+			model: sigma.OpenAICompatibleEmbeddingModel(sigma.OpenAICompatibleEmbeddingModelConfig{
+				ID:       "embed",
+				Provider: "local",
+				BaseURL:  "localhost:11434/v1",
+			}),
+			want: "base URL must be absolute",
+		},
+		{
+			name: "compatibility on wrong api",
+			model: sigma.EmbeddingModel{
+				ID:       "wrong-api",
+				Provider: "local",
+				API:      "other-embeddings",
+				ProviderMetadata: map[string]any{
+					sigma.MetadataOpenAICompatible:        true,
+					sigma.MetadataOpenAICompatibleBaseURL: "http://localhost:11434/v1",
+				},
+			},
+			want: "api must be openai-embeddings",
+		},
+		{
+			name: "invalid header metadata",
+			model: sigma.OpenAICompatibleEmbeddingModel(sigma.OpenAICompatibleEmbeddingModelConfig{
+				ID:       "embed",
+				Provider: "local",
+				BaseURL:  "http://localhost:11434/v1",
+				ProviderMetadata: map[string]any{
+					sigma.MetadataOpenAICompatibleHeaders: map[string]any{"X-Test": 3},
+				},
+			}),
+			want: "headers must be strings",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := sigma.RegisterEmbeddingModel(sigma.NewRegistry(), tt.model, sigma.WithMetadataOnly())
+			if err == nil {
+				t.Fatal("RegisterEmbeddingModel returned nil error")
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("error = %q, want substring %q", err, tt.want)
+			}
+		})
+	}
+}
+
+func TestOpenAICompatibleEmbeddingModelUsesLocalEndpointMetadata(t *testing.T) {
+	t.Parallel()
+
+	requests := make(chan customModelRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captureCustomModelRequest(t, requests, r)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"data":[{"index":0,"embedding":[0.1,0.2]}],"usage":{"prompt_tokens":2,"total_tokens":2}}`)
+	}))
+	t.Cleanup(server.Close)
+
+	headers := map[string]string{"X-Model": "model", "X-Model-Only": "present", "Authorization": "Bearer model"}
+	metadata := map[string]any{"family": "local"}
+	providerID := sigma.ProviderID("local-openai-compatible-embeddings")
+	model := sigma.OpenAICompatibleEmbeddingModel(sigma.OpenAICompatibleEmbeddingModelConfig{
+		ID:                  "local-embed",
+		Provider:            providerID,
+		BaseURL:             server.URL,
+		Name:                "Local Embeddings",
+		Headers:             headers,
+		DefaultDimensions:   1024,
+		MinDimensions:       1,
+		MaxDimensions:       1024,
+		MaxInputTokens:      8192,
+		InputCostPerMillion: 0.01,
+		CostCurrency:        "USD",
+		ProviderMetadata:    metadata,
+	})
+	headers["X-Model-Only"] = "mutated"
+	metadata["family"] = "mutated"
+
+	registry := sigma.NewRegistry()
+	if err := openai.RegisterEmbeddings(registry, providerID); err != nil {
+		t.Fatalf("openai.RegisterEmbeddings returned error: %v", err)
+	}
+	if err := sigma.RegisterEmbeddingModel(registry, model); err != nil {
+		t.Fatalf("RegisterEmbeddingModel returned error: %v", err)
+	}
+	client := sigma.NewClient(
+		sigma.WithRegistry(registry),
+		sigma.WithAuthResolver(staticCredential("local")),
+	)
+
+	_, err := client.Embed(
+		context.Background(),
+		model,
+		sigma.EmbeddingRequest{Inputs: []string{"hi"}, Dimensions: 512},
+		sigma.WithEmbeddingHeader("X-Model", "request"),
+	)
+	if err != nil {
+		t.Fatalf("Embed returned error: %v", err)
+	}
+
+	request := receiveCustomModelRequest(t, requests)
+	if got, want := request.Path, "/embeddings"; got != want {
+		t.Fatalf("path = %q, want %q", got, want)
+	}
+	assertHeaderValue(t, request.Headers, "Authorization", "Bearer local")
+	assertHeaderValue(t, request.Headers, "X-Model", "request")
+	assertHeaderValue(t, request.Headers, "X-Model-Only", "present")
+	assertJSONMap(t, request.Body, map[string]any{
+		"model":           "local-embed",
+		"input":           []any{"hi"},
+		"encoding_format": "float",
+		"dimensions":      float64(512),
+	})
+	if got, want := model.ProviderMetadata["family"], "local"; got != want {
+		t.Fatalf("provider metadata family = %q, want %q", got, want)
+	}
+}
+
 func TestCustomModelRegistrationDuplicateAndIsolation(t *testing.T) {
 	t.Parallel()
 

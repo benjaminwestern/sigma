@@ -109,10 +109,17 @@ See [release notes](docs/release-notes-v0.3.0.md).
   model discovery, request-scoped embedding options, redacted embedding debug
   hooks, OpenAI `/v1/embeddings` support, and generated metadata for
   `text-embedding-3-small` and `text-embedding-3-large`.
+- Embedding results now include typed SDK-level attempt metadata for provider,
+  API, model, retry attempt, status code, request ID, and per-attempt latency.
+- `sigma.OpenAICompatibleEmbeddingModel` now constructs metadata for caller-
+  registered OpenAI-compatible embedding endpoints without hand-written model
+  metadata maps.
+- Embedding model metadata now exposes supported dimension ranges alongside
+  default dimensions, max input tokens, and input-token pricing.
 - Embedding batches can now use `Client.EmbedBatch` for duplicate input reuse,
   retry-aware batch splitting, optional oversized-input splitting, progress
-  callbacks, and aggregate usage/cost summaries while preserving the existing
-  provider-neutral embedding contracts.
+  callbacks, and aggregate status/request/usage/cost summaries while preserving
+  the existing provider-neutral embedding contracts.
 
 ### Compatibility
 
@@ -144,10 +151,10 @@ See [release notes](docs/release-notes-v0.3.0.md).
   environments should use SSE fallback.
 - Token usage and cost reporting come from provider usage data and model
   metadata; tokenizer-based token estimates are deferred.
-- Embeddings are currently limited to OpenAI text embedding models. Vector
-  stores, general chunking, similarity/ranking helpers, tokenizer estimates,
-  provider-selection fallback, non-OpenAI embedding adapters, and live
-  embedding probes remain deferred.
+- Built-in embeddings are currently limited to OpenAI text embedding models.
+  Vector stores, general chunking, similarity/ranking helpers, tokenizer
+  estimates, provider-selection fallback, non-OpenAI embedding adapters, and
+  live embedding probes remain deferred.
 - Built-in model metadata is still refreshed through the curated checked-in
   catalog; automated `models.dev`/provider-catalog ingestion is deferred until
   it can preserve deterministic review and fixtures.

@@ -59,7 +59,7 @@ func (p *EmbeddingsProvider) Embed(ctx context.Context, model sigma.EmbeddingMod
 	ctx, cancel := sigma.ContextWithRequestTimeout(ctx, opts)
 	defer cancel()
 
-	resp, err := sigma.DoHTTPWithRetry(
+	resp, attempts, err := sigma.DoHTTPWithRetryAttempts(
 		ctx,
 		p.base.httpClient(opts),
 		opts,
@@ -71,25 +71,30 @@ func (p *EmbeddingsProvider) Embed(ctx context.Context, model sigma.EmbeddingMod
 		},
 		sigma.EmbeddingResponseDebugHTTPHook(ctx, opts, model.Provider, sigma.EmbeddingAPIOpenAIEmbeddings, model.ID),
 	)
+	embeddingAttempts := embeddingAttemptsFromHTTP(model, attempts)
 	if err != nil {
+		response := sigma.Embeddings{Model: model.ID, Provider: model.Provider, Attempts: embeddingAttempts}
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || ctx.Err() != nil {
-			return sigma.Embeddings{}, contextError(ctx, err)
+			return response, contextError(ctx, err)
 		}
-		return sigma.Embeddings{}, err
+		return response, fmt.Errorf("openai embeddings: request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 16<<20))
 	if err != nil {
+		response := sigma.Embeddings{Model: model.ID, Provider: model.Provider, Attempts: embeddingAttempts}
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || ctx.Err() != nil {
-			return sigma.Embeddings{}, contextError(ctx, err)
+			return response, contextError(ctx, err)
 		}
-		return sigma.Embeddings{}, fmt.Errorf("openai embeddings: read response: %w", err)
+		return response, fmt.Errorf("openai embeddings: read response: %w", err)
 	}
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return sigma.Embeddings{}, embeddingsProviderError(resp, model, body, nil)
+		return sigma.Embeddings{Model: model.ID, Provider: model.Provider, Attempts: embeddingAttempts}, embeddingsProviderError(resp, model, body, nil)
 	}
-	return decodeEmbeddingsResponse(body, model)
+	embeddings, err := decodeEmbeddingsResponse(body, model)
+	embeddings.Attempts = embeddingAttempts
+	return embeddings, err
 }
 
 func (p *EmbeddingsProvider) newRequest(ctx context.Context, model sigma.EmbeddingModel, req sigma.EmbeddingRequest, opts sigma.Options) (*http.Request, error) {
@@ -190,7 +195,9 @@ func (p *EmbeddingsProvider) endpoint(model sigma.EmbeddingModel, opts sigma.Opt
 
 func (p *EmbeddingsProvider) baseURLForModel(model sigma.EmbeddingModel, opts sigma.Options) string {
 	baseURL := p.base.defaultBaseURL()
-	if value, ok := model.ProviderMetadata["baseURL"].(string); ok && strings.TrimSpace(value) != "" {
+	if value, ok := model.ProviderMetadata[sigma.MetadataOpenAICompatibleBaseURL].(string); ok && strings.TrimSpace(value) != "" {
+		baseURL = value
+	} else if value, ok := model.ProviderMetadata["baseURL"].(string); ok && strings.TrimSpace(value) != "" {
 		baseURL = value
 	}
 	options := providerOptions(opts, model.Provider)
@@ -203,15 +210,35 @@ func (p *EmbeddingsProvider) baseURLForModel(model sigma.EmbeddingModel, opts si
 }
 
 func addEmbeddingModelHeaders(req *http.Request, model sigma.EmbeddingModel) {
-	headers, ok := model.ProviderMetadata["headers"].(map[string]string)
-	if !ok {
-		return
-	}
+	headers := embeddingModelHeaders(model)
 	for key, value := range headers {
-		if strings.TrimSpace(value) == "" {
+		if strings.TrimSpace(value) == "" || unsafeCredentialHeader(key) {
 			continue
 		}
 		req.Header.Set(key, value)
+	}
+}
+
+func embeddingModelHeaders(model sigma.EmbeddingModel) map[string]string {
+	raw, ok := model.ProviderMetadata[sigma.MetadataOpenAICompatibleHeaders]
+	if !ok {
+		raw = model.ProviderMetadata["headers"]
+	}
+	switch headers := raw.(type) {
+	case map[string]string:
+		return headers
+	case map[string]any:
+		copied := make(map[string]string, len(headers))
+		for key, value := range headers {
+			text, ok := value.(string)
+			if !ok {
+				continue
+			}
+			copied[key] = text
+		}
+		return copied
+	default:
+		return nil
 	}
 }
 
@@ -294,4 +321,23 @@ func embeddingsProviderError(resp *http.Response, model sigma.EmbeddingModel, bo
 		body,
 		err,
 	)
+}
+
+func embeddingAttemptsFromHTTP(model sigma.EmbeddingModel, attempts []sigma.HTTPAttempt) []sigma.EmbeddingAttempt {
+	if len(attempts) == 0 {
+		return nil
+	}
+	out := make([]sigma.EmbeddingAttempt, 0, len(attempts))
+	for _, attempt := range attempts {
+		out = append(out, sigma.EmbeddingAttempt{
+			Provider:   model.Provider,
+			API:        sigma.EmbeddingAPIOpenAIEmbeddings,
+			Model:      model.ID,
+			Attempt:    attempt.Attempt,
+			StatusCode: attempt.StatusCode,
+			RequestID:  attempt.RequestID,
+			Latency:    attempt.Latency,
+		})
+	}
+	return out
 }

@@ -216,6 +216,7 @@ func cloneEmbeddings(response sigma.Embeddings) sigma.Embeddings {
 	}
 	response.Usage = ptrCopy(response.Usage)
 	response.Cost = ptrCopy(response.Cost)
+	response.Attempts = append([]sigma.EmbeddingAttempt(nil), response.Attempts...)
 	response.ProviderMetadata = cloneMap(response.ProviderMetadata)
 	return response
 }

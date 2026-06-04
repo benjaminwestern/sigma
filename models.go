@@ -5,6 +5,8 @@
 
 package sigma
 
+import "time"
+
 //go:generate go run ./cmd/sigma-generate-models
 
 // Model describes a provider model available through sigma.
@@ -120,6 +122,54 @@ func OpenAICompatibleModel(config OpenAICompatibleModelConfig) Model {
 	}
 }
 
+// OpenAICompatibleEmbeddingModelConfig configures OpenAICompatibleEmbeddingModel.
+type OpenAICompatibleEmbeddingModelConfig struct {
+	ID                  ModelID
+	Provider            ProviderID
+	BaseURL             string
+	Name                string
+	Headers             map[string]string
+	DefaultDimensions   int
+	MinDimensions       int
+	MaxDimensions       int
+	MaxInputTokens      int
+	InputCostPerMillion float64
+	CostCurrency        string
+	ProviderMetadata    map[string]any
+}
+
+// OpenAICompatibleEmbeddingModel constructs metadata for an OpenAI
+// Embeddings-compatible model. Register the returned model on the same registry
+// as an OpenAI embeddings provider, then pass that registry to NewClient with
+// WithRegistry for an isolated setup.
+func OpenAICompatibleEmbeddingModel(config OpenAICompatibleEmbeddingModelConfig) EmbeddingModel {
+	metadata := copyStringAnyMap(config.ProviderMetadata)
+	if metadata == nil {
+		metadata = make(map[string]any)
+	}
+	metadata[MetadataOpenAICompatible] = true
+	if config.BaseURL != "" {
+		metadata[MetadataOpenAICompatibleBaseURL] = config.BaseURL
+	}
+	if len(config.Headers) > 0 {
+		metadata[MetadataOpenAICompatibleHeaders] = copyStringStringMap(config.Headers)
+	}
+
+	return EmbeddingModel{
+		ID:                  config.ID,
+		Provider:            config.Provider,
+		API:                 EmbeddingAPIOpenAIEmbeddings,
+		Name:                config.Name,
+		DefaultDimensions:   config.DefaultDimensions,
+		MinDimensions:       config.MinDimensions,
+		MaxDimensions:       config.MaxDimensions,
+		MaxInputTokens:      config.MaxInputTokens,
+		InputCostPerMillion: config.InputCostPerMillion,
+		CostCurrency:        config.CostCurrency,
+		ProviderMetadata:    metadata,
+	}
+}
+
 // AzureOpenAIResponsesConfig carries Azure-specific model metadata for the
 // Responses API. Endpoint is the Azure OpenAI resource endpoint, Deployment is
 // the deployment name sent as the Responses model, APIVersion is the
@@ -160,6 +210,8 @@ type EmbeddingModel struct {
 	API                 EmbeddingAPI   `json:"api,omitempty"`
 	Name                string         `json:"name,omitempty"`
 	DefaultDimensions   int            `json:"defaultDimensions,omitempty"`
+	MinDimensions       int            `json:"minDimensions,omitempty"`
+	MaxDimensions       int            `json:"maxDimensions,omitempty"`
 	MaxInputTokens      int            `json:"maxInputTokens,omitempty"`
 	InputCostPerMillion float64        `json:"inputCostPerMillion,omitempty"`
 	CostCurrency        string         `json:"costCurrency,omitempty"`
@@ -221,14 +273,26 @@ type Embedding struct {
 	Vector []float32 `json:"vector,omitempty"`
 }
 
+// EmbeddingAttempt records SDK-level metadata for one embedding provider attempt.
+type EmbeddingAttempt struct {
+	Provider   ProviderID    `json:"provider,omitempty"`
+	API        EmbeddingAPI  `json:"api,omitempty"`
+	Model      ModelID       `json:"model,omitempty"`
+	Attempt    int           `json:"attempt,omitempty"`
+	StatusCode int           `json:"statusCode,omitempty"`
+	RequestID  string        `json:"requestID,omitempty"`
+	Latency    time.Duration `json:"latency,omitempty"`
+}
+
 // Embeddings is provider-neutral embedding output plus request metadata.
 type Embeddings struct {
-	Vectors          []Embedding    `json:"vectors,omitempty"`
-	Usage            *Usage         `json:"usage,omitempty"`
-	Cost             *Cost          `json:"cost,omitempty"`
-	Model            ModelID        `json:"model,omitempty"`
-	Provider         ProviderID     `json:"provider,omitempty"`
-	ProviderMetadata map[string]any `json:"providerMetadata,omitempty"`
+	Vectors          []Embedding        `json:"vectors,omitempty"`
+	Usage            *Usage             `json:"usage,omitempty"`
+	Cost             *Cost              `json:"cost,omitempty"`
+	Model            ModelID            `json:"model,omitempty"`
+	Provider         ProviderID         `json:"provider,omitempty"`
+	Attempts         []EmbeddingAttempt `json:"attempts,omitempty"`
+	ProviderMetadata map[string]any     `json:"providerMetadata,omitempty"`
 }
 
 func cloneModel(model Model) Model {

@@ -125,9 +125,50 @@ func TestGenerateEmbeddingsProviderErrorIsTypedAndRedacted(t *testing.T) {
 	if got, want := providerErr.API, sigma.API(sigma.EmbeddingAPIOpenAIEmbeddings); got != want {
 		t.Fatalf("provider error API = %q, want %q", got, want)
 	}
+	if len(response.Attempts) != 1 {
+		t.Fatalf("attempts = %#v, want one failed attempt", response.Attempts)
+	}
+	assertEmbeddingAttempt(t, response.Attempts[0], sigma.ProviderOpenAI, "text-embedding-3-small", 0, http.StatusUnauthorized, "req_123")
 	if strings.Contains(err.Error(), "sk-secret123") {
 		t.Fatalf("error leaked secret: %v", err)
 	}
+}
+
+func TestGenerateEmbeddingsRecordsRetryAttempts(t *testing.T) {
+	t.Parallel()
+
+	var callCount int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		switch callCount {
+		case 1:
+			w.Header().Set("x-request-id", "req_retry")
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = io.WriteString(w, `{"error":{"message":"try again"}}`)
+		default:
+			w.Header().Set("x-request-id", "req_ok")
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(w, `{"data":[{"index":0,"embedding":[0.1]}],"usage":{"prompt_tokens":1,"total_tokens":1}}`)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	client := openAIEmbeddingsTestClient(t, server.URL)
+	response, err := client.Embed(
+		context.Background(),
+		openAIEmbeddingModel(),
+		sigma.EmbeddingRequest{Inputs: []string{"hi"}},
+		sigma.WithEmbeddingMaxRetries(1),
+		sigma.WithEmbeddingMaxRetryDelay(0),
+	)
+	if err != nil {
+		t.Fatalf("Embed returned error: %v", err)
+	}
+	if len(response.Attempts) != 2 {
+		t.Fatalf("attempts = %#v, want retry then success", response.Attempts)
+	}
+	assertEmbeddingAttempt(t, response.Attempts[0], sigma.ProviderOpenAI, "text-embedding-3-small", 0, http.StatusInternalServerError, "req_retry")
+	assertEmbeddingAttempt(t, response.Attempts[1], sigma.ProviderOpenAI, "text-embedding-3-small", 1, http.StatusOK, "req_ok")
 }
 
 func TestGenerateEmbeddingsDebugHooksAreRedacted(t *testing.T) {
@@ -173,6 +214,34 @@ func TestGenerateEmbeddingsDebugHooksAreRedacted(t *testing.T) {
 	}
 	if got := responseDebug.Headers.Get("Set-Cookie"); got != "[redacted]" {
 		t.Fatalf("response Set-Cookie = %q, want redacted", got)
+	}
+}
+
+func assertEmbeddingAttempt(
+	t *testing.T,
+	attempt sigma.EmbeddingAttempt,
+	provider sigma.ProviderID,
+	model sigma.ModelID,
+	attemptIndex int,
+	statusCode int,
+	requestID string,
+) {
+	t.Helper()
+
+	if attempt.Provider != provider || attempt.API != sigma.EmbeddingAPIOpenAIEmbeddings || attempt.Model != model {
+		t.Fatalf("attempt target = %#v, want provider %q api %q model %q", attempt, provider, sigma.EmbeddingAPIOpenAIEmbeddings, model)
+	}
+	if attempt.Attempt != attemptIndex {
+		t.Fatalf("attempt index = %d, want %d", attempt.Attempt, attemptIndex)
+	}
+	if attempt.StatusCode != statusCode {
+		t.Fatalf("attempt status = %d, want %d", attempt.StatusCode, statusCode)
+	}
+	if attempt.RequestID != requestID {
+		t.Fatalf("attempt request id = %q, want %q", attempt.RequestID, requestID)
+	}
+	if attempt.Latency < 0 {
+		t.Fatalf("attempt latency = %s, want non-negative", attempt.Latency)
 	}
 }
 

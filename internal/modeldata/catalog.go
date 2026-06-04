@@ -83,6 +83,8 @@ type EmbeddingModel struct {
 	API                 string            `json:"api"`
 	BaseURL             string            `json:"baseURL"`
 	DefaultDimensions   int               `json:"defaultDimensions"`
+	MinDimensions       int               `json:"minDimensions"`
+	MaxDimensions       int               `json:"maxDimensions"`
 	MaxInputTokens      int               `json:"maxInputTokens"`
 	InputCostPerMillion float64           `json:"inputCostPerMillion"`
 	Currency            string            `json:"currency"`
@@ -350,6 +352,18 @@ func validateEmbeddingModel(model EmbeddingModel) error {
 	}
 	if model.DefaultDimensions <= 0 {
 		return fmt.Errorf("defaultDimensions must be positive")
+	}
+	if model.MinDimensions <= 0 {
+		return fmt.Errorf("minDimensions must be positive")
+	}
+	if model.MaxDimensions <= 0 {
+		return fmt.Errorf("maxDimensions must be positive")
+	}
+	if model.MinDimensions > model.MaxDimensions {
+		return fmt.Errorf("minDimensions must be less than or equal to maxDimensions")
+	}
+	if model.DefaultDimensions < model.MinDimensions || model.DefaultDimensions > model.MaxDimensions {
+		return fmt.Errorf("defaultDimensions must be within supported dimensions")
 	}
 	if model.MaxInputTokens <= 0 {
 		return fmt.Errorf("maxInputTokens must be positive")
