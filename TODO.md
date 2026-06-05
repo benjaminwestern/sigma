@@ -226,8 +226,10 @@ evidence bar.
 The Google adapters already cover the v0.2 request and stream slice with
 deterministic fixtures. The next useful hardening pass around Vertex
 credentials, model-scoped routing metadata, and tool-call replay for
-Google-hosted non-Gemini routes is complete. Broader model coverage should
-still come through the catalog refresh workflow.
+Google-hosted non-Gemini routes is complete. Vertex project/location routing
+stays explicit through `VertexConfig` or provider options, and ADC/OAuth tokens
+stay caller-supplied through `WithVertexTokenProvider`. Broader model coverage
+should still come through the catalog refresh workflow.
 
 - [x] Treat Vertex API-key placeholder values such as angle-bracket markers and
       local credential sentinels as unavailable in auto credential mode, so a
@@ -242,6 +244,9 @@ still come through the catalog refresh workflow.
       native Gemini requests.
 - [ ] Keep live Google Gemini API and Vertex AI validation out of `mise run ci`;
       use credential-gated probes only for manual compatibility investigation.
+- [ ] Keep ambient Vertex project/location environment fallback and built-in ADC
+      token discovery deferred unless Sigma adds a broader provider credential
+      loading policy.
 - [ ] Add broader Vertex-specific fixtures only when Vertex behavior diverges
       from the shared Google payload or stream parser.
 - [ ] Expand Google and Vertex catalog coverage only through the catalog refresh

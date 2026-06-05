@@ -21,6 +21,10 @@ See [release notes](docs/release-notes-v0.4.0.md).
 - OpenAI-compatible Chat Completions replay now omits empty assistant history
   turns and can opt specific compatibility routes into empty `tools: []`
   payloads when prior tool-call history requires the tools field.
+- Google Vertex AI routing remains an explicit provider contract: callers pass
+  project/location through `VertexConfig` or provider options and supply
+  ADC/OAuth tokens with `WithVertexTokenProvider`, while ambient routing and
+  built-in ADC discovery remain deferred.
 
 ## [0.3.0] - 2026-06-05
 

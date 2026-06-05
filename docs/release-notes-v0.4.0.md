@@ -9,7 +9,8 @@ checklist see [RELEASING.md](../RELEASING.md).
 
 `sigma` v0.4.0 is open for development. The first compatibility fixes tighten
 structured-output request shaping, OpenAI Responses reasoning replay defaults,
-and OpenAI-compatible Chat Completions history replay for stricter routes.
+OpenAI-compatible Chat Completions history replay for stricter routes, and the
+documented Google Vertex explicit-routing contract.
 
 ## Added
 
@@ -23,6 +24,9 @@ and OpenAI-compatible Chat Completions history replay for stricter routes.
 - OpenAI-compatible Chat Completions replay now skips empty assistant history
   turns and supports an opt-in compatibility flag for routes that require an
   empty tools array when replaying prior tool-call history.
+- Google Vertex AI keeps project/location routing explicit through
+  `VertexConfig` or provider options and continues to use caller-supplied
+  `WithVertexTokenProvider` sources for ADC/OAuth tokens.
 
 ## Compatibility
 
@@ -35,10 +39,15 @@ and OpenAI-compatible Chat Completions history replay for stricter routes.
   caller precedence while adding safer defaults for ordinary reasoning replay.
 - OpenAI-compatible Chat Completions keeps empty `tools` arrays out of default
   payloads and enables them only for compatibility routes that opt in.
+- Google Vertex AI does not read ambient project/location routing or load ADC
+  tokens itself; applications should resolve those inputs before registering or
+  calling the provider.
 
 ## Deferred work
 
 - Deferred work continues to be tracked in [TODO.md](../TODO.md).
+- Ambient Vertex project/location fallback and built-in ADC token discovery
+  remain deferred pending a broader provider credential-loading policy.
 
 ## Validation status
 

@@ -169,10 +169,11 @@ _ = google.RegisterVertex(registry, sigma.ProviderGoogleVertex,
 )
 ```
 
-Routing commonly comes from `GOOGLE_CLOUD_PROJECT` and
-`GOOGLE_CLOUD_LOCATION` or `GOOGLE_CLOUD_REGION`. API-key auth can use
-`GOOGLE_API_KEY` or `GOOGLE_CLOUD_API_KEY`; ADC/OAuth auth should be supplied
-with `google.WithVertexTokenProvider`.
+Applications commonly resolve routing from `GOOGLE_CLOUD_PROJECT` and
+`GOOGLE_CLOUD_LOCATION` or `GOOGLE_CLOUD_REGION`, then pass it through
+`VertexConfig` or provider options. API-key auth can use `GOOGLE_API_KEY` or
+`GOOGLE_CLOUD_API_KEY`; ADC/OAuth auth should be supplied with
+`google.WithVertexTokenProvider`.
 
 ### Mistral Conversations
 
