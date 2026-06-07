@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/wintermi/sigma"
+	"github.com/wintermi/sigma/internal/transform"
 )
 
 const (
@@ -28,7 +29,8 @@ const (
 )
 
 func responsesPayload(model sigma.Model, req sigma.Request, opts sigma.Options) (map[string]any, error) {
-	input, err := responsesInput(model, req)
+	cleaned := transform.DropUnansweredToolCalls(req)
+	input, err := responsesInput(model, cleaned)
 	if err != nil {
 		return nil, err
 	}
@@ -39,8 +41,8 @@ func responsesPayload(model sigma.Model, req sigma.Request, opts sigma.Options) 
 		"store":  false,
 		"stream": true,
 	}
-	if req.SystemPrompt != "" {
-		payload["instructions"] = providerText(req.SystemPrompt)
+	if cleaned.SystemPrompt != "" {
+		payload["instructions"] = providerText(cleaned.SystemPrompt)
 	}
 	if opts.Temperature != nil {
 		payload["temperature"] = *opts.Temperature
@@ -60,8 +62,8 @@ func responsesPayload(model sigma.Model, req sigma.Request, opts sigma.Options) 
 	}
 	addResponsesReasoning(payload, model, opts)
 	addResponsesReasoningInclude(payload, model, opts)
-	if len(req.Tools) > 0 {
-		tools, err := responsesTools(req.Tools)
+	if len(cleaned.Tools) > 0 {
+		tools, err := responsesTools(cleaned.Tools)
 		if err != nil {
 			return nil, err
 		}

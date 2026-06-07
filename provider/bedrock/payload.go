@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/wintermi/sigma"
+	"github.com/wintermi/sigma/internal/providertext"
 	"github.com/wintermi/sigma/internal/transform"
 )
 
@@ -153,7 +154,8 @@ func conversePayload(model sigma.Model, req sigma.Request, opts sigma.Options, c
 		TargetModel: model,
 		Request:     req,
 		Compatibility: transform.Compatibility{
-			ConvertDeveloperRole: true,
+			ConvertDeveloperRole:    true,
+			DropUnansweredToolCalls: true,
 		},
 	})
 	if err != nil {
@@ -176,7 +178,7 @@ func conversePayload(model sigma.Model, req sigma.Request, opts sigma.Options, c
 		return ConverseRequest{}, unsupportedError(model, "bedrock converse stream: model id is required")
 	}
 	if transformed.SystemPrompt != "" {
-		payload.System = append(payload.System, ConverseContentBlock{Type: converseBlockText, Text: transformed.SystemPrompt})
+		payload.System = append(payload.System, ConverseContentBlock{Type: converseBlockText, Text: providertext.Clean(transformed.SystemPrompt)})
 	}
 	if cachePointsEnabled(model, opts.CacheRetention) {
 		cachePoint := cachePointBlock(opts.CacheRetention)
@@ -317,7 +319,7 @@ func converseToolResultContent(blocks []sigma.ContentBlock) ([]ConverseToolResul
 	for _, block := range blocks {
 		switch block.Type {
 		case sigma.ContentBlockText:
-			content = append(content, ConverseToolResultContent{Type: converseBlockText, Text: block.Text})
+			content = append(content, ConverseToolResultContent{Type: converseBlockText, Text: providertext.Clean(block.Text)})
 		case sigma.ContentBlockImage:
 			image, err := converseImage(block)
 			if err != nil {
@@ -339,7 +341,7 @@ func converseInputContent(blocks []sigma.ContentBlock) ([]ConverseContentBlock, 
 	for _, block := range blocks {
 		switch block.Type {
 		case sigma.ContentBlockText:
-			content = append(content, ConverseContentBlock{Type: converseBlockText, Text: block.Text})
+			content = append(content, ConverseContentBlock{Type: converseBlockText, Text: providertext.Clean(block.Text)})
 		case sigma.ContentBlockImage:
 			image, err := converseImage(block)
 			if err != nil {
@@ -358,10 +360,10 @@ func converseAssistantContent(blocks []sigma.ContentBlock) ([]ConverseContentBlo
 	for _, block := range blocks {
 		switch block.Type {
 		case sigma.ContentBlockText:
-			content = append(content, ConverseContentBlock{Type: converseBlockText, Text: block.Text})
+			content = append(content, ConverseContentBlock{Type: converseBlockText, Text: providertext.Clean(block.Text)})
 		case sigma.ContentBlockThinking:
 			reasoning := &ConverseReasoningBlock{
-				Text:              block.ThinkingText,
+				Text:              providertext.Clean(block.ThinkingText),
 				Signature:         block.Signature,
 				ProviderSignature: firstNonEmpty(block.ProviderSignature, block.Signature),
 				Redacted:          block.Redacted,

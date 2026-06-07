@@ -198,6 +198,54 @@ func TestResponsesNormalizesProviderTextInPayload(t *testing.T) {
 	assertResponsesToolOutputText(t, payload.Input[5], "toolclean")
 }
 
+func TestResponsesDropsUnansweredToolCallsBeforeUserTurn(t *testing.T) {
+	t.Parallel()
+
+	requests := make(chan capturedRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captureRequest(t, requests, r)
+		writeResponsesSSE(t, w, responsesCompletedEvent)
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("responses-drop-unanswered-tool-test")
+	model := responsesTestModel(providerID)
+	client := responsesTestClient(t, providerID, model, server.URL)
+
+	_, err := client.Complete(
+		context.Background(),
+		model,
+		sigma.Request{Messages: []sigma.Message{
+			{
+				Role: sigma.RoleAssistant,
+				Content: []sigma.ContentBlock{
+					sigma.ToolCallBlock("call_abandoned", "lookup", map[string]any{"query": "weather"}),
+				},
+			},
+			sigma.UserText("Skip the lookup."),
+		}},
+	)
+	if err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+
+	var payload struct {
+		Input []map[string]any `json:"input"`
+	}
+	if err := json.Unmarshal(receiveRequest(t, requests).Body, &payload); err != nil {
+		t.Fatalf("Unmarshal request body returned error: %v", err)
+	}
+	if got, want := len(payload.Input), 1; got != want {
+		t.Fatalf("input count = %d, want %d", got, want)
+	}
+	if got, want := payload.Input[0]["role"], "user"; got != want {
+		t.Fatalf("input role = %v, want %q", got, want)
+	}
+	if got := payload.Input[0]["type"]; got != nil {
+		t.Fatalf("payload kept provider item type = %v", got)
+	}
+}
+
 func TestResponsesStreamingNormalizesInvalidUTF8(t *testing.T) {
 	t.Parallel()
 

@@ -7,6 +7,7 @@ package mistral_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -128,6 +129,115 @@ func TestCompleteSendsTextPayloadWithHooksHeadersAndOptions(t *testing.T) {
 	assertHeader(t, request.Headers, "X-Provider", "provider")
 	assertHeader(t, request.Headers, "X-Custom", "custom")
 	goldentest.AssertJSON(t, request.Body, "provider/mistral/conversations/rich_text_payload.json")
+}
+
+func TestConversationPayloadDropsUnansweredToolCallsBeforeUserTurn(t *testing.T) {
+	t.Parallel()
+
+	requests := make(chan capturedRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captureRequest(t, requests, r)
+		writeMistralSSE(t, w, completedEvent)
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("mistral-drop-unanswered-tool-test")
+	model := mistralTestModel(providerID)
+	client := mistralTestClient(t, providerID, model, server.URL)
+
+	_, err := client.Complete(
+		context.Background(),
+		model,
+		sigma.Request{Messages: []sigma.Message{
+			{
+				Role: sigma.RoleAssistant,
+				Content: []sigma.ContentBlock{
+					sigma.ToolCallBlock("call_abandoned", "lookup", map[string]any{"query": "weather"}),
+				},
+			},
+			sigma.UserText("Skip the lookup."),
+		}},
+	)
+	if err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+
+	payload := decodePayload(t, receiveRequest(t, requests).Body)
+	inputs := payload["inputs"].([]any)
+	if got, want := len(inputs), 1; got != want {
+		t.Fatalf("input count = %d, want %d", got, want)
+	}
+	input := inputs[0].(map[string]any)
+	if got, want := input["role"], "user"; got != want {
+		t.Fatalf("input role = %v, want %q", got, want)
+	}
+}
+
+func TestConversationPayloadNormalizesProviderText(t *testing.T) {
+	t.Parallel()
+
+	requests := make(chan capturedRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captureRequest(t, requests, r)
+		writeMistralSSE(t, w, completedEvent)
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("mistral-normalized-payload-test")
+	model := mistralTestModel(providerID)
+	model.SupportsThinking = true
+	client := mistralTestClient(t, providerID, model, server.URL)
+	invalid := invalidProviderText()
+
+	_, err := client.Complete(
+		context.Background(),
+		model,
+		sigma.Request{
+			SystemPrompt: "system" + invalid,
+			Messages: []sigma.Message{
+				{Role: sigma.RoleDeveloper, Content: []sigma.ContentBlock{sigma.Text("developer" + invalid)}},
+				sigma.UserText("user" + invalid),
+				{
+					Role: sigma.RoleAssistant,
+					Content: []sigma.ContentBlock{
+						sigma.Text("assistant" + invalid),
+						sigma.Thinking("thinking"+invalid, "sig"),
+						sigma.ToolCallBlock("call_invalid", "lookup", map[string]any{"query": "weather"}),
+					},
+				},
+				{Role: sigma.RoleTool, ToolCallID: "call_invalid", ToolName: "lookup", Content: []sigma.ContentBlock{sigma.Text("tool" + invalid)}},
+			},
+			Tools: []sigma.Tool{{Name: "lookup", InputSchema: sigma.Schema{"type": "object"}}},
+		},
+	)
+	if err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+
+	payload := decodePayload(t, receiveRequest(t, requests).Body)
+	if got, want := payload["instructions"], "systemclean"; got != want {
+		t.Fatalf("instructions = %v, want %q", got, want)
+	}
+	inputs := payload["inputs"].([]any)
+	if got, want := inputs[0].(map[string]any)["content"], "developerclean"; got != want {
+		t.Fatalf("developer content = %v, want %q", got, want)
+	}
+	if got, want := inputs[1].(map[string]any)["content"], "userclean"; got != want {
+		t.Fatalf("user content = %v, want %q", got, want)
+	}
+	assistant := inputs[2].(map[string]any)
+	content := assistant["content"].([]any)
+	if got, want := content[0].(map[string]any)["text"], "assistantclean"; got != want {
+		t.Fatalf("assistant text = %v, want %q", got, want)
+	}
+	thinking := content[1].(map[string]any)["thinking"].([]any)
+	if got, want := thinking[0].(map[string]any)["text"], "thinkingclean"; got != want {
+		t.Fatalf("thinking = %v, want %q", got, want)
+	}
+	tool := inputs[4].(map[string]any)
+	if got, want := tool["result"], "toolclean"; got != want {
+		t.Fatalf("tool result = %v, want %q", got, want)
+	}
 }
 
 func TestCompleteSetsSessionAffinityHeaderUnlessCallerOverrides(t *testing.T) {
@@ -933,6 +1043,20 @@ func receiveRequest(t *testing.T, requests <-chan capturedRequest) capturedReque
 		t.Fatal("server did not receive request")
 		return capturedRequest{}
 	}
+}
+
+func decodePayload(t *testing.T, body string) map[string]any {
+	t.Helper()
+
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(body), &payload); err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+	return payload
+}
+
+func invalidProviderText() string {
+	return string([]byte{0xff}) + "clean"
 }
 
 func writeMistralSSE(t *testing.T, w http.ResponseWriter, body string) {

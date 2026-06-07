@@ -33,6 +33,7 @@ type Compatibility struct {
 	AssistantAfterToolResultMessage sigma.Message
 	RequireToolResultName           bool
 	ConvertDeveloperRole            bool
+	DropUnansweredToolCalls         bool
 }
 
 // Policy controls lossless request normalization choices.
@@ -80,7 +81,101 @@ func Transform(input Input) (sigma.Request, error) {
 		recordToolCalls(toolNamesByID, transformed)
 	}
 
+	if input.Compatibility.DropUnansweredToolCalls {
+		output.Messages = dropUnansweredToolCalls(output.Messages)
+	}
+
 	return output, nil
+}
+
+// DropUnansweredToolCalls returns a copy of req with replayed assistant tool
+// calls removed when a new user/developer turn arrived before the tool result.
+func DropUnansweredToolCalls(req sigma.Request) sigma.Request {
+	return sigma.Request{
+		SystemPrompt: req.SystemPrompt,
+		Messages:     dropUnansweredToolCalls(cloneMessages(req.Messages)),
+		Tools:        cloneTools(req.Tools),
+	}
+}
+
+func dropUnansweredToolCalls(messages []sigma.Message) []sigma.Message {
+	if len(messages) == 0 {
+		return nil
+	}
+	cleaned := make([]sigma.Message, 0, len(messages))
+	for index, message := range messages {
+		if message.Role != sigma.RoleAssistant || len(message.Content) == 0 {
+			cleaned = append(cleaned, message)
+			continue
+		}
+		answered := answeredToolCallsBeforeUserTurn(messages, index)
+		if answered == nil {
+			cleaned = append(cleaned, message)
+			continue
+		}
+		message.Content = dropUnansweredToolCallBlocks(message.Content, answered)
+		if len(message.Content) == 0 {
+			continue
+		}
+		cleaned = append(cleaned, message)
+	}
+	return cleaned
+}
+
+func answeredToolCallsBeforeUserTurn(messages []sigma.Message, assistantIndex int) map[string]struct{} {
+	callIDs := assistantToolCallIDs(messages[assistantIndex])
+	if len(callIDs) == 0 {
+		return nil
+	}
+	answered := make(map[string]struct{})
+	for index := assistantIndex + 1; index < len(messages); index++ {
+		message := messages[index]
+		switch message.Role {
+		case sigma.RoleTool:
+			if _, ok := callIDs[message.ToolCallID]; ok {
+				answered[message.ToolCallID] = struct{}{}
+			}
+		case sigma.RoleUser, sigma.RoleDeveloper:
+			return answered
+		case sigma.RoleAssistant:
+			return nil
+		}
+	}
+	return nil
+}
+
+func assistantToolCallIDs(message sigma.Message) map[string]struct{} {
+	ids := make(map[string]struct{})
+	for _, block := range message.Content {
+		if isClientToolCall(block) {
+			ids[block.ToolCallID] = struct{}{}
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	return ids
+}
+
+func dropUnansweredToolCallBlocks(blocks []sigma.ContentBlock, answered map[string]struct{}) []sigma.ContentBlock {
+	cleaned := make([]sigma.ContentBlock, 0, len(blocks))
+	for _, block := range blocks {
+		if isClientToolCall(block) {
+			if _, ok := answered[block.ToolCallID]; !ok {
+				continue
+			}
+		}
+		cleaned = append(cleaned, block)
+	}
+	return cleaned
+}
+
+func isClientToolCall(block sigma.ContentBlock) bool {
+	if block.Type != sigma.ContentBlockToolCall {
+		return false
+	}
+	metadataType, _ := block.ProviderMetadata["type"].(string)
+	return metadataType != "server_tool_use"
 }
 
 type messageContext struct {
@@ -183,6 +278,17 @@ func (policy Policy) withDefaults() Policy {
 func cloneMessage(message sigma.Message) sigma.Message {
 	message.Content = cloneContentBlocks(message.Content)
 	return message
+}
+
+func cloneMessages(messages []sigma.Message) []sigma.Message {
+	if len(messages) == 0 {
+		return nil
+	}
+	cloned := make([]sigma.Message, len(messages))
+	for index, message := range messages {
+		cloned[index] = cloneMessage(message)
+	}
+	return cloned
 }
 
 func cloneContentBlocks(blocks []sigma.ContentBlock) []sigma.ContentBlock {

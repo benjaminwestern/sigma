@@ -263,6 +263,126 @@ func TestTransformRepairsToolCallToolResultSequences(t *testing.T) {
 	}
 }
 
+func TestTransformDropsUnansweredToolCallsBeforeUserTurn(t *testing.T) {
+	t.Parallel()
+
+	request := sigma.Request{
+		Messages: []sigma.Message{
+			{
+				Role: sigma.RoleAssistant,
+				Content: []sigma.ContentBlock{
+					sigma.ToolCallBlock("call_unanswered", "lookup", map[string]any{"query": "weather"}),
+				},
+			},
+			sigma.UserText("Never mind, answer directly."),
+		},
+	}
+
+	transformed, err := Transform(Input{
+		TargetModel: sigma.Model{
+			ID:       "gpt-4.1",
+			Provider: sigma.ProviderOpenAI,
+			API:      sigma.APIOpenAIResponses,
+		},
+		Compatibility: Compatibility{
+			DropUnansweredToolCalls: true,
+		},
+		Request: request,
+	})
+	if err != nil {
+		t.Fatalf("Transform returned error: %v", err)
+	}
+
+	if got, want := len(transformed.Messages), 1; got != want {
+		t.Fatalf("message count = %d, want %d", got, want)
+	}
+	if got, want := transformed.Messages[0].Role, sigma.RoleUser; got != want {
+		t.Fatalf("remaining message role = %q, want %q", got, want)
+	}
+	if got, want := len(request.Messages[0].Content), 1; got != want {
+		t.Fatalf("original assistant content count = %d, want %d", got, want)
+	}
+}
+
+func TestTransformPreservesAnsweredToolCallsBeforeUserTurn(t *testing.T) {
+	t.Parallel()
+
+	transformed, err := Transform(Input{
+		TargetModel: sigma.Model{
+			ID:       "gpt-4.1",
+			Provider: sigma.ProviderOpenAI,
+			API:      sigma.APIOpenAIResponses,
+		},
+		Compatibility: Compatibility{
+			DropUnansweredToolCalls: true,
+		},
+		Request: sigma.Request{
+			Messages: []sigma.Message{
+				{
+					Role: sigma.RoleAssistant,
+					Content: []sigma.ContentBlock{
+						sigma.ToolCallBlock("call_answered", "lookup", map[string]any{"query": "weather"}),
+					},
+				},
+				sigma.ToolResult("call_answered", "18 C"),
+				sigma.UserText("Thanks."),
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Transform returned error: %v", err)
+	}
+
+	if got, want := len(transformed.Messages), 3; got != want {
+		t.Fatalf("message count = %d, want %d", got, want)
+	}
+	toolCall := transformed.Messages[0].Content[0]
+	if got, want := toolCall.ToolCallID, "call_answered"; got != want {
+		t.Fatalf("tool call id = %q, want %q", got, want)
+	}
+}
+
+func TestTransformDropsOnlyUnansweredToolCallBlocks(t *testing.T) {
+	t.Parallel()
+
+	transformed, err := Transform(Input{
+		TargetModel: sigma.Model{
+			ID:       "gpt-4.1",
+			Provider: sigma.ProviderOpenAI,
+			API:      sigma.APIOpenAIResponses,
+		},
+		Compatibility: Compatibility{
+			DropUnansweredToolCalls: true,
+		},
+		Request: sigma.Request{
+			Messages: []sigma.Message{
+				{
+					Role: sigma.RoleAssistant,
+					Content: []sigma.ContentBlock{
+						sigma.Text("I can look that up."),
+						sigma.ToolCallBlock("call_unanswered", "lookup", map[string]any{"query": "weather"}),
+					},
+				},
+				sigma.UserText("Skip the lookup."),
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Transform returned error: %v", err)
+	}
+
+	if got, want := len(transformed.Messages), 2; got != want {
+		t.Fatalf("message count = %d, want %d", got, want)
+	}
+	blocks := transformed.Messages[0].Content
+	if got, want := len(blocks), 1; got != want {
+		t.Fatalf("assistant content count = %d, want %d", got, want)
+	}
+	if got, want := blocks[0].Text, "I can look that up."; got != want {
+		t.Fatalf("assistant text = %q, want %q", got, want)
+	}
+}
+
 func TestTransformConvertsDeveloperRoleWhenRequired(t *testing.T) {
 	t.Parallel()
 

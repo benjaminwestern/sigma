@@ -89,6 +89,9 @@ integrations remain future work until they have the same local evidence bar.
       fallback while keeping the implementation stdlib-only.
 - [ ] Keep proxy-aware Codex WebSocket dialing deferred; proxy-constrained
       environments should use SSE fallback.
+- [ ] Keep Codex WebSocket-specific timeout knobs and debug-stat parity
+      deferred; the current preview transport uses request contexts, explicit
+      session cleanup helpers, and SSE fallback.
 - [x] Add OpenAI Codex device-code OAuth login and refresh helpers while keeping
       token persistence caller-owned.
 - [x] Add OpenAI Codex browser callback OAuth login while keeping token
@@ -138,6 +141,11 @@ work until their API boundaries are explicit.
       Gemini API and Vertex AI grounded responses.
 - [x] Synthesize Bedrock Converse tool specs from replayed assistant/tool
       history when the current request has no active tools.
+- [x] Drop abandoned local assistant tool-call blocks during provider replay
+      when a new user/developer turn arrives before the matching tool result,
+      while preserving answered calls and hosted provider tool metadata.
+- [x] Normalize invalid UTF-8 text before non-OpenAI provider JSON encoding for
+      Anthropic, Google/Vertex, Mistral, and Bedrock request builders.
 - [ ] Add provider-neutral document/PDF content blocks only after settling
       request, replay, debug-redaction, and provider compatibility semantics.
 - [ ] Decide whether Anthropic native `output_format` becomes a typed Sigma

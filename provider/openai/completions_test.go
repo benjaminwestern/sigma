@@ -269,6 +269,54 @@ func TestChatCompletionsNormalizesProviderTextInPayload(t *testing.T) {
 	assertPayloadText(t, payload.Messages[4]["content"], "toolclean")
 }
 
+func TestChatCompletionsDropsUnansweredToolCallsBeforeUserTurn(t *testing.T) {
+	t.Parallel()
+
+	requests := make(chan capturedRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captureRequest(t, requests, r)
+		writeFixture(t, w, "text_usage.sse")
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("openai-drop-unanswered-tool-test")
+	model := openAITestModel(providerID)
+	client := openAITestClient(t, providerID, model, server.URL)
+
+	_, err := client.Complete(
+		context.Background(),
+		model,
+		sigma.Request{Messages: []sigma.Message{
+			{
+				Role: sigma.RoleAssistant,
+				Content: []sigma.ContentBlock{
+					sigma.ToolCallBlock("call_abandoned", "lookup", map[string]any{"query": "weather"}),
+				},
+			},
+			sigma.UserText("Skip the lookup."),
+		}},
+	)
+	if err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+
+	var payload struct {
+		Messages []map[string]any `json:"messages"`
+	}
+	if err := json.Unmarshal(receiveRequest(t, requests).Body, &payload); err != nil {
+		t.Fatalf("Unmarshal request body returned error: %v", err)
+	}
+	if got, want := len(payload.Messages), 1; got != want {
+		t.Fatalf("message count = %d, want %d", got, want)
+	}
+	if got, want := payload.Messages[0]["role"], "user"; got != want {
+		t.Fatalf("message role = %v, want %q", got, want)
+	}
+	if _, ok := payload.Messages[0]["tool_calls"]; ok {
+		t.Fatalf("payload kept abandoned tool call: %#v", payload.Messages[0])
+	}
+}
+
 func TestChatCompletionsStreamingNormalizesInvalidUTF8(t *testing.T) {
 	t.Parallel()
 

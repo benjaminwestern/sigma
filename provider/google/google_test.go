@@ -127,6 +127,120 @@ func TestCompleteProviderBaseURLOptionOverridesModelMetadata(t *testing.T) {
 	}
 }
 
+func TestGenerativePayloadDropsUnansweredToolCallsBeforeUserTurn(t *testing.T) {
+	t.Parallel()
+
+	requests := make(chan capturedRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captureRequest(t, requests, r)
+		writeGoogleSSE(t, w, completedEvent)
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("google-drop-unanswered-tool-test")
+	model := googleTestModel(providerID)
+	client := googleTestClient(t, providerID, model, server.URL)
+
+	_, err := client.Complete(
+		context.Background(),
+		model,
+		sigma.Request{Messages: []sigma.Message{
+			{
+				Role: sigma.RoleAssistant,
+				Content: []sigma.ContentBlock{
+					sigma.ToolCallBlock("call_abandoned", "lookup", map[string]any{"query": "weather"}),
+				},
+			},
+			sigma.UserText("Skip the lookup."),
+		}},
+	)
+	if err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(receiveRequest(t, requests).Body), &payload); err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+	contents := payload["contents"].([]any)
+	if got, want := len(contents), 1; got != want {
+		t.Fatalf("content count = %d, want %d", got, want)
+	}
+	content := contents[0].(map[string]any)
+	if got, want := content["role"], "user"; got != want {
+		t.Fatalf("content role = %v, want %q", got, want)
+	}
+}
+
+func TestGenerativePayloadNormalizesProviderText(t *testing.T) {
+	t.Parallel()
+
+	requests := make(chan capturedRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captureRequest(t, requests, r)
+		writeGoogleSSE(t, w, completedEvent)
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("google-normalized-payload-test")
+	model := googleTestModel(providerID)
+	client := googleTestClient(t, providerID, model, server.URL)
+	invalid := invalidProviderText()
+
+	_, err := client.Complete(
+		context.Background(),
+		model,
+		sigma.Request{
+			SystemPrompt: "system" + invalid,
+			Messages: []sigma.Message{
+				{Role: sigma.RoleDeveloper, Content: []sigma.ContentBlock{sigma.Text("developer" + invalid)}},
+				sigma.UserText("user" + invalid),
+				{
+					Role: sigma.RoleAssistant,
+					Content: []sigma.ContentBlock{
+						sigma.Text("assistant" + invalid),
+						sigma.Thinking("thinking"+invalid, "sig"),
+						sigma.ToolCallBlock("call_invalid", "lookup", map[string]any{"query": "weather"}),
+					},
+				},
+				{Role: sigma.RoleTool, ToolCallID: "call_invalid", ToolName: "lookup", Content: []sigma.ContentBlock{sigma.Text("tool" + invalid)}},
+			},
+			Tools: []sigma.Tool{{Name: "lookup", InputSchema: sigma.Schema{"type": "object"}}},
+		},
+	)
+	if err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(receiveRequest(t, requests).Body), &payload); err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+	system := payload["systemInstruction"].(map[string]any)
+	systemParts := system["parts"].([]any)
+	if got, want := systemParts[0].(map[string]any)["text"], "systemclean"; got != want {
+		t.Fatalf("system text = %v, want %q", got, want)
+	}
+	contents := payload["contents"].([]any)
+	assertGoogleTextPart(t, contents[0], "developerclean")
+	assertGoogleTextPart(t, contents[1], "userclean")
+	assistant := contents[2].(map[string]any)
+	assistantParts := assistant["parts"].([]any)
+	if got, want := assistantParts[0].(map[string]any)["text"], "assistantclean"; got != want {
+		t.Fatalf("assistant text = %v, want %q", got, want)
+	}
+	if got, want := assistantParts[1].(map[string]any)["text"], "thinkingclean"; got != want {
+		t.Fatalf("thinking text = %v, want %q", got, want)
+	}
+	tool := contents[3].(map[string]any)
+	toolParts := tool["parts"].([]any)
+	functionResponse := toolParts[0].(map[string]any)["functionResponse"].(map[string]any)
+	response := functionResponse["response"].(map[string]any)
+	if got, want := response["output"], "toolclean"; got != want {
+		t.Fatalf("tool output = %v, want %q", got, want)
+	}
+}
+
 func TestCompleteSendsGoldenPayloadWithImagesToolsThinkingAndHooks(t *testing.T) {
 	t.Parallel()
 
@@ -1152,6 +1266,20 @@ func receiveRequest(t *testing.T, requests <-chan capturedRequest) capturedReque
 	default:
 		t.Fatal("server did not receive request")
 		return capturedRequest{}
+	}
+}
+
+func invalidProviderText() string {
+	return string([]byte{0xff}) + "clean"
+}
+
+func assertGoogleTextPart(t *testing.T, content any, want string) {
+	t.Helper()
+
+	typed := content.(map[string]any)
+	parts := typed["parts"].([]any)
+	if got := parts[0].(map[string]any)["text"]; got != want {
+		t.Fatalf("text part = %v, want %q", got, want)
 	}
 }
 

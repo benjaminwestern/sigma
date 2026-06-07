@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/wintermi/sigma"
+	"github.com/wintermi/sigma/internal/transform"
 )
 
 const (
@@ -31,7 +32,8 @@ const (
 )
 
 func chatCompletionsPayload(model sigma.Model, req sigma.Request, opts sigma.Options, compat completionsCompat) (map[string]any, error) {
-	messages, err := chatMessages(model, req, opts.CacheRetention, compat)
+	cleaned := transform.DropUnansweredToolCalls(req)
+	messages, err := chatMessages(model, cleaned, opts.CacheRetention, compat)
 	if err != nil {
 		return nil, err
 	}
@@ -61,8 +63,8 @@ func chatCompletionsPayload(model sigma.Model, req sigma.Request, opts sigma.Opt
 	addChatPromptCache(payload, opts, compat)
 	addReasoning(payload, model, opts, compat)
 	addChatOpenAIOptions(payload, opts, compat)
-	if len(req.Tools) > 0 {
-		tools, err := chatTools(model, req.Tools, compat)
+	if len(cleaned.Tools) > 0 {
+		tools, err := chatTools(model, cleaned.Tools, compat)
 		if err != nil {
 			return nil, err
 		}
@@ -70,7 +72,7 @@ func chatCompletionsPayload(model sigma.Model, req sigma.Request, opts sigma.Opt
 		if compat.supportsToolStream {
 			payload["tool_stream"] = true
 		}
-	} else if compat.requiresToolsForToolHistory && hasToolHistory(req.Messages) {
+	} else if compat.requiresToolsForToolHistory && hasToolHistory(cleaned.Messages) {
 		payload["tools"] = []map[string]any{}
 	}
 

@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/wintermi/sigma"
+	"github.com/wintermi/sigma/internal/providertext"
 	"github.com/wintermi/sigma/internal/transform"
 )
 
@@ -47,7 +48,8 @@ func conversationPayload(model sigma.Model, req sigma.Request, opts sigma.Option
 		TargetModel: model,
 		Request:     req,
 		Compatibility: transform.Compatibility{
-			ConvertDeveloperRole: true,
+			ConvertDeveloperRole:    true,
+			DropUnansweredToolCalls: true,
 		},
 	})
 	if err != nil {
@@ -65,7 +67,7 @@ func conversationPayload(model sigma.Model, req sigma.Request, opts sigma.Option
 		"stream": true,
 	}
 	if transformed.SystemPrompt != "" {
-		payload["instructions"] = transformed.SystemPrompt
+		payload["instructions"] = providertext.Clean(transformed.SystemPrompt)
 	}
 	if len(opts.Metadata) > 0 {
 		payload["metadata"] = copyAnyMap(opts.Metadata)
@@ -241,6 +243,7 @@ func (o *assistantOutput) addText(text string) {
 	if text == "" {
 		return
 	}
+	text = providertext.Clean(text)
 	if o.typed {
 		o.chunks = append(o.chunks, map[string]any{
 			payloadKeyType:   payloadValueText,
@@ -266,7 +269,7 @@ func (o *assistantOutput) addThinking(text string) {
 		payloadKeyType: "thinking",
 		"thinking": []map[string]any{{
 			payloadKeyType:   payloadValueText,
-			payloadValueText: text,
+			payloadValueText: providertext.Clean(text),
 		}},
 	})
 }
@@ -432,7 +435,7 @@ func conversationContentChunks(model sigma.Model, blocks []sigma.ContentBlock) (
 			}
 			chunks = append(chunks, map[string]any{
 				payloadKeyType:   payloadValueText,
-				payloadValueText: block.Text,
+				payloadValueText: providertext.Clean(block.Text),
 			})
 		case sigma.ContentBlockImage:
 			hasImage = true
@@ -475,7 +478,7 @@ func textContent(blocks []sigma.ContentBlock) string {
 	var text strings.Builder
 	for _, block := range blocks {
 		if block.Type == sigma.ContentBlockText {
-			text.WriteString(block.Text)
+			text.WriteString(providertext.Clean(block.Text))
 		}
 	}
 	return text.String()

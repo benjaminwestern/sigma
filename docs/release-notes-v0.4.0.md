@@ -14,7 +14,9 @@ Vertex AI routing for both Gemini and focused non-Gemini MaaS routes, and a
 focused provider-surface expansion for Google/Vertex image generation plus
 Google/Vertex/Bedrock embeddings. Provider replay and metadata hardening now
 also preserves Anthropic hosted-tool metadata, Google grounding sources, and
-Bedrock tool-use history in deterministic request shapes.
+Bedrock tool-use history in deterministic request shapes, drops abandoned local
+tool calls during replay, and normalizes invalid UTF-8 text before non-OpenAI
+provider JSON encoding.
 
 ## Added
 
@@ -66,6 +68,13 @@ Bedrock tool-use history in deterministic request shapes.
   normalized source entries from grounded responses.
 - Bedrock Converse Stream now synthesizes placeholder tool specs from replayed
   assistant/tool-call history when the current request has no active tools.
+- Provider replay now drops abandoned local assistant tool-call blocks when a
+  new user or developer turn arrives before the corresponding tool result,
+  while preserving answered tool-call history and hosted provider tool
+  metadata.
+- Anthropic Messages, Google Gemini API/Vertex AI, Mistral Conversations, and
+  Bedrock Converse request builders now strip invalid UTF-8 from replayed text
+  before provider JSON encoding, matching OpenAI-compatible request cleanup.
 
 ## Compatibility
 
@@ -112,6 +121,12 @@ Bedrock tool-use history in deterministic request shapes.
 - Bedrock replay tool specs are synthesized only from existing tool-use history
   when no active tools are present; explicit tools and tool-choice options keep
   precedence.
+- Abandoned tool-call cleanup applies only to local client function/tool calls.
+  Hosted provider tool metadata remains replayable through provider metadata,
+  and answered tool-call/tool-result pairs are preserved.
+- Invalid UTF-8 cleanup removes malformed byte sequences from text fields before
+  provider dispatch without changing valid Unicode, emoji, images, tool
+  arguments, provider signatures, or provider metadata.
 
 ## Deferred work
 
@@ -135,6 +150,9 @@ Bedrock tool-use history in deterministic request shapes.
 - Provider-neutral document/PDF content blocks, Anthropic native output-format
   policy, and broader first-class provider row promotion remain deferred until
   their public API and deterministic fixture boundaries are settled.
+- Codex WebSocket-specific timeout knobs, debug-stat parity, and proxy-aware
+  dialing remain deferred; the current transport keeps using request contexts,
+  session cleanup helpers, and SSE fallback.
 
 ## Validation status
 

@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/wintermi/sigma"
+	"github.com/wintermi/sigma/internal/providertext"
 	"github.com/wintermi/sigma/internal/transform"
 )
 
@@ -49,8 +50,9 @@ func generativePayload(model sigma.Model, req sigma.Request, opts sigma.Options)
 		TargetModel: model,
 		Request:     req,
 		Compatibility: transform.Compatibility{
-			ConvertDeveloperRole:  true,
-			RequireToolResultName: true,
+			ConvertDeveloperRole:    true,
+			RequireToolResultName:   true,
+			DropUnansweredToolCalls: true,
 		},
 	})
 	if err != nil {
@@ -67,7 +69,7 @@ func generativePayload(model sigma.Model, req sigma.Request, opts sigma.Options)
 	}
 	if transformed.SystemPrompt != "" {
 		payload["systemInstruction"] = map[string]any{
-			"parts": []map[string]any{{"text": transformed.SystemPrompt}},
+			"parts": []map[string]any{{"text": providertext.Clean(transformed.SystemPrompt)}},
 		}
 	}
 
@@ -166,7 +168,7 @@ func googleInputParts(blocks []sigma.ContentBlock) ([]map[string]any, error) {
 	for _, block := range blocks {
 		switch block.Type {
 		case sigma.ContentBlockText:
-			parts = append(parts, map[string]any{"text": block.Text})
+			parts = append(parts, map[string]any{"text": providertext.Clean(block.Text)})
 		case sigma.ContentBlockImage:
 			image, err := googleImage(block)
 			if err != nil {
@@ -185,12 +187,12 @@ func googleAssistantParts(model sigma.Model, message sigma.Message, ids *googleT
 	for _, block := range message.Content {
 		switch block.Type {
 		case sigma.ContentBlockText:
-			part := map[string]any{"text": block.Text}
+			part := map[string]any{"text": providertext.Clean(block.Text)}
 			addThoughtSignature(part, replayThoughtSignature(model, message, block.ProviderSignature))
 			parts = append(parts, part)
 		case sigma.ContentBlockThinking:
 			part := map[string]any{
-				"text":    block.ThinkingText,
+				"text":    providertext.Clean(block.ThinkingText),
 				"thought": true,
 			}
 			addThoughtSignature(part, replayThoughtSignature(model, message, block.ProviderSignature))
@@ -266,7 +268,7 @@ func googleToolResultContent(blocks []sigma.ContentBlock) (string, []map[string]
 			if text != "" {
 				text += "\n"
 			}
-			text += block.Text
+			text += providertext.Clean(block.Text)
 		case sigma.ContentBlockImage:
 			image, err := googleImage(block)
 			if err != nil {

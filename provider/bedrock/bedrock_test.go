@@ -98,6 +98,85 @@ func TestConversePayloadMapsMessagesToolsImagesThinkingAndCache(t *testing.T) {
 	goldentest.AssertJSON(t, payload, "provider/bedrock/converse/rich_payload.json")
 }
 
+func TestConversePayloadDropsUnansweredToolCallsBeforeUserTurn(t *testing.T) {
+	t.Parallel()
+
+	payload, err := conversePayload(
+		bedrockTestModel(sigma.ProviderAmazonBedrock),
+		sigma.Request{Messages: []sigma.Message{
+			{
+				Role: sigma.RoleAssistant,
+				Content: []sigma.ContentBlock{
+					sigma.ToolCallBlock("call_abandoned", "lookup", map[string]any{"query": "weather"}),
+				},
+			},
+			sigma.UserText("Skip the lookup."),
+		}},
+		sigma.Options{},
+		Config{ModelID: "anthropic.claude-3-5-sonnet-20240620-v1:0"},
+	)
+	if err != nil {
+		t.Fatalf("conversePayload returned error: %v", err)
+	}
+
+	if got, want := len(payload.Messages), 1; got != want {
+		t.Fatalf("message count = %d, want %d", got, want)
+	}
+	if got, want := payload.Messages[0].Role, "user"; got != want {
+		t.Fatalf("message role = %q, want %q", got, want)
+	}
+}
+
+func TestConversePayloadNormalizesProviderText(t *testing.T) {
+	t.Parallel()
+
+	invalid := invalidProviderText()
+	payload, err := conversePayload(
+		bedrockTestModel(sigma.ProviderAmazonBedrock),
+		sigma.Request{
+			SystemPrompt: "system" + invalid,
+			Messages: []sigma.Message{
+				{Role: sigma.RoleDeveloper, Content: []sigma.ContentBlock{sigma.Text("developer" + invalid)}},
+				sigma.UserText("user" + invalid),
+				{
+					Role: sigma.RoleAssistant,
+					Content: []sigma.ContentBlock{
+						sigma.Text("assistant" + invalid),
+						sigma.Thinking("thinking"+invalid, "sig"),
+						sigma.ToolCallBlock("call_invalid", "lookup", map[string]any{"query": "weather"}),
+					},
+				},
+				{Role: sigma.RoleTool, ToolCallID: "call_invalid", ToolName: "lookup", Content: []sigma.ContentBlock{sigma.Text("tool" + invalid)}},
+			},
+			Tools: []sigma.Tool{{Name: "lookup", InputSchema: sigma.Schema{"type": "object"}}},
+		},
+		sigma.Options{},
+		Config{ModelID: "anthropic.claude-3-5-sonnet-20240620-v1:0"},
+	)
+	if err != nil {
+		t.Fatalf("conversePayload returned error: %v", err)
+	}
+
+	if got, want := payload.System[0].Text, "systemclean"; got != want {
+		t.Fatalf("system text = %q, want %q", got, want)
+	}
+	if got, want := payload.Messages[0].Content[0].Text, "developerclean"; got != want {
+		t.Fatalf("developer text = %q, want %q", got, want)
+	}
+	if got, want := payload.Messages[1].Content[0].Text, "userclean"; got != want {
+		t.Fatalf("user text = %q, want %q", got, want)
+	}
+	if got, want := payload.Messages[2].Content[0].Text, "assistantclean"; got != want {
+		t.Fatalf("assistant text = %q, want %q", got, want)
+	}
+	if got, want := payload.Messages[2].Content[1].Reasoning.Text, "thinkingclean"; got != want {
+		t.Fatalf("thinking text = %q, want %q", got, want)
+	}
+	if got, want := payload.Messages[3].Content[0].ToolResult.Content[0].Text, "toolclean"; got != want {
+		t.Fatalf("tool text = %q, want %q", got, want)
+	}
+}
+
 func TestBedrockOptionsOverrideProviderOptionsAndMapToolChoice(t *testing.T) {
 	t.Parallel()
 
@@ -1015,6 +1094,10 @@ func bedrockTestModel(providerID sigma.ProviderID) sigma.Model {
 		InputCostPerMillion:  1,
 		OutputCostPerMillion: 2,
 	}
+}
+
+func invalidProviderText() string {
+	return string([]byte{0xff}) + "clean"
 }
 
 type fakeCredentialDetector struct {

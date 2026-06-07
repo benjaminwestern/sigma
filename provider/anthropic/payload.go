@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/wintermi/sigma"
+	"github.com/wintermi/sigma/internal/providertext"
 	"github.com/wintermi/sigma/internal/transform"
 )
 
@@ -40,7 +41,8 @@ func messagesPayload(model sigma.Model, req sigma.Request, opts sigma.Options, c
 		TargetModel: model,
 		Request:     req,
 		Compatibility: transform.Compatibility{
-			ConvertDeveloperRole: true,
+			ConvertDeveloperRole:    true,
+			DropUnansweredToolCalls: true,
 		},
 	})
 	if err != nil {
@@ -84,6 +86,7 @@ func messagesPayload(model sigma.Model, req sigma.Request, opts sigma.Options, c
 }
 
 func anthropicSystem(prompt string, retention sigma.CacheRetention, compat messagesCompat) any {
+	prompt = providertext.Clean(prompt)
 	if cacheControl(retention, compat) == nil {
 		return prompt
 	}
@@ -175,7 +178,7 @@ func anthropicInputContent(blocks []sigma.ContentBlock, toolResult bool) ([]map[
 		case sigma.ContentBlockText:
 			content = append(content, map[string]any{
 				"type": "text",
-				"text": block.Text,
+				"text": providertext.Clean(block.Text),
 			})
 		case sigma.ContentBlockImage:
 			image, err := anthropicImage(block)
@@ -195,7 +198,7 @@ func anthropicInputContent(blocks []sigma.ContentBlock, toolResult bool) ([]map[
 
 func anthropicToolResultContent(message sigma.Message) (any, error) {
 	if len(message.Content) == 1 && message.Content[0].Type == sigma.ContentBlockText {
-		return message.Content[0].Text, nil
+		return providertext.Clean(message.Content[0].Text), nil
 	}
 	return anthropicInputContent(message.Content, true)
 }
@@ -207,7 +210,7 @@ func anthropicAssistantContent(blocks []sigma.ContentBlock, compat messagesCompa
 		case sigma.ContentBlockText:
 			content = append(content, map[string]any{
 				"type": "text",
-				"text": block.Text,
+				"text": providertext.Clean(block.Text),
 			})
 		case sigma.ContentBlockThinking:
 			if block.Redacted {
@@ -225,13 +228,13 @@ func anthropicAssistantContent(blocks []sigma.ContentBlock, compat messagesCompa
 			if signature == "" && !compat.emptyThinkingSignature {
 				content = append(content, map[string]any{
 					"type": "text",
-					"text": block.ThinkingText,
+					"text": providertext.Clean(block.ThinkingText),
 				})
 				continue
 			}
 			thinking := map[string]any{
 				"type":     "thinking",
-				"thinking": block.ThinkingText,
+				"thinking": providertext.Clean(block.ThinkingText),
 			}
 			if signature != "" || compat.emptyThinkingSignature {
 				thinking["signature"] = signature

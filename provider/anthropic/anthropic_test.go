@@ -199,6 +199,113 @@ func TestCompleteSendsProviderDefinedToolsPayload(t *testing.T) {
 	goldentest.AssertJSON(t, request.Body, "provider/anthropic/messages/provider_defined_tools_payload.json")
 }
 
+func TestMessagesPayloadDropsUnansweredToolCallsBeforeUserTurn(t *testing.T) {
+	t.Parallel()
+
+	requests := make(chan capturedRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captureRequest(t, requests, r)
+		writeMessagesSSE(t, w, completedEvent)
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("anthropic-drop-unanswered-tool-test")
+	model := anthropicTestModel(providerID)
+	client := anthropicTestClient(t, providerID, model, server.URL)
+
+	_, err := client.Complete(
+		context.Background(),
+		model,
+		sigma.Request{Messages: []sigma.Message{
+			{
+				Role: sigma.RoleAssistant,
+				Content: []sigma.ContentBlock{
+					sigma.ToolCallBlock("call_abandoned", "lookup", map[string]any{"query": "weather"}),
+				},
+			},
+			sigma.UserText("Skip the lookup."),
+		}},
+	)
+	if err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+
+	payload := decodePayload(t, receiveRequest(t, requests).Body)
+	messages := payload["messages"].([]any)
+	if got, want := len(messages), 1; got != want {
+		t.Fatalf("message count = %d, want %d", got, want)
+	}
+	message := messages[0].(map[string]any)
+	if got, want := message["role"], "user"; got != want {
+		t.Fatalf("message role = %v, want %q", got, want)
+	}
+}
+
+func TestMessagesPayloadNormalizesProviderText(t *testing.T) {
+	t.Parallel()
+
+	requests := make(chan capturedRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captureRequest(t, requests, r)
+		writeMessagesSSE(t, w, completedEvent)
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("anthropic-normalized-payload-test")
+	model := anthropicTestModel(providerID)
+	client := anthropicTestClient(t, providerID, model, server.URL)
+	invalid := invalidProviderText()
+
+	_, err := client.Complete(
+		context.Background(),
+		model,
+		sigma.Request{
+			SystemPrompt: "system" + invalid,
+			Messages: []sigma.Message{
+				{Role: sigma.RoleDeveloper, Content: []sigma.ContentBlock{sigma.Text("developer" + invalid)}},
+				sigma.UserText("user" + invalid),
+				{
+					Role: sigma.RoleAssistant,
+					Content: []sigma.ContentBlock{
+						sigma.Text("assistant" + invalid),
+						sigma.Thinking("thinking"+invalid, "sig"),
+						sigma.ToolCallBlock("call_invalid", "lookup", map[string]any{"query": "weather"}),
+					},
+				},
+				sigma.ToolResult("call_invalid", "tool"+invalid),
+			},
+			Tools: []sigma.Tool{{Name: "lookup", InputSchema: sigma.Schema{"type": "object"}}},
+		},
+	)
+	if err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+
+	payload := decodePayload(t, receiveRequest(t, requests).Body)
+	if got, want := payload["system"], "systemclean"; got != want {
+		t.Fatalf("system = %v, want %q", got, want)
+	}
+	messages := payload["messages"].([]any)
+	assertAnthropicTextBlock(t, messages[0], "developerclean")
+	assertAnthropicTextBlock(t, messages[1], "userclean")
+	assistant := messages[2].(map[string]any)
+	content := assistant["content"].([]any)
+	text := content[0].(map[string]any)
+	if got, want := text["text"], "assistantclean"; got != want {
+		t.Fatalf("assistant text = %v, want %q", got, want)
+	}
+	thinking := content[1].(map[string]any)
+	if got, want := thinking["thinking"], "thinkingclean"; got != want {
+		t.Fatalf("thinking = %v, want %q", got, want)
+	}
+	toolMessage := messages[3].(map[string]any)
+	toolBlocks := toolMessage["content"].([]any)
+	toolResult := toolBlocks[0].(map[string]any)
+	if got, want := toolResult["content"], "toolclean"; got != want {
+		t.Fatalf("tool content = %v, want %q", got, want)
+	}
+}
+
 func TestCompleteSendsDisabledThinkingAndEagerToolStreamingPayload(t *testing.T) {
 	t.Parallel()
 
@@ -1357,6 +1464,21 @@ func decodePayload(t *testing.T, body string) map[string]any {
 		t.Fatalf("decode payload: %v", err)
 	}
 	return payload
+}
+
+func invalidProviderText() string {
+	return string([]byte{0xff}) + "clean"
+}
+
+func assertAnthropicTextBlock(t *testing.T, message any, want string) {
+	t.Helper()
+
+	typed := message.(map[string]any)
+	content := typed["content"].([]any)
+	block := content[0].(map[string]any)
+	if got := block["text"]; got != want {
+		t.Fatalf("text block = %v, want %q", got, want)
+	}
 }
 
 func anthropicTestModel(providerID sigma.ProviderID) sigma.Model {

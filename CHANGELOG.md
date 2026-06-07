@@ -21,6 +21,10 @@ See [release notes](docs/release-notes-v0.4.0.md).
 - OpenAI-compatible Chat Completions replay now omits empty assistant history
   turns and can opt specific compatibility routes into empty `tools: []`
   payloads when prior tool-call history requires the tools field.
+- Provider replay now drops abandoned local assistant tool-call blocks when a
+  new user or developer turn arrives before the corresponding tool result,
+  while preserving answered tool-call history and hosted provider tool
+  metadata.
 - Google Vertex AI routing remains an explicit provider contract: callers pass
   project/location through `VertexConfig` or provider options and supply
   ADC/OAuth tokens with `WithVertexTokenProvider`, while ambient routing and
@@ -55,6 +59,10 @@ See [release notes](docs/release-notes-v0.4.0.md).
 - Bedrock Converse Stream now synthesizes placeholder tool specs from replayed
   assistant/tool history when the current request has no active tools, avoiding
   provider rejection of otherwise valid tool-use history.
+- Anthropic Messages, Google Gemini API/Vertex AI, Mistral Conversations, and
+  Bedrock Converse request builders now strip invalid UTF-8 from replayed text
+  before provider JSON encoding, matching the existing OpenAI-compatible text
+  cleanup behavior.
 
 ## [0.3.0] - 2026-06-05
 
