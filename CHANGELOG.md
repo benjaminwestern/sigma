@@ -32,6 +32,12 @@ See [release notes](docs/release-notes-v0.4.0.md).
 - Anthropic Messages now has typed Sigma options for tool choice, thinking
   display, and explicit interleaved-thinking beta opt-in while preserving raw
   provider options for advanced fields.
+- Mistral Conversations now supports base64 image input and image-bearing tool
+  results for direct Pixtral models, with generated Pixtral metadata advertising
+  text and image input support.
+- Bedrock Converse Stream now derives the runtime endpoint and
+  `eu-central-1` region for built-in EU regional inference-profile rows when no
+  explicit region, endpoint, or AWS region environment variable is configured.
 
 ## [0.3.0] - 2026-06-05
 
@@ -213,12 +219,12 @@ See [release notes](docs/release-notes-v0.3.0.md).
 - Built-in model metadata is still refreshed through the curated checked-in
   catalog; automated `models.dev`/provider-catalog ingestion is deferred until
   it can preserve deterministic review and fixtures.
-- Mistral Conversations image input, built-in connectors, append/restart, and
-  broad catalog expansion remain deferred until their request shapes are covered
-  by deterministic fixtures.
-- Bedrock regional alias expansion, AWS SDK credential-chain integration,
-  profiles, SSO, web identity, IMDS, shared AWS config loading, and live
-  Bedrock CI coverage remain deferred.
+- Mistral Conversations built-in connectors, append/restart, URL/file image
+  references, and broad catalog expansion remain deferred until their request
+  shapes are covered by deterministic fixtures.
+- Bedrock credential-chain integration, profiles, SSO, web identity, IMDS,
+  shared AWS config loading, broader regional alias expansion beyond the built-in
+  EU inference-profile fallback, and live Bedrock CI coverage remain deferred.
 - Anthropic-compatible Fireworks model routing remains deferred; the built-in
   Fireworks row continues to target the OpenAI-compatible Fire Pass route.
 - Live Google Gemini API and Vertex AI validation remains deferred; deterministic

@@ -792,6 +792,81 @@ func TestEffectiveConfigUsesRegionEnvironmentFallback(t *testing.T) {
 	}
 }
 
+func TestEffectiveConfigUsesModelEndpointForRegionalInferenceProfile(t *testing.T) {
+	t.Setenv("AWS_REGION", "")
+	t.Setenv("AWS_DEFAULT_REGION", "")
+
+	model := bedrockTestModel(sigma.ProviderAmazonBedrock)
+	model.ID = "eu.anthropic.claude-sonnet-4-5-20250929-v1:0"
+	model.ProviderMetadata = map[string]any{
+		"baseURL": "https://bedrock-runtime.{region}.amazonaws.com",
+	}
+
+	config := effectiveConfig(Config{}, model, sigma.Options{})
+	if got, want := config.Region, "eu-central-1"; got != want {
+		t.Fatalf("region = %q, want %q", got, want)
+	}
+	if got, want := config.Endpoint, "https://bedrock-runtime.eu-central-1.amazonaws.com"; got != want {
+		t.Fatalf("endpoint = %q, want %q", got, want)
+	}
+}
+
+func TestEffectiveConfigKeepsEnvironmentBeforeModelEndpoint(t *testing.T) {
+	t.Setenv("AWS_REGION", "us-west-2")
+	t.Setenv("AWS_DEFAULT_REGION", "")
+
+	model := bedrockTestModel(sigma.ProviderAmazonBedrock)
+	model.ID = "eu.anthropic.claude-sonnet-4-5-20250929-v1:0"
+	model.ProviderMetadata = map[string]any{
+		"baseURL": "https://bedrock-runtime.{region}.amazonaws.com",
+	}
+
+	config := effectiveConfig(Config{}, model, sigma.Options{})
+	if got, want := config.Region, "us-west-2"; got != want {
+		t.Fatalf("region = %q, want %q", got, want)
+	}
+	if got, want := config.Endpoint, ""; got != want {
+		t.Fatalf("endpoint = %q, want %q", got, want)
+	}
+}
+
+func TestEffectiveConfigKeepsExplicitConfigAndOptionsBeforeModelEndpoint(t *testing.T) {
+	t.Setenv("AWS_REGION", "")
+	t.Setenv("AWS_DEFAULT_REGION", "")
+
+	model := bedrockTestModel(sigma.ProviderAmazonBedrock)
+	model.ID = "eu.anthropic.claude-sonnet-4-5-20250929-v1:0"
+	model.ProviderMetadata = map[string]any{
+		"baseURL": "https://bedrock-runtime.{region}.amazonaws.com",
+	}
+
+	config := effectiveConfig(Config{
+		Region:   "ap-southeast-2",
+		Endpoint: "https://bedrock-vpc.example.com",
+	}, model, sigma.Options{})
+	if got, want := config.Region, "ap-southeast-2"; got != want {
+		t.Fatalf("explicit config region = %q, want %q", got, want)
+	}
+	if got, want := config.Endpoint, "https://bedrock-vpc.example.com"; got != want {
+		t.Fatalf("explicit config endpoint = %q, want %q", got, want)
+	}
+
+	config = effectiveConfig(Config{}, model, sigma.Options{
+		ProviderOptions: map[sigma.ProviderID]map[string]any{
+			sigma.ProviderAmazonBedrock: {
+				providerOptionRegion:   "us-east-2",
+				providerOptionEndpoint: "https://bedrock-custom.example.com",
+			},
+		},
+	})
+	if got, want := config.Region, "us-east-2"; got != want {
+		t.Fatalf("provider option region = %q, want %q", got, want)
+	}
+	if got, want := config.Endpoint, "https://bedrock-custom.example.com"; got != want {
+		t.Fatalf("provider option endpoint = %q, want %q", got, want)
+	}
+}
+
 func TestAuthResolverOAuthTokenBecomesBearerToken(t *testing.T) {
 	t.Parallel()
 

@@ -38,6 +38,12 @@ Vertex AI routing for both Gemini and focused non-Gemini MaaS routes.
   thinking display, and explicit interleaved-thinking beta opt-in, so callers
   can use `sigma.WithAnthropicOptions` for common provider controls without raw
   provider option maps.
+- Direct Mistral Pixtral models now advertise image input support and the
+  Mistral Conversations adapter can send base64 image inputs plus image-bearing
+  tool results through deterministic request shapes.
+- Bedrock Converse Stream now derives the `eu-central-1` runtime endpoint for
+  built-in EU regional inference-profile rows when callers have not configured
+  a region, endpoint, or AWS region environment variable.
 
 ## Compatibility
 
@@ -62,6 +68,12 @@ Vertex AI routing for both Gemini and focused non-Gemini MaaS routes.
 - Typed Anthropic options take precedence over matching raw provider options.
   Raw provider options remain available for advanced or newly introduced
   Anthropic fields.
+- Mistral image support is limited to base64 image data on direct Pixtral
+  Conversations models. URL/file image references and broader Mistral catalog
+  changes remain future work.
+- Explicit Bedrock provider config, provider options, custom endpoints,
+  `AWS_REGION`, and `AWS_DEFAULT_REGION` keep precedence over generated
+  metadata fallback.
 
 ## Deferred work
 
@@ -75,6 +87,10 @@ Vertex AI routing for both Gemini and focused non-Gemini MaaS routes.
   opt-in future work and are not part of `mise run ci`.
 - Anthropic OAuth, Claude Code identity headers, Claude Code tool-name
   canonicalization, and live Anthropic-compatible probes remain deferred.
+- Mistral built-in connectors, append/restart lifecycle operations, URL/file
+  image references, and broad direct Mistral catalog expansion remain deferred.
+- AWS profile, SSO, web identity, IMDS, shared-config loading, and live Bedrock
+  validation remain deferred.
 
 ## Validation status
 

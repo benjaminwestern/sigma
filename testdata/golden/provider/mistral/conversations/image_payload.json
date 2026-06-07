@@ -1,0 +1,21 @@
+{
+  "inputs": [
+    {
+      "content": [
+        {
+          "text": "Describe this image.",
+          "type": "text"
+        },
+        {
+          "imageUrl": "data:image/png;base64,aW1hZ2U=",
+          "type": "image_url"
+        }
+      ],
+      "object": "entry",
+      "role": "user",
+      "type": "message.input"
+    }
+  ],
+  "model": "pixtral-12b",
+  "stream": true
+}

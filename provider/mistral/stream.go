@@ -83,7 +83,7 @@ func (c *conversationContent) UnmarshalJSON(data []byte) error {
 func parseConversationContentChunk(data []byte) (conversationContentChunk, error) {
 	var text string
 	if err := json.Unmarshal(data, &text); err == nil {
-		return conversationContentChunk{Type: "text", Text: text}, nil
+		return conversationContentChunk{Type: payloadValueText, Text: text}, nil
 	}
 	var raw struct {
 		Type     string          `json:"type"`
@@ -98,7 +98,7 @@ func parseConversationContentChunk(data []byte) (conversationContentChunk, error
 		chunk.Text = thinkingText(raw.Thinking)
 	}
 	if chunk.Type == "" {
-		chunk.Type = "text"
+		chunk.Type = payloadValueText
 	}
 	return chunk, nil
 }

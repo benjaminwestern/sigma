@@ -360,6 +360,100 @@ func TestConversationGoldenPayloads(t *testing.T) {
 	}
 }
 
+func TestConversationImagePayloads(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		req    sigma.Request
+		golden string
+	}{
+		{
+			name: "user image input",
+			req: sigma.Request{
+				Messages: []sigma.Message{
+					sigma.UserContent(
+						sigma.Text("Describe this image."),
+						sigma.ImageBase64("image/png", "aW1hZ2U="),
+					),
+				},
+			},
+			golden: "provider/mistral/conversations/image_payload.json",
+		},
+		{
+			name: "image only tool result",
+			req: sigma.Request{
+				Messages: []sigma.Message{
+					sigma.UserText("Inspect the screenshot."),
+					{
+						Role: sigma.RoleAssistant,
+						Content: []sigma.ContentBlock{
+							sigma.ToolCallBlock("call_screenshot", "screenshot", map[string]any{"target": "screen"}),
+						},
+					},
+					{
+						Role:       sigma.RoleTool,
+						ToolCallID: "call_screenshot",
+						ToolName:   "screenshot",
+						Content:    []sigma.ContentBlock{sigma.ImageBase64("image/png", "aW1hZ2U=")},
+					},
+				},
+			},
+			golden: "provider/mistral/conversations/tool_result_image_payload.json",
+		},
+		{
+			name: "text plus image tool result",
+			req: sigma.Request{
+				Messages: []sigma.Message{
+					sigma.UserText("Inspect the screenshot."),
+					{
+						Role: sigma.RoleAssistant,
+						Content: []sigma.ContentBlock{
+							sigma.ToolCallBlock("call_screenshot", "screenshot", map[string]any{"target": "screen"}),
+						},
+					},
+					{
+						Role:       sigma.RoleTool,
+						ToolCallID: "call_screenshot",
+						ToolName:   "screenshot",
+						Content: []sigma.ContentBlock{
+							sigma.Text("Screenshot captured."),
+							sigma.ImageBase64("image/png", "aW1hZ2U="),
+						},
+					},
+				},
+			},
+			golden: "provider/mistral/conversations/tool_result_text_image_payload.json",
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			requests := make(chan capturedRequest, 1)
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				captureRequest(t, requests, r)
+				writeMistralSSE(t, w, completedEvent)
+			}))
+			t.Cleanup(server.Close)
+
+			providerID := sigma.ProviderID("mistral-image-" + strings.ReplaceAll(tt.name, " ", "-"))
+			model := mistralTestModel(providerID)
+			model.ID = "pixtral-12b"
+			model.SupportedInputs = []sigma.ContentBlockType{sigma.ContentBlockText, sigma.ContentBlockImage}
+			client := mistralTestClient(t, providerID, model, server.URL)
+
+			if _, err := client.Complete(context.Background(), model, tt.req); err != nil {
+				t.Fatalf("Complete returned error: %v", err)
+			}
+			request := receiveRequest(t, requests)
+			goldentest.AssertJSON(t, request.Body, tt.golden)
+		})
+	}
+}
+
 func TestConversationReasoningPayloads(t *testing.T) {
 	t.Parallel()
 
@@ -709,7 +803,7 @@ func TestUnsupportedCapabilitiesFailBeforeNetworkCall(t *testing.T) {
 	client := mistralTestClient(t, providerID, model, server.URL)
 
 	_, err := client.Complete(context.Background(), model, sigma.Request{
-		Messages: []sigma.Message{sigma.UserContent(sigma.ImageURL("image/png", "https://example.test/cat.png"))},
+		Messages: []sigma.Message{sigma.UserContent(sigma.ImageBase64("image/png", "aW1hZ2U="))},
 	})
 	if err == nil {
 		t.Fatal("Complete returned nil error")

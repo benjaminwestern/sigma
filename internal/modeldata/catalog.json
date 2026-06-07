@@ -9514,7 +9514,8 @@
       "api": "mistral-conversations",
       "baseURL": "https://api.mistral.ai",
       "supportedInputs": [
-        "text"
+        "text",
+        "image"
       ],
       "supportsTools": true,
       "supportsThinking": false,
@@ -9541,7 +9542,8 @@
       "api": "mistral-conversations",
       "baseURL": "https://api.mistral.ai",
       "supportedInputs": [
-        "text"
+        "text",
+        "image"
       ],
       "supportsTools": true,
       "supportsThinking": false,

@@ -271,7 +271,49 @@ func effectiveConfig(base Config, model sigma.Model, opts sigma.Options) Config 
 	if config.Region == "" {
 		config.Region = os.Getenv("AWS_DEFAULT_REGION")
 	}
+	if config.Region == "" && config.Endpoint == "" {
+		applyModelEndpointFallback(&config, model)
+	}
 	return config
+}
+
+func applyModelEndpointFallback(config *Config, model sigma.Model) {
+	baseURL := stringMetadata(model.ProviderMetadata, "baseURL")
+	if region := regionalInferenceProfileRegion(model.ID); region != "" {
+		config.Region = region
+		if baseURL != "" {
+			config.Endpoint = strings.TrimRight(strings.ReplaceAll(baseURL, "{region}", region), "/")
+			return
+		}
+		config.Endpoint = "https://bedrock-runtime." + region + ".amazonaws.com"
+		return
+	}
+	if baseURL == "" || strings.Contains(baseURL, "{region}") {
+		return
+	}
+	config.Endpoint = strings.TrimRight(baseURL, "/")
+	if region := bedrockEndpointRegion(config.Endpoint); region != "" {
+		config.Region = region
+	}
+}
+
+func regionalInferenceProfileRegion(modelID sigma.ModelID) string {
+	if strings.HasPrefix(string(modelID), "eu.") {
+		return "eu-central-1"
+	}
+	return ""
+}
+
+func bedrockEndpointRegion(raw string) string {
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	parts := strings.Split(parsed.Hostname(), ".")
+	if len(parts) < 4 || parts[0] != "bedrock-runtime" || parts[2] != "amazonaws" {
+		return ""
+	}
+	return parts[1]
 }
 
 func newHTTPConverseStreamClient(_ context.Context, bedrockConfig Config, opts sigma.Options, credentialsInfo CredentialInfo) (ConverseStreamClient, error) {

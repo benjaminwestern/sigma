@@ -277,9 +277,10 @@ should still come through the catalog refresh workflow.
 
 ## Mistral parity
 
-- [ ] Add Mistral Conversations image input only after the Conversations request
-      shape is verified and covered by deterministic payload fixtures, or add a
-      separate Mistral Chat adapter if image support belongs on that API surface.
+- [x] Add Mistral Conversations base64 image input and image-bearing tool
+      results for direct Pixtral models with deterministic payload fixtures.
+- [ ] Add Mistral URL/file image references only after the Conversations
+      request shape is verified and covered by deterministic payload fixtures.
 - [ ] Add Mistral built-in connector tools such as web search, code interpreter,
       image generation, and document libraries after deciding how they map to
       Sigma provider-defined tools.
@@ -291,6 +292,9 @@ should still come through the catalog refresh workflow.
 
 ## Bedrock parity
 
+- [x] Derive the `eu-central-1` runtime endpoint for built-in EU regional
+      inference-profile rows when callers have not configured an endpoint,
+      region, or AWS region environment variable.
 - [ ] Keep live Bedrock validation out of `mise run ci`; use credential-gated
       checks only for manual compatibility investigation.
 - [ ] Expand broad Bedrock generated metadata only through the catalog refresh

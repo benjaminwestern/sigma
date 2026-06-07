@@ -7,6 +7,7 @@ package mistral
 
 import (
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -34,6 +35,7 @@ const (
 	providerOptionReasoningModeEffort = "reasoning_effort"
 	providerOptionReasoningModePrompt = "prompt_mode"
 	payloadKeyType                    = "type"
+	payloadValueText                  = "text"
 )
 
 func conversationPayload(model sigma.Model, req sigma.Request, opts sigma.Options) (map[string]any, error) {
@@ -52,7 +54,7 @@ func conversationPayload(model sigma.Model, req sigma.Request, opts sigma.Option
 		return nil, err
 	}
 
-	inputs, err := conversationInputs(transformed)
+	inputs, err := conversationInputs(model, transformed)
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +107,9 @@ func validateCapabilities(model sigma.Model, req sigma.Request, opts sigma.Optio
 		for _, block := range message.Content {
 			switch block.Type { //nolint:exhaustive
 			case sigma.ContentBlockImage:
-				return unsupportedError(model, fmt.Sprintf("message %d: mistral conversations does not support image content", messageIndex))
+				if !model.SupportsImages() {
+					return unsupportedError(model, fmt.Sprintf("message %d: target model does not declare image input support", messageIndex))
+				}
 			case sigma.ContentBlockThinking:
 				if !model.SupportsThinking {
 					return unsupportedError(model, fmt.Sprintf("message %d: target model does not support thinking content", messageIndex))
@@ -125,11 +129,11 @@ func unsupportedError(model sigma.Model, message string) error {
 	}
 }
 
-func conversationInputs(req sigma.Request) ([]map[string]any, error) {
+func conversationInputs(model sigma.Model, req sigma.Request) ([]map[string]any, error) {
 	inputs := make([]map[string]any, 0, len(req.Messages))
 	ids := newToolCallIDNormalizer()
 	for _, message := range req.Messages {
-		converted, err := conversationInput(message, ids)
+		converted, err := conversationInput(model, message, ids)
 		if err != nil {
 			return nil, err
 		}
@@ -138,23 +142,31 @@ func conversationInputs(req sigma.Request) ([]map[string]any, error) {
 	return inputs, nil
 }
 
-func conversationInput(message sigma.Message, ids *toolCallIDNormalizer) ([]map[string]any, error) {
+func conversationInput(model sigma.Model, message sigma.Message, ids *toolCallIDNormalizer) ([]map[string]any, error) {
 	switch message.Role {
 	case sigma.RoleUser, sigma.RoleDeveloper:
+		content, err := conversationMessageContent(model, message.Content)
+		if err != nil {
+			return nil, err
+		}
 		return []map[string]any{{
 			"object":       "entry",
 			payloadKeyType: "message.input",
 			"role":         "user",
-			"content":      textContent(message.Content),
+			"content":      content,
 		}}, nil
 	case sigma.RoleAssistant:
 		return assistantEntries(message.Content, ids)
 	case sigma.RoleTool:
+		result, err := conversationToolResult(model, message.Content)
+		if err != nil {
+			return nil, err
+		}
 		entry := map[string]any{
 			"object":       "entry",
 			payloadKeyType: "function.result",
 			"tool_call_id": ids.normalize(message.ToolCallID),
-			"result":       textContent(message.Content),
+			"result":       result,
 		}
 		if message.ToolName != "" {
 			entry["name"] = message.ToolName
@@ -231,8 +243,8 @@ func (o *assistantOutput) addText(text string) {
 	}
 	if o.typed {
 		o.chunks = append(o.chunks, map[string]any{
-			payloadKeyType: "text",
-			"text":         text,
+			payloadKeyType:   payloadValueText,
+			payloadValueText: text,
 		})
 		return
 	}
@@ -243,8 +255,8 @@ func (o *assistantOutput) addThinking(text string) {
 	if !o.typed {
 		if existing := o.text.String(); existing != "" {
 			o.chunks = append(o.chunks, map[string]any{
-				payloadKeyType: "text",
-				"text":         existing,
+				payloadKeyType:   payloadValueText,
+				payloadValueText: existing,
 			})
 			o.text.Reset()
 		}
@@ -253,8 +265,8 @@ func (o *assistantOutput) addThinking(text string) {
 	o.chunks = append(o.chunks, map[string]any{
 		payloadKeyType: "thinking",
 		"thinking": []map[string]any{{
-			payloadKeyType: "text",
-			"text":         text,
+			payloadKeyType:   payloadValueText,
+			payloadValueText: text,
 		}},
 	})
 }
@@ -379,6 +391,84 @@ func addProviderOptions(payload map[string]any, provider sigma.ProviderID, opts 
 	for key, value := range extraBody(opts, provider) {
 		payload[key] = value
 	}
+}
+
+func conversationMessageContent(model sigma.Model, blocks []sigma.ContentBlock) (any, error) {
+	chunks, hasImage, err := conversationContentChunks(model, blocks)
+	if err != nil {
+		return nil, err
+	}
+	if !hasImage {
+		return textContent(blocks), nil
+	}
+	return chunks, nil
+}
+
+func conversationToolResult(model sigma.Model, blocks []sigma.ContentBlock) (any, error) {
+	chunks, hasImage, err := conversationContentChunks(model, blocks)
+	if err != nil {
+		return nil, err
+	}
+	if !hasImage {
+		return textContent(blocks), nil
+	}
+	if textContent(blocks) == "" {
+		chunks = append([]map[string]any{{
+			payloadKeyType:   payloadValueText,
+			payloadValueText: "(see attached image)",
+		}}, chunks...)
+	}
+	return chunks, nil
+}
+
+func conversationContentChunks(model sigma.Model, blocks []sigma.ContentBlock) ([]map[string]any, bool, error) {
+	chunks := make([]map[string]any, 0, len(blocks))
+	hasImage := false
+	for _, block := range blocks {
+		switch block.Type {
+		case sigma.ContentBlockText:
+			if block.Text == "" {
+				continue
+			}
+			chunks = append(chunks, map[string]any{
+				payloadKeyType:   payloadValueText,
+				payloadValueText: block.Text,
+			})
+		case sigma.ContentBlockImage:
+			hasImage = true
+			image, err := conversationImage(model, block)
+			if err != nil {
+				return nil, false, err
+			}
+			chunks = append(chunks, image)
+		default:
+			return nil, false, fmt.Errorf("mistral conversations: unsupported input content block %q", block.Type)
+		}
+	}
+	return chunks, hasImage, nil
+}
+
+func conversationImage(model sigma.Model, block sigma.ContentBlock) (map[string]any, error) {
+	if !model.SupportsImages() {
+		return nil, unsupportedError(model, "target model does not declare image input support")
+	}
+	if block.ImageSource != "base64" {
+		return nil, fmt.Errorf("mistral conversations: unsupported image source %q", block.ImageSource)
+	}
+	if block.Data == "" {
+		return nil, fmt.Errorf("mistral conversations: image data is required")
+	}
+	if _, err := base64.StdEncoding.DecodeString(block.Data); err != nil {
+		return nil, fmt.Errorf("mistral conversations: image data must be base64: %w", err)
+	}
+	mimeType := block.MIMEType
+	if mimeType == "" {
+		mimeType = "application/octet-stream"
+	}
+	return map[string]any{
+		payloadKeyType: "image_url",
+		"imageUrl":     "data:" + mimeType + ";base64," + block.Data,
+	}, nil
 }
 
 func textContent(blocks []sigma.ContentBlock) string {
