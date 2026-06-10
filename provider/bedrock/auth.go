@@ -25,6 +25,8 @@ const (
 	CredentialSourceDefaultChain CredentialSource = "default-chain"
 	// CredentialSourceAuthResolver uses sigma.Options.AuthResolver only.
 	CredentialSourceAuthResolver CredentialSource = "auth-resolver"
+	// CredentialSourceBearerToken uses an explicit request-scoped bearer token.
+	CredentialSourceBearerToken CredentialSource = "bearer-token"
 )
 
 // CredentialInfo is diagnostic-safe AWS credential metadata plus optional static
@@ -66,6 +68,12 @@ type DefaultCredentialDetector struct{}
 
 // Detect resolves Bedrock credentials according to config.
 func (DefaultCredentialDetector) Detect(ctx context.Context, model sigma.Model, opts sigma.Options, bedrockConfig Config) (CredentialInfo, error) {
+	if opts.BedrockOptions != nil && opts.BedrockOptions.BearerToken != "" {
+		return CredentialInfo{
+			Source:      CredentialSourceBearerToken,
+			BearerToken: opts.BedrockOptions.BearerToken,
+		}, nil
+	}
 	source := bedrockConfig.CredentialSource
 	switch source {
 	case CredentialSourceAuthResolver:

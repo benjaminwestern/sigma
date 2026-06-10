@@ -15,6 +15,12 @@ See [release notes](docs/release-notes-v0.5.0.md).
 - Bedrock Converse Stream now derives the runtime region from application
   inference profile ARNs on the model or request/provider options before AWS
   region environment fallbacks, while preserving explicit region overrides.
+- Bedrock Converse Stream now accepts a request-scoped bearer token through
+  typed Bedrock options, taking precedence over auth resolvers and environment
+  credential fallbacks.
+- Mistral Conversations now has typed tool-choice controls for automatic,
+  required, disabled, any-tool, and named-tool selection while preserving raw
+  provider options for advanced request fields.
 - Anthropic Messages now has typed options for native `output_format` payloads
   and `disable_parallel_tool_use` tool-choice controls.
 - Bedrock Converse Stream now supports typed structured-output requests by

@@ -80,6 +80,34 @@ type GoogleOptions struct {
 	DisableThinking      *bool
 }
 
+// MistralOptions carries Mistral-specific request options known to the root
+// package without importing the provider adapter.
+type MistralOptions struct {
+	ToolChoice *MistralToolChoice
+}
+
+// MistralToolChoiceType identifies Mistral Conversations tool selection behavior.
+type MistralToolChoiceType string
+
+const (
+	// MistralToolChoiceAuto lets Mistral choose whether to call a tool.
+	MistralToolChoiceAuto MistralToolChoiceType = "auto"
+	// MistralToolChoiceAny asks Mistral to call one of the supplied tools.
+	MistralToolChoiceAny MistralToolChoiceType = "any"
+	// MistralToolChoiceNone prevents Mistral from calling tools.
+	MistralToolChoiceNone MistralToolChoiceType = "none"
+	// MistralToolChoiceRequired requires Mistral to call one of the supplied tools.
+	MistralToolChoiceRequired MistralToolChoiceType = "required"
+	// MistralToolChoiceTool requires Mistral to call the named function tool.
+	MistralToolChoiceTool MistralToolChoiceType = "function"
+)
+
+// MistralToolChoice carries Mistral Conversations tool choice controls.
+type MistralToolChoice struct {
+	Type MistralToolChoiceType `json:"type"`
+	Name string                `json:"name,omitempty"`
+}
+
 // BedrockToolChoiceType identifies Bedrock Converse tool selection behavior.
 type BedrockToolChoiceType string
 
@@ -116,6 +144,7 @@ const (
 // package without importing the provider adapter.
 type BedrockOptions struct {
 	ToolChoice                        *BedrockToolChoice
+	BearerToken                       string
 	ThinkingDisplay                   BedrockThinkingDisplay
 	InterleavedThinking               *bool
 	StopSequences                     []string
@@ -160,6 +189,7 @@ type Options struct {
 	OpenAIOptions               *OpenAIOptions
 	AnthropicOptions            *AnthropicOptions
 	GoogleOptions               *GoogleOptions
+	MistralOptions              *MistralOptions
 	BedrockOptions              *BedrockOptions
 }
 
@@ -363,6 +393,13 @@ func WithGoogleOptions(googleOptions GoogleOptions) Option {
 	}
 }
 
+// WithMistralOptions configures known Mistral-specific request options.
+func WithMistralOptions(mistralOptions MistralOptions) Option {
+	return func(options *Options) {
+		options.MistralOptions = cloneMistralOptions(&mistralOptions)
+	}
+}
+
 // WithBedrockOptions configures known Bedrock-specific request options.
 func WithBedrockOptions(bedrockOptions BedrockOptions) Option {
 	return func(options *Options) {
@@ -408,6 +445,7 @@ func cloneOptions(options Options) Options {
 		OpenAIOptions:               cloneOpenAIOptions(options.OpenAIOptions),
 		AnthropicOptions:            cloneAnthropicOptions(options.AnthropicOptions),
 		GoogleOptions:               cloneGoogleOptions(options.GoogleOptions),
+		MistralOptions:              cloneMistralOptions(options.MistralOptions),
 		BedrockOptions:              cloneBedrockOptions(options.BedrockOptions),
 	}
 }
@@ -466,6 +504,18 @@ func cloneGoogleOptions(options *GoogleOptions) *GoogleOptions {
 	copied := *options
 	copied.ThinkingBudgetTokens = cloneIntPtr(options.ThinkingBudgetTokens)
 	copied.DisableThinking = cloneBoolPtr(options.DisableThinking)
+	return &copied
+}
+
+func cloneMistralOptions(options *MistralOptions) *MistralOptions {
+	if options == nil {
+		return nil
+	}
+	copied := *options
+	if options.ToolChoice != nil {
+		toolChoice := *options.ToolChoice
+		copied.ToolChoice = &toolChoice
+	}
 	return &copied
 }
 

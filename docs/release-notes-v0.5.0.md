@@ -8,14 +8,20 @@ checklist see [RELEASING.md](../RELEASING.md).
 ## Release summary
 
 `sigma` v0.5.0 is open for development with focused provider hardening for
-Bedrock application inference profile routing plus advanced Anthropic and
-Bedrock request-shape controls.
+Bedrock application inference profile routing, request-scoped Bedrock bearer
+tokens, typed Mistral tool selection, and advanced Anthropic and Bedrock
+request-shape controls.
 
 ## Added
 
 - Bedrock Converse Stream now derives the runtime region from application
   inference profile ARNs supplied as the model ID or `inference_profile_arn`
   provider option before AWS region environment fallbacks.
+- Bedrock Converse Stream now accepts request-scoped bearer-token auth through
+  `sigma.BedrockOptions.BearerToken`, before auth resolver and environment
+  credential fallback.
+- Mistral Conversations now accepts typed `sigma.MistralOptions.ToolChoice`
+  values for automatic, required, disabled, any-tool, and named-tool selection.
 - Anthropic Messages now accepts typed `sigma.AnthropicOptions.OutputFormat`
   values and sends them as native `output_format` payloads.
 - Anthropic Messages can disable parallel tool use with
@@ -31,6 +37,11 @@ Bedrock request-shape controls.
 - Explicit Bedrock region configuration continues to win over ARN-derived
   regions. Existing AWS environment fallback, EU regional inference-profile
   endpoint fallback, and caller-supplied endpoint behavior are unchanged.
+- Request-scoped Bedrock bearer tokens are explicit caller-owned credentials and
+  do not add AWS profile, SSO, web identity, IMDS, or shared-config loading.
+- Typed Mistral tool choice takes precedence over raw `tool_choice` provider
+  options. Raw provider options remain available when typed Mistral options are
+  unset.
 - Anthropic `OutputFormat` is explicit caller-owned behavior; Sigma does not
   infer native structured-output support from model names in this release.
 - Anthropic parallel-tool suppression fails locally when combined with a raw
@@ -45,6 +56,9 @@ Bedrock request-shape controls.
   result APIs, broad provider-neutral sampling controls, and model-inferred
   Anthropic output-format routing remain deferred and are tracked in
   [TODO.md](../TODO.md).
+- First-class Cloudflare/GitHub provider-row promotion, AWS SDK credential
+  loading, live provider probes, Mistral connectors, and catalog expansion remain
+  deferred.
 
 ## Validation status
 

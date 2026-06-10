@@ -309,6 +309,7 @@ func TestBedrockOptionsAreCopied(t *testing.T) {
 	responseFormat := map[string]any{"type": "object"}
 	options := sigma.BedrockOptions{
 		ToolChoice:          &sigma.BedrockToolChoice{Type: sigma.BedrockToolChoiceTool, Name: "lookup"},
+		BearerToken:         "bedrock-token",
 		InterleavedThinking: &interleaved,
 		TopP:                &topP,
 		StopSequences:       []string{"stop"},
@@ -340,6 +341,9 @@ func TestBedrockOptionsAreCopied(t *testing.T) {
 	}
 	if got.ToolChoice == nil || got.ToolChoice.Name != "lookup" {
 		t.Fatalf("tool choice = %+v, want lookup", got.ToolChoice)
+	}
+	if got.BearerToken != "bedrock-token" {
+		t.Fatalf("bearer token = %q, want bedrock-token", got.BearerToken)
 	}
 	if got.StopSequences[0] != "stop" {
 		t.Fatalf("stop sequence = %q, want stop", got.StopSequences[0])
@@ -378,8 +382,41 @@ func TestBedrockOptionsAreCopied(t *testing.T) {
 		got.RequestMetadata["trace"] != "original" ||
 		got.AdditionalModelRequestFields["custom"] != "original" ||
 		got.AdditionalModelResponseFieldPaths[0] != "/stop_sequence" ||
+		got.BearerToken != "bedrock-token" ||
 		got.ResponseFormat.(map[string]any)["type"] != "object" {
 		t.Fatalf("bedrock options were not cloned after provider mutation: %+v", got)
+	}
+}
+
+func TestMistralOptionsAreCopied(t *testing.T) {
+	t.Parallel()
+
+	options := sigma.MistralOptions{
+		ToolChoice: &sigma.MistralToolChoice{Type: sigma.MistralToolChoiceTool, Name: "lookup"},
+	}
+	client, provider, model := newOptionsTestClient(t,
+		sigma.WithDefaultOptions(sigma.WithMistralOptions(options)),
+	)
+	options.ToolChoice.Name = "mutated"
+
+	if _, err := client.Complete(context.Background(), model, sigma.Request{}); err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+	got := provider.opts.MistralOptions
+	if got == nil {
+		t.Fatal("mistral options = nil")
+	}
+	if got.ToolChoice == nil || got.ToolChoice.Name != "lookup" {
+		t.Fatalf("mistral tool choice = %+v, want lookup", got.ToolChoice)
+	}
+
+	got.ToolChoice.Name = "provider-mutated"
+	if _, err := client.Complete(context.Background(), model, sigma.Request{}); err != nil {
+		t.Fatalf("second Complete returned error: %v", err)
+	}
+	got = provider.opts.MistralOptions
+	if got.ToolChoice == nil || got.ToolChoice.Name != "lookup" {
+		t.Fatalf("mistral tool choice after mutation = %+v, want lookup", got.ToolChoice)
 	}
 }
 
@@ -396,6 +433,8 @@ func TestOptionsValidateCommonInvalidValues(t *testing.T) {
 		{name: "max retry delay", opt: sigma.WithMaxRetryDelay(-time.Second)},
 		{name: "thinking budget", opt: sigma.WithThinkingBudgetTokens(-1)},
 		{name: "openai top logprobs", opt: sigma.WithOpenAIOptions(sigma.OpenAIOptions{TopLogprobs: -1})},
+		{name: "mistral simple tool choice with name", opt: sigma.WithMistralOptions(sigma.MistralOptions{ToolChoice: &sigma.MistralToolChoice{Type: sigma.MistralToolChoiceAuto, Name: "lookup"}})},
+		{name: "mistral named tool without name", opt: sigma.WithMistralOptions(sigma.MistralOptions{ToolChoice: &sigma.MistralToolChoice{Type: sigma.MistralToolChoiceTool}})},
 		{name: "bedrock top p", opt: sigma.WithBedrockOptions(sigma.BedrockOptions{TopP: testFloat64Ptr(-0.1)})},
 		{name: "bedrock tool choice", opt: sigma.WithBedrockOptions(sigma.BedrockOptions{ToolChoice: &sigma.BedrockToolChoice{Type: sigma.BedrockToolChoiceTool}})},
 	}

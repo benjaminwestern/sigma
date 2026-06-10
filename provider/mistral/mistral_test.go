@@ -291,6 +291,109 @@ func TestCompleteSetsSessionAffinityHeaderUnlessCallerOverrides(t *testing.T) {
 	}
 }
 
+func TestTypedMistralToolChoicePayloads(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		opts sigma.MistralOptions
+		want any
+	}{
+		{
+			name: "auto",
+			opts: sigma.MistralOptions{ToolChoice: &sigma.MistralToolChoice{Type: sigma.MistralToolChoiceAuto}},
+			want: "auto",
+		},
+		{
+			name: "required",
+			opts: sigma.MistralOptions{ToolChoice: &sigma.MistralToolChoice{Type: sigma.MistralToolChoiceRequired}},
+			want: "required",
+		},
+		{
+			name: "named tool",
+			opts: sigma.MistralOptions{ToolChoice: &sigma.MistralToolChoice{Type: sigma.MistralToolChoiceTool, Name: "lookup"}},
+			want: map[string]any{
+				"type": "function",
+				"function": map[string]any{
+					"name": "lookup",
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			requests := make(chan capturedRequest, 1)
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				captureRequest(t, requests, r)
+				writeMistralSSE(t, w, completedEvent)
+			}))
+			t.Cleanup(server.Close)
+
+			providerID := sigma.ProviderID("mistral-tool-choice-" + strings.ReplaceAll(tt.name, " ", "-"))
+			model := mistralTestModel(providerID)
+			client := mistralTestClient(t, providerID, model, server.URL)
+
+			if _, err := client.Complete(
+				context.Background(),
+				model,
+				sigma.Request{
+					Messages: []sigma.Message{sigma.UserText("Use a tool.")},
+					Tools:    []sigma.Tool{{Name: "lookup", InputSchema: sigma.Schema{"type": "object"}}},
+				},
+				sigma.WithMistralOptions(tt.opts),
+			); err != nil {
+				t.Fatalf("Complete returned error: %v", err)
+			}
+
+			payload := decodePayload(t, receiveRequest(t, requests).Body)
+			completionArgs := payload["completion_args"].(map[string]any)
+			if got := completionArgs["tool_choice"]; !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("tool choice = %#v, want %#v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestTypedMistralToolChoiceOverridesRawProviderOption(t *testing.T) {
+	t.Parallel()
+
+	requests := make(chan capturedRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captureRequest(t, requests, r)
+		writeMistralSSE(t, w, completedEvent)
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("mistral-typed-tool-choice-precedence")
+	model := mistralTestModel(providerID)
+	client := mistralTestClient(t, providerID, model, server.URL)
+
+	if _, err := client.Complete(
+		context.Background(),
+		model,
+		sigma.Request{
+			Messages: []sigma.Message{sigma.UserText("Use a tool.")},
+			Tools:    []sigma.Tool{{Name: "lookup", InputSchema: sigma.Schema{"type": "object"}}},
+		},
+		sigma.WithProviderOption(providerID, "tool_choice", "none"),
+		sigma.WithMistralOptions(sigma.MistralOptions{
+			ToolChoice: &sigma.MistralToolChoice{Type: sigma.MistralToolChoiceRequired},
+		}),
+	); err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+
+	payload := decodePayload(t, receiveRequest(t, requests).Body)
+	completionArgs := payload["completion_args"].(map[string]any)
+	if got, want := completionArgs["tool_choice"], "required"; got != want {
+		t.Fatalf("tool choice = %#v, want %#v", got, want)
+	}
+}
+
 func TestConversationsRejectsProviderDefinedTools(t *testing.T) {
 	t.Parallel()
 

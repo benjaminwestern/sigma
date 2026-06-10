@@ -329,7 +329,9 @@ func completionArgs(model sigma.Model, opts sigma.Options) map[string]any {
 	}
 	addMistralReasoningArgs(args, model, opts)
 	options := providerOptions(opts, model.Provider)
-	if value, ok := options[providerOptionToolChoice]; ok {
+	if value, ok := mistralToolChoice(opts); ok {
+		args["tool_choice"] = value
+	} else if value, ok := options[providerOptionToolChoice]; ok {
 		args["tool_choice"] = value
 	} else if value, ok := options[providerOptionToolChoiceGo]; ok {
 		args["tool_choice"] = value
@@ -358,6 +360,22 @@ func addMistralReasoningArgs(args map[string]any, model sigma.Model, opts sigma.
 		}
 		args["reasoning_effort"] = value
 	}
+}
+
+func mistralToolChoice(opts sigma.Options) (any, bool) {
+	if opts.MistralOptions == nil || opts.MistralOptions.ToolChoice == nil {
+		return nil, false
+	}
+	choice := opts.MistralOptions.ToolChoice
+	if choice.Type == sigma.MistralToolChoiceTool {
+		return map[string]any{
+			payloadKeyType: "function",
+			"function": map[string]any{
+				"name": choice.Name,
+			},
+		}, true
+	}
+	return string(choice.Type), true
 }
 
 func mistralReasoningMode(model sigma.Model) (string, bool) {

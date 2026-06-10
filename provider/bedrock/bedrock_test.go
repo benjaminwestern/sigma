@@ -1093,6 +1093,59 @@ func TestDefaultCredentialDetectorUsesBedrockBearerTokenFromEnvironment(t *testi
 	}
 }
 
+func TestDefaultCredentialDetectorUsesRequestScopedBedrockBearerTokenWithoutEnvironment(t *testing.T) {
+	t.Setenv("AWS_BEARER_TOKEN_BEDROCK", "")
+	t.Setenv("AWS_ACCESS_KEY_ID", "")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "")
+
+	model := bedrockTestModel(sigma.ProviderAmazonBedrock)
+	info, err := (DefaultCredentialDetector{}).Detect(context.Background(), model, sigma.Options{
+		BedrockOptions: &sigma.BedrockOptions{BearerToken: "request-token"},
+	}, Config{})
+	if err != nil {
+		t.Fatalf("Detect returned error: %v", err)
+	}
+	if got, want := info.Source, CredentialSourceBearerToken; got != want {
+		t.Fatalf("source = %q, want %q", got, want)
+	}
+	if got, want := info.BearerToken, "request-token"; got != want {
+		t.Fatalf("bearer token = %q, want %q", got, want)
+	}
+	if info.AccessKeyID != "" || info.SecretAccessKey != "" {
+		t.Fatalf("static credentials = %q/%q, want request bearer token only", info.AccessKeyID, info.SecretAccessKey)
+	}
+}
+
+func TestDefaultCredentialDetectorRequestScopedBedrockBearerTokenWins(t *testing.T) {
+	t.Setenv("AWS_BEARER_TOKEN_BEDROCK", "env-token")
+	t.Setenv("AWS_ACCESS_KEY_ID", "AKIAIGNORED")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "ignored-secret")
+
+	model := bedrockTestModel(sigma.ProviderAmazonBedrock)
+	resolver := sigma.AuthResolverFunc(func(context.Context, sigma.Model, sigma.Options) (sigma.Credential, error) {
+		return sigma.Credential{
+			Type:  sigma.CredentialTypeOAuthToken,
+			Value: "resolver-token",
+		}, nil
+	})
+	info, err := (DefaultCredentialDetector{}).Detect(context.Background(), model, sigma.Options{
+		AuthResolver:   resolver,
+		BedrockOptions: &sigma.BedrockOptions{BearerToken: "request-token"},
+	}, Config{
+		Region:           "us-east-1",
+		CredentialSource: CredentialSourceAuto,
+	})
+	if err != nil {
+		t.Fatalf("Detect returned error: %v", err)
+	}
+	if got, want := info.Source, CredentialSourceBearerToken; got != want {
+		t.Fatalf("source = %q, want %q", got, want)
+	}
+	if got, want := info.BearerToken, "request-token"; got != want {
+		t.Fatalf("bearer token = %q, want %q", got, want)
+	}
+}
+
 func TestDefaultCredentialDetectorUsesStaticEnvironmentCredentials(t *testing.T) {
 	t.Setenv("AWS_BEARER_TOKEN_BEDROCK", "")
 	t.Setenv("AWS_ACCESS_KEY_ID", "AKIASTATIC")

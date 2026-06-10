@@ -324,6 +324,9 @@ should still come through the catalog refresh workflow.
 
 ## Mistral parity
 
+- [x] Add typed Mistral Conversations tool-choice controls for automatic,
+      required, disabled, any-tool, and named-tool selection while preserving
+      raw provider options for advanced request fields.
 - [x] Add Mistral Conversations base64 image input and image-bearing tool
       results for direct Pixtral models with deterministic payload fixtures.
 - [ ] Add Mistral URL/file image references only after the Conversations
@@ -349,6 +352,8 @@ should still come through the catalog refresh workflow.
 - [x] Add focused Bedrock `InvokeModel` embedding support for Titan, Cohere,
       and Nova text embedding request shapes through the existing stdlib
       credential and signing path.
+- [x] Add request-scoped Bedrock bearer-token auth through typed Bedrock options
+      before resolver and environment credential fallback.
 - [ ] Keep live Bedrock validation out of `mise run ci`; use credential-gated
       checks only for manual compatibility investigation.
 - [ ] Expand broad Bedrock generated metadata only through the catalog refresh

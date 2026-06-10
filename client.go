@@ -353,6 +353,9 @@ func mergeOptions(base Options, override Options) Options {
 	if override.GoogleOptions != nil {
 		merged.GoogleOptions = cloneGoogleOptions(override.GoogleOptions)
 	}
+	if override.MistralOptions != nil {
+		merged.MistralOptions = cloneMistralOptions(override.MistralOptions)
+	}
 	if override.BedrockOptions != nil {
 		merged.BedrockOptions = cloneBedrockOptions(override.BedrockOptions)
 	}
@@ -404,6 +407,11 @@ func validateOptions(model Model, options Options) error {
 		!validGoogleToolChoice(options.GoogleOptions.ToolChoice) {
 		return invalidOptionsError(model, "google tool choice must be auto, none, or any")
 	}
+	if options.MistralOptions != nil &&
+		options.MistralOptions.ToolChoice != nil &&
+		!validMistralToolChoice(*options.MistralOptions.ToolChoice) {
+		return invalidOptionsError(model, "mistral tool choice must be auto, none, any, required, or a named tool")
+	}
 	if options.BedrockOptions != nil {
 		if options.BedrockOptions.TopP != nil && *options.BedrockOptions.TopP < 0 {
 			return invalidOptionsError(model, "bedrock top_p must be non-negative")
@@ -432,6 +440,17 @@ func validBedrockToolChoice(choice BedrockToolChoice) bool {
 	case BedrockToolChoiceAuto, BedrockToolChoiceAny, BedrockToolChoiceNone:
 		return choice.Name == ""
 	case BedrockToolChoiceTool:
+		return choice.Name != ""
+	default:
+		return false
+	}
+}
+
+func validMistralToolChoice(choice MistralToolChoice) bool {
+	switch choice.Type {
+	case MistralToolChoiceAuto, MistralToolChoiceAny, MistralToolChoiceNone, MistralToolChoiceRequired:
+		return choice.Name == ""
+	case MistralToolChoiceTool:
 		return choice.Name != ""
 	default:
 		return false
