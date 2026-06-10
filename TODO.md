@@ -225,6 +225,15 @@ upstream.
 - [x] Add focused Chat Completions reasoning-format support for generated
       Together, Qwen, Z.ai, and Ant Ling metadata, including Z.ai `tool_stream`
       payloads.
+- [x] Refresh the focused OpenRouter image catalog with the missing routed MAI
+      Image 2.5 and Riverflow 2.5 rows while keeping broad OpenRouter text
+      expansion deferred.
+- [x] Add the missing direct Anthropic Claude Fable 5 row with adaptive
+      thinking metadata, xhigh thinking-level mapping, image input support,
+      current limits, and pricing.
+- [x] Add a deterministic local catalog summary report for the generator,
+      covering source count, text/image/embedding totals, text tool/reasoning
+      counts, and provider/API buckets without changing the checked-in catalog.
 - [ ] Add an offline-friendly refresh command that can ingest `models.dev` and
       provider catalog APIs into a candidate catalog file without replacing the
       checked-in review step.
@@ -232,11 +241,26 @@ upstream.
       `models.dev` for broad text model discovery, provider APIs for surfaces
       not covered there, and hand-curated overrides for known endpoint behavior
       mismatches.
-- [ ] Emit a refresh report that lists added, removed, changed, skipped, and
-      overridden models by provider so catalog review is tractable.
+- [ ] Extend the local summary into a candidate refresh diff report that lists
+      added, removed, changed, skipped, and overridden models by provider so
+      catalog review is tractable.
 - [ ] Expand broad OpenRouter text metadata only through the catalog refresh
       workflow, with deterministic diffs and reviewable routing/cost changes
       instead of ad hoc catalog imports.
+- [ ] Evaluate high-value Bedrock regional/application-inference-profile rows
+      and current direct Anthropic rows through deterministic Bedrock/Anthropic
+      metadata assertions before adding broad regional catalog coverage.
+- [ ] Evaluate Anthropic-routed aliases through Cloudflare AI Gateway,
+      OpenRouter, Vercel AI Gateway, OpenCode, and Bedrock only after route
+      shape, auth, compatibility metadata, pricing, and regional availability
+      are reviewed per provider family.
+- [ ] Evaluate new provider-family catalog candidates such as Hugging Face
+      router, Kimi coding, and Xiaomi token-plan endpoints only after deciding
+      provider IDs, credential env vars, compatibility metadata, and first-class
+      provider-row promotion requirements.
+- [ ] Expand broad Vercel AI Gateway and OpenRouter text catalogs only after
+      source-aware provider/API mapping, tool-capable filtering, reasoning
+      metadata, and cost/routing diff reports are in place.
 - [ ] Preserve Sigma's current generated-output contract: deterministic order,
       validated `internal/modeldata/catalog.json`, generated Go code, checksum
       tests, and metadata-only default registry entries.

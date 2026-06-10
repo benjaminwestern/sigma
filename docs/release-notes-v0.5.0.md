@@ -10,7 +10,9 @@ checklist see [RELEASING.md](../RELEASING.md).
 `sigma` v0.5.0 is open for development with focused provider hardening for
 Bedrock application inference profile routing, request-scoped Bedrock bearer
 tokens, typed Mistral tool selection, and advanced Anthropic and Bedrock
-request-shape controls.
+request-shape controls. It also tightens the generated model-metadata workflow
+with a deterministic local catalog summary while keeping broad catalog refresh
+automation outside the release scope.
 
 ## Added
 
@@ -22,6 +24,15 @@ request-shape controls.
   credential fallback.
 - Mistral Conversations now accepts typed `sigma.MistralOptions.ToolChoice`
   values for automatic, required, disabled, any-tool, and named-tool selection.
+- The model metadata generator can emit a deterministic catalog summary covering
+  source count, text/image/embedding totals, text tool/reasoning counts, and
+  provider/API buckets. Generator tests now also cover deterministic embedding
+  model rendering.
+- Generated OpenRouter image metadata now includes routed MAI Image 2.5 and
+  Riverflow 2.5 rows through the existing OpenRouter Images adapter.
+- Generated Anthropic metadata now includes Claude Fable 5 with adaptive
+  thinking metadata, xhigh thinking-level mapping, image input support, current
+  limits, and pricing.
 - Anthropic Messages now accepts typed `sigma.AnthropicOptions.OutputFormat`
   values and sends them as native `output_format` payloads.
 - Anthropic Messages can disable parallel tool use with
@@ -42,6 +53,15 @@ request-shape controls.
 - Typed Mistral tool choice takes precedence over raw `tool_choice` provider
   options. Raw provider options remain available when typed Mistral options are
   unset.
+- The model-generation summary is reporting-only. It does not fetch provider
+  catalogs, change catalog source precedence, or add/remove built-in model rows.
+- The OpenRouter image catalog refresh is limited to image-generation rows that
+  use Sigma's existing OpenRouter Images adapter. It does not promote broad
+  OpenRouter text routing or new provider families.
+- The Anthropic catalog refresh is limited to the direct Anthropic Messages row.
+  Anthropic-routed aliases on other provider families remain separate catalog
+  decisions because their route shape, auth, compatibility metadata, pricing,
+  and regional availability can differ.
 - Anthropic `OutputFormat` is explicit caller-owned behavior; Sigma does not
   infer native structured-output support from model names in this release.
 - Anthropic parallel-tool suppression fails locally when combined with a raw
@@ -57,8 +77,10 @@ request-shape controls.
   Anthropic output-format routing remain deferred and are tracked in
   [TODO.md](../TODO.md).
 - First-class Cloudflare/GitHub provider-row promotion, AWS SDK credential
-  loading, live provider probes, Mistral connectors, and catalog expansion remain
-  deferred.
+  loading, live provider probes, Mistral connectors, candidate catalog ingestion,
+  source-precedence automation, refresh diff reports, broad OpenRouter/Vercel
+  text expansion, Anthropic-routed alias expansion, Bedrock regional-profile
+  catalog expansion, and new provider family catalog promotion remain deferred.
 
 ## Validation status
 

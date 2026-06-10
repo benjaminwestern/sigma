@@ -21,6 +21,16 @@ See [release notes](docs/release-notes-v0.5.0.md).
 - Mistral Conversations now has typed tool-choice controls for automatic,
   required, disabled, any-tool, and named-tool selection while preserving raw
   provider options for advanced request fields.
+- The model metadata generator now has an opt-in deterministic catalog summary
+  report covering source count, text/image/embedding totals, text
+  tool/reasoning counts, and provider/API buckets, with embedding generation
+  included in deterministic-render coverage.
+- Generated OpenRouter image metadata now includes the MAI Image 2.5 and
+  Riverflow 2.5 routed rows, keeping broad OpenRouter text expansion deferred
+  to the catalog refresh workflow.
+- Generated Anthropic metadata now includes Claude Fable 5 with adaptive
+  thinking metadata, xhigh thinking-level mapping, image input support, current
+  limits, and pricing.
 - Anthropic Messages now has typed options for native `output_format` payloads
   and `disable_parallel_tool_use` tool-choice controls.
 - Bedrock Converse Stream now supports typed structured-output requests by

@@ -32,11 +32,13 @@ func main() {
 	var modelsPath string
 	var imageModelsPath string
 	var embeddingModelsPath string
+	var report bool
 
 	flag.StringVar(&inputPath, "input", "internal/modeldata/catalog.json", "model metadata catalog JSON")
 	flag.StringVar(&modelsPath, "models", "models_generated.go", "generated text model Go file")
 	flag.StringVar(&imageModelsPath, "image-models", "image_models_generated.go", "generated image model Go file")
 	flag.StringVar(&embeddingModelsPath, "embedding-models", "embedding_models_generated.go", "generated embedding model Go file")
+	flag.BoolVar(&report, "report", false, "print a deterministic catalog summary")
 	flag.Parse()
 
 	catalog, err := modeldata.Load(inputPath)
@@ -51,6 +53,9 @@ func main() {
 	}
 	if err := writeGoFile(embeddingModelsPath, renderEmbeddingModels(catalog)); err != nil {
 		fatalf("write embedding models: %v", err)
+	}
+	if report {
+		fmt.Print(renderCatalogReport(catalog))
 	}
 }
 
@@ -118,6 +123,94 @@ func renderEmbeddingModels(catalog modeldata.Catalog) []byte {
 	b.WriteString("\treturn nil\n")
 	b.WriteString("}\n")
 	return b.Bytes()
+}
+
+type catalogReportBucket struct {
+	Provider string
+	API      string
+	Count    int
+}
+
+func renderCatalogReport(catalog modeldata.Catalog) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "Catalog snapshot: %s\n", catalog.SnapshotDate)
+	fmt.Fprintf(&b, "Sources: %d\n", len(catalog.Sources))
+	writeTextCatalogReport(&b, catalog.TextModels)
+	writeCatalogReportSection(&b, "Image models", imageCatalogBuckets(catalog.ImageModels))
+	writeCatalogReportSection(&b, "Embedding models", embeddingCatalogBuckets(catalog.EmbeddingModels))
+	return b.String()
+}
+
+func writeTextCatalogReport(b *strings.Builder, models []modeldata.TextModel) {
+	toolCapable := 0
+	reasoningCapable := 0
+	for _, model := range models {
+		if model.SupportsTools {
+			toolCapable++
+		}
+		if model.SupportsThinking || len(model.ThinkingLevels) > 0 || len(model.ThinkingLevelMap) > 0 {
+			reasoningCapable++
+		}
+	}
+	fmt.Fprintf(b, "Text models: %d (tools: %d, reasoning: %d)\n", len(models), toolCapable, reasoningCapable)
+	writeCatalogReportBuckets(b, textCatalogBuckets(models))
+}
+
+func writeCatalogReportSection(b *strings.Builder, title string, buckets []catalogReportBucket) {
+	total := 0
+	for _, bucket := range buckets {
+		total += bucket.Count
+	}
+	fmt.Fprintf(b, "%s: %d\n", title, total)
+	writeCatalogReportBuckets(b, buckets)
+}
+
+func writeCatalogReportBuckets(b *strings.Builder, buckets []catalogReportBucket) {
+	for _, bucket := range buckets {
+		fmt.Fprintf(b, "  %s / %s: %d\n", bucket.Provider, bucket.API, bucket.Count)
+	}
+}
+
+func textCatalogBuckets(models []modeldata.TextModel) []catalogReportBucket {
+	counts := make(map[string]int)
+	for _, model := range models {
+		counts[catalogReportKey(model.Provider, model.API)]++
+	}
+	return sortedCatalogReportBuckets(counts)
+}
+
+func imageCatalogBuckets(models []modeldata.ImageModel) []catalogReportBucket {
+	counts := make(map[string]int)
+	for _, model := range models {
+		counts[catalogReportKey(model.Provider, model.API)]++
+	}
+	return sortedCatalogReportBuckets(counts)
+}
+
+func embeddingCatalogBuckets(models []modeldata.EmbeddingModel) []catalogReportBucket {
+	counts := make(map[string]int)
+	for _, model := range models {
+		counts[catalogReportKey(model.Provider, model.API)]++
+	}
+	return sortedCatalogReportBuckets(counts)
+}
+
+func sortedCatalogReportBuckets(counts map[string]int) []catalogReportBucket {
+	keys := sortedMapKeys(counts)
+	buckets := make([]catalogReportBucket, 0, len(keys))
+	for _, key := range keys {
+		provider, api, _ := strings.Cut(key, "\x00")
+		buckets = append(buckets, catalogReportBucket{
+			Provider: provider,
+			API:      api,
+			Count:    counts[key],
+		})
+	}
+	return buckets
+}
+
+func catalogReportKey(provider, api string) string {
+	return provider + "\x00" + api
 }
 
 func writeSnapshotComment(b *bytes.Buffer, catalog modeldata.Catalog) {

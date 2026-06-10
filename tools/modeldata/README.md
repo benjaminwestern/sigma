@@ -8,9 +8,19 @@ Refresh flow:
 
 1. Update `internal/modeldata/catalog.json`.
 2. Run `mise run go:generate`.
-3. Review `models_generated.go` and `image_models_generated.go`.
+3. Review `models_generated.go`, `image_models_generated.go`, and
+   `embedding_models_generated.go`.
 4. Run `mise run go:test`.
 
-The generator validates required fields and emits text models ordered by
-provider, API, and model ID. Image models use the same ordering. Generated files
-are deterministic and should not be edited by hand.
+The generator validates required fields and emits text, image, and embedding
+models ordered by provider, API, and model ID. Generated files are deterministic
+and should not be edited by hand.
+
+For a local catalog summary while regenerating, run:
+
+```bash
+mise run go:run -- ./cmd/sigma-generate-models -report
+```
+
+The summary is reporting-only. It does not fetch provider catalogs or change the
+checked-in catalog.

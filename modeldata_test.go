@@ -92,6 +92,23 @@ func TestGeneratedModelMetadataRegistersIntoFreshRegistry(t *testing.T) {
 	if !haiku.SupportsReasoning() || haiku.ContextWindow != 200000 || haiku.MaxOutputTokens != 64000 {
 		t.Fatalf("Claude Haiku 4.5 metadata = %+v, want reasoning with current limits", haiku)
 	}
+	fable, ok := registry.Model(ProviderAnthropic, "claude-fable-5")
+	if !ok {
+		t.Fatal("fresh registry missing generated Claude Fable 5 model")
+	}
+	if fable.API != APIAnthropicMessages || !fable.SupportsTools || !fable.SupportsImages() || !fable.SupportsReasoning() {
+		t.Fatalf("Claude Fable 5 metadata = %+v, want Anthropic Messages with tools, images, and reasoning", fable)
+	}
+	if fable.AnthropicMessagesCompat == nil || fable.AnthropicMessagesCompat.ThinkingFormat != AnthropicThinkingAdaptive {
+		t.Fatalf("Claude Fable 5 compat = %#v, want adaptive thinking", fable.AnthropicMessagesCompat)
+	}
+	if got, ok := fable.ProviderThinkingLevel(ThinkingLevelXHigh); !ok || got != "xhigh" {
+		t.Fatalf("Claude Fable 5 xhigh level = %q, %v; want xhigh, true", got, ok)
+	}
+	if fable.ContextWindow != 1000000 || fable.MaxOutputTokens != 128000 {
+		t.Fatalf("Claude Fable 5 limits = context %d max %d, want 1000000/128000", fable.ContextWindow, fable.MaxOutputTokens)
+	}
+	assertMetadataStrings(t, fable.ProviderMetadata, MetadataAPIKeyEnvVars, []string{"ANTHROPIC_API_KEY"})
 	opus, ok := registry.Model(ProviderAnthropic, "claude-opus-4-8")
 	if !ok {
 		t.Fatal("fresh registry missing generated Claude Opus 4.8 model")
@@ -351,6 +368,36 @@ func TestGeneratedModelMetadataRegistersIntoFreshRegistry(t *testing.T) {
 	}
 	assertMetadataString(t, geminiImage.ProviderMetadata, "routedProvider", "google")
 	assertMetadataStrings(t, geminiImage.ProviderMetadata, MetadataAPIKeyEnvVars, []string{"OPENROUTER_API_KEY"})
+
+	maiImage, ok := registry.ImageModel(ProviderOpenRouter, "microsoft/mai-image-2.5")
+	if !ok {
+		t.Fatal("fresh registry missing generated OpenRouter MAI image model")
+	}
+	if maiImage.API != ImageAPIOpenRouterImages {
+		t.Fatalf("MAI image API = %q, want %q", maiImage.API, ImageAPIOpenRouterImages)
+	}
+	assertMetadataString(t, maiImage.ProviderMetadata, "routedProvider", "microsoft")
+	assertMetadataString(t, maiImage.ProviderMetadata, "modelFamily", "mai-image")
+	assertMetadataStrings(t, maiImage.ProviderMetadata, MetadataAPIKeyEnvVars, []string{"OPENROUTER_API_KEY"})
+	cost, ok := maiImage.ProviderMetadata["cost"].(map[string]any)
+	if !ok {
+		t.Fatalf("MAI image cost metadata type = %T, want map[string]any", maiImage.ProviderMetadata["cost"])
+	}
+	values, ok := cost["values"].(map[string]float64)
+	if !ok || values["input"] != 5 {
+		t.Fatalf("MAI image cost values = %#v, want input token cost", cost["values"])
+	}
+
+	riverflowImage, ok := registry.ImageModel(ProviderOpenRouter, "sourceful/riverflow-v2.5-pro")
+	if !ok {
+		t.Fatal("fresh registry missing generated OpenRouter Riverflow image model")
+	}
+	if riverflowImage.API != ImageAPIOpenRouterImages {
+		t.Fatalf("Riverflow image API = %q, want %q", riverflowImage.API, ImageAPIOpenRouterImages)
+	}
+	assertMetadataString(t, riverflowImage.ProviderMetadata, "routedProvider", "sourceful")
+	assertMetadataString(t, riverflowImage.ProviderMetadata, "modelFamily", "riverflow")
+	assertMetadataStrings(t, riverflowImage.ProviderMetadata, MetadataAPIKeyEnvVars, []string{"OPENROUTER_API_KEY"})
 }
 
 func assertProviderConstantsHaveGeneratedTextMetadata(t *testing.T, registry *Registry) {

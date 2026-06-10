@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "snapshotDate": "2026-06-01",
+  "snapshotDate": "2026-06-10",
   "sources": [
     {
       "name": "Amazon Bedrock model catalog",
@@ -1544,6 +1544,47 @@
         "supportsReasoningEffort": "unsupported",
         "maxTokensField": "max_tokens",
         "reasoningFormat": "ant-ling"
+      }
+    },
+    {
+      "id": "claude-fable-5",
+      "name": "Claude Fable 5",
+      "provider": "anthropic",
+      "api": "anthropic-messages",
+      "baseURL": "https://api.anthropic.com",
+      "supportedInputs": [
+        "text",
+        "image"
+      ],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 10,
+        "outputPerMillion": 50,
+        "cacheReadInputPerMillion": 1,
+        "cacheWriteInputPerMillion": 12.5,
+        "currency": "USD"
+      },
+      "contextWindow": 1000000,
+      "maxOutputTokens": 128000,
+      "headers": {
+        "anthropic-version": "2023-06-01"
+      },
+      "authEnvNames": [
+        "ANTHROPIC_API_KEY"
+      ],
+      "defaultTransport": "sse",
+      "providerMetadata": {
+        "modelFamily": "claude"
+      },
+      "anthropicMessagesCompat": {
+        "supportsEagerToolInputStreaming": "supported",
+        "supportsLongCacheRetention": "supported",
+        "supportsCacheControlOnTools": "supported",
+        "thinkingFormat": "adaptive"
+      },
+      "thinkingLevelMap": {
+        "xhigh": "xhigh"
       }
     },
     {
@@ -16292,6 +16333,39 @@
       }
     },
     {
+      "id": "microsoft/mai-image-2.5",
+      "name": "Microsoft: MAI-Image-2.5",
+      "provider": "openrouter",
+      "api": "openrouter-images",
+      "baseURL": "https://openrouter.ai/api/v1",
+      "maxWidth": 1024,
+      "maxHeight": 1024,
+      "supportedSizes": [
+        "1024x1024"
+      ],
+      "supportedFormats": [
+        "image/png"
+      ],
+      "cost": {
+        "unit": "million tokens",
+        "currency": "USD",
+        "values": {
+          "input": 5
+        }
+      },
+      "headers": {
+        "HTTP-Referer": "",
+        "X-Title": ""
+      },
+      "authEnvNames": [
+        "OPENROUTER_API_KEY"
+      ],
+      "providerMetadata": {
+        "modelFamily": "mai-image",
+        "routedProvider": "microsoft"
+      }
+    },
+    {
       "id": "openai/gpt-5-image",
       "name": "OpenAI: GPT-5 Image",
       "provider": "openrouter",
@@ -16954,6 +17028,72 @@
       ],
       "providerMetadata": {
         "modelFamily": "sourceful",
+        "routedProvider": "sourceful"
+      }
+    },
+    {
+      "id": "sourceful/riverflow-v2.5-fast",
+      "name": "Sourceful: Riverflow V2.5 Fast",
+      "provider": "openrouter",
+      "api": "openrouter-images",
+      "baseURL": "https://openrouter.ai/api/v1",
+      "maxWidth": 1024,
+      "maxHeight": 1024,
+      "supportedSizes": [
+        "1024x1024"
+      ],
+      "supportedFormats": [
+        "image/png"
+      ],
+      "cost": {
+        "unit": "image",
+        "currency": "USD",
+        "values": {
+          "image": 0
+        }
+      },
+      "headers": {
+        "HTTP-Referer": "",
+        "X-Title": ""
+      },
+      "authEnvNames": [
+        "OPENROUTER_API_KEY"
+      ],
+      "providerMetadata": {
+        "modelFamily": "riverflow",
+        "routedProvider": "sourceful"
+      }
+    },
+    {
+      "id": "sourceful/riverflow-v2.5-pro",
+      "name": "Sourceful: Riverflow V2.5 Pro",
+      "provider": "openrouter",
+      "api": "openrouter-images",
+      "baseURL": "https://openrouter.ai/api/v1",
+      "maxWidth": 1024,
+      "maxHeight": 1024,
+      "supportedSizes": [
+        "1024x1024"
+      ],
+      "supportedFormats": [
+        "image/png"
+      ],
+      "cost": {
+        "unit": "image",
+        "currency": "USD",
+        "values": {
+          "image": 0
+        }
+      },
+      "headers": {
+        "HTTP-Referer": "",
+        "X-Title": ""
+      },
+      "authEnvNames": [
+        "OPENROUTER_API_KEY"
+      ],
+      "providerMetadata": {
+        "modelFamily": "riverflow",
         "routedProvider": "sourceful"
       }
     },
