@@ -142,6 +142,7 @@ Fireworks, and Xiaomi routes. Compatibility varies by endpoint; check
 ```go
 registry := sigma.DefaultRegistry()
 _ = fireworks.Register(registry)
+_ = fireworks.RegisterAnthropic(registry)
 client := sigma.NewClient(sigma.WithRegistry(registry))
 ```
 
@@ -154,6 +155,13 @@ OpenAI-compatible Chat Completions endpoint and supports streaming text,
 usage, thinking, and function tools in the shared `openai-completions` path.
 `sigma.WithReasoningLevel` maps to Fireworks `reasoning_effort`;
 `sigma.WithThinkingBudgetTokens` maps to the Fireworks `thinking` object.
+
+The built-in Fireworks Anthropic-compatible route is
+`accounts/fireworks/models/kimi-k2p6` under `ProviderFireworksAnthropic`.
+Register it with `fireworks.RegisterAnthropic`; it uses the shared
+Anthropic Messages adapter against Fireworks' `/messages` endpoint and carries
+compatibility metadata for image input, thinking levels, cache behavior, and
+tool use.
 
 ### Google Generative AI
 

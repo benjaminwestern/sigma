@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/wintermi/sigma"
-	"github.com/wintermi/sigma/provider/anthropic"
 	"github.com/wintermi/sigma/provider/fireworks"
 	"github.com/wintermi/sigma/provider/openai"
 	"github.com/wintermi/sigma/provider/opencode"
@@ -151,8 +150,8 @@ var routes = map[string]routeSpec{
 	},
 	"fireworks-anthropic": {
 		Name:             "fireworks-anthropic",
-		Provider:         sigma.ProviderFireworks,
-		BaseURL:          "https://api.fireworks.ai/inference",
+		Provider:         sigma.ProviderFireworksAnthropic,
+		BaseURL:          fireworks.DefaultBaseURL,
 		ModelBaseURL:     fireworks.DefaultBaseURL,
 		APIKeyEnv:        "FIREWORKS_API_KEY",
 		RegisterProvider: registerFireworksAnthropicProvider,
@@ -502,7 +501,7 @@ func registerFireworksOpenAIProvider(registry *sigma.Registry, route routeSpec) 
 }
 
 func registerFireworksAnthropicProvider(registry *sigma.Registry, route routeSpec) error {
-	if err := anthropic.Register(registry, sigma.ProviderFireworks, anthropic.WithBaseURL(route.BaseURL)); err != nil {
+	if err := fireworks.RegisterAnthropic(registry, fireworks.WithAnthropicBaseURL(route.BaseURL)); err != nil {
 		return fmt.Errorf("register fireworks anthropic-compatible provider: %w", err)
 	}
 	return nil

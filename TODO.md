@@ -325,7 +325,7 @@ evidence bar.
       `cmd/sigma-surface-probe`.
 - [ ] Keep live Fireworks probing out of `mise run ci`; use it only for manual
       compatibility investigation with `FIREWORKS_API_KEY`.
-- [ ] Add Fireworks Anthropic-compatible routing before promoting regular
+- [x] Add Fireworks Anthropic-compatible routing before promoting regular
       Fireworks model rows that do not use the OpenAI-compatible Fire Pass
       route.
 - [ ] Promote additional Fireworks metadata only after matching deterministic

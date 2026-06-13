@@ -62,6 +62,32 @@ func TestGeneratedModelMetadataRegistersIntoFreshRegistry(t *testing.T) {
 	assertMetadataStrings(t, fireworks.ProviderMetadata, MetadataAPIKeyEnvVars, []string{"FIREWORKS_API_KEY"})
 	assertMetadataStrings(t, fireworks.ProviderMetadata, "imageInputSources", []string{"url"})
 
+	fireworksAnthropic, ok := registry.Model(ProviderFireworksAnthropic, "accounts/fireworks/models/kimi-k2p6")
+	if !ok {
+		t.Fatal("fresh registry missing generated Fireworks Anthropic Kimi K2.6 model")
+	}
+	if fireworksAnthropic.API != APIAnthropicMessages {
+		t.Fatalf("Fireworks Anthropic model API = %q, want %q", fireworksAnthropic.API, APIAnthropicMessages)
+	}
+	if !fireworksAnthropic.SupportsTools || !fireworksAnthropic.SupportsImages() {
+		t.Fatalf("Fireworks Anthropic model capabilities were not generated: %+v", fireworksAnthropic)
+	}
+	if !fireworksAnthropic.SupportsReasoning() || !fireworksAnthropic.SupportsThinkingLevel(ThinkingLevelHigh) {
+		t.Fatalf("Fireworks Anthropic reasoning metadata was not generated: %+v", fireworksAnthropic)
+	}
+	if fireworksAnthropic.AnthropicMessagesCompat == nil ||
+		fireworksAnthropic.AnthropicMessagesCompat.SupportsSessionAffinity != AnthropicCompatSupported ||
+		fireworksAnthropic.AnthropicMessagesCompat.SupportsEagerToolInputStreaming != AnthropicCompatUnsupported ||
+		fireworksAnthropic.AnthropicMessagesCompat.SupportsLongCacheRetention != AnthropicCompatUnsupported ||
+		fireworksAnthropic.AnthropicMessagesCompat.SupportsCacheControlOnTools != AnthropicCompatUnsupported ||
+		fireworksAnthropic.AnthropicMessagesCompat.ThinkingFormat != AnthropicThinkingBudget {
+		t.Fatalf("Fireworks Anthropic compat = %#v, want Messages compatibility overrides", fireworksAnthropic.AnthropicMessagesCompat)
+	}
+	assertMetadataString(t, fireworksAnthropic.ProviderMetadata, "baseURL", "https://api.fireworks.ai/inference/v1")
+	assertMetadataString(t, fireworksAnthropic.ProviderMetadata, "fireworksSurface", "anthropic")
+	assertMetadataString(t, fireworksAnthropic.ProviderMetadata, "pricingStatus", "unverified")
+	assertMetadataStrings(t, fireworksAnthropic.ProviderMetadata, MetadataAPIKeyEnvVars, []string{"FIREWORKS_API_KEY"})
+
 	anthropic, ok := registry.Model(ProviderAnthropic, "claude-3-5-sonnet-20241022")
 	if !ok {
 		t.Fatal("fresh registry missing generated Anthropic text model")

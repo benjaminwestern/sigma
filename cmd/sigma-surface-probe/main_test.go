@@ -91,7 +91,7 @@ func TestFireworksRoutesBuildExpectedModels(t *testing.T) {
 	assertMetadataStrings(t, openAI.ProviderMetadata, "apiKeyEnvVars", []string{"FIREWORKS_API_KEY"})
 
 	anthropic := routes["fireworks-anthropic"].Model(routes["fireworks-anthropic"], "accounts/fireworks/models/kimi-k2p6")
-	if anthropic.Provider != sigma.ProviderFireworks || anthropic.API != sigma.APIAnthropicMessages {
+	if anthropic.Provider != sigma.ProviderFireworksAnthropic || anthropic.API != sigma.APIAnthropicMessages {
 		t.Fatalf("fireworks-anthropic model provider/API = %q/%q", anthropic.Provider, anthropic.API)
 	}
 	if anthropic.AnthropicMessagesCompat == nil ||
@@ -101,7 +101,7 @@ func TestFireworksRoutesBuildExpectedModels(t *testing.T) {
 		anthropic.AnthropicMessagesCompat.SupportsCacheControlOnTools != sigma.AnthropicCompatUnsupported {
 		t.Fatalf("fireworks-anthropic compat = %#v, want Fireworks Anthropic compat", anthropic.AnthropicMessagesCompat)
 	}
-	assertMetadataString(t, anthropic.ProviderMetadata, "baseURL", "https://api.fireworks.ai/inference")
+	assertMetadataString(t, anthropic.ProviderMetadata, "baseURL", "https://api.fireworks.ai/inference/v1")
 	assertMetadataStrings(t, anthropic.ProviderMetadata, "apiKeyEnvVars", []string{"FIREWORKS_API_KEY"})
 }
 

@@ -39,6 +39,70 @@ func TestRegisterReportsOpenAICompletionsAPI(t *testing.T) {
 	}
 }
 
+func TestRegisterAnthropicReportsMessagesAPI(t *testing.T) {
+	t.Parallel()
+
+	registry := sigma.NewRegistry()
+	if err := fireworks.RegisterAnthropic(registry); err != nil {
+		t.Fatalf("RegisterAnthropic returned error: %v", err)
+	}
+	if err := registry.RegisterModel(fireworksAnthropicTestModel()); err != nil {
+		t.Fatalf("RegisterModel returned error: %v", err)
+	}
+
+	providers := registry.ListProviders()
+	if got, want := providers[0].ID, sigma.ProviderFireworksAnthropic; got != want {
+		t.Fatalf("provider ID = %q, want %q", got, want)
+	}
+	if got, want := providers[0].TextAPI, sigma.APIAnthropicMessages; got != want {
+		t.Fatalf("provider API = %q, want %q", got, want)
+	}
+}
+
+func TestCompleteStreamsTextWithFireworksAnthropicDefaults(t *testing.T) {
+	t.Parallel()
+
+	requests := make(chan capturedRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captureRequest(t, requests, r)
+		writeAnthropicCompleted(t, w)
+	}))
+	t.Cleanup(server.Close)
+
+	model := fireworksAnthropicTestModel()
+	registry := sigma.NewRegistry()
+	if err := fireworks.RegisterAnthropic(registry, fireworks.WithAnthropicBaseURL(server.URL)); err != nil {
+		t.Fatalf("RegisterAnthropic returned error: %v", err)
+	}
+	if err := registry.RegisterModel(model); err != nil {
+		t.Fatalf("RegisterModel returned error: %v", err)
+	}
+	client := sigma.NewClient(sigma.WithRegistry(registry))
+
+	final, err := client.Complete(
+		context.Background(),
+		model,
+		sigma.Request{Messages: []sigma.Message{sigma.UserText("hi")}},
+		sigma.WithAPIKey("request-key"),
+	)
+	if err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+	if got, want := final.Content[0].Text, "ok"; got != want {
+		t.Fatalf("final text = %q, want %q", got, want)
+	}
+
+	request := receiveRequest(t, requests)
+	if got, want := request.Method, http.MethodPost; got != want {
+		t.Fatalf("method = %q, want %q", got, want)
+	}
+	if got, want := request.Path, "/messages"; got != want {
+		t.Fatalf("path = %q, want %q", got, want)
+	}
+	assertHeader(t, request.Headers, "X-Api-Key", "request-key")
+	assertJSONPath(t, request.Body, []string{"model"}, "accounts/fireworks/models/kimi-k2p6")
+}
+
 func TestCompleteStreamsTextWithFireworksDefaults(t *testing.T) {
 	t.Parallel()
 
@@ -269,6 +333,23 @@ func fireworksTestModel() sigma.Model {
 	}
 }
 
+func fireworksAnthropicTestModel() sigma.Model {
+	return sigma.Model{
+		ID:               "accounts/fireworks/models/kimi-k2p6",
+		Provider:         sigma.ProviderFireworksAnthropic,
+		API:              sigma.APIAnthropicMessages,
+		SupportedInputs:  []sigma.ContentBlockType{sigma.ContentBlockText, sigma.ContentBlockImage},
+		SupportsTools:    true,
+		SupportsThinking: true,
+		ThinkingLevels:   []sigma.ThinkingLevel{sigma.ThinkingLevelLow, sigma.ThinkingLevelMedium, sigma.ThinkingLevelHigh},
+		AnthropicMessagesCompat: &sigma.AnthropicMessagesCompat{
+			SupportsSessionAffinity:     sigma.AnthropicCompatSupported,
+			SupportsCacheControlOnTools: sigma.AnthropicCompatUnsupported,
+			ThinkingFormat:              sigma.AnthropicThinkingBudget,
+		},
+	}
+}
+
 type capturedRequest struct {
 	Method  string
 	Path    string
@@ -312,6 +393,22 @@ func writeFixture(t *testing.T, w http.ResponseWriter, name string) {
 	}
 	w.Header().Set("Content-Type", "text/event-stream")
 	_, _ = w.Write(data)
+}
+
+func writeAnthropicCompleted(t *testing.T, w http.ResponseWriter) {
+	t.Helper()
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	_, _ = io.WriteString(w, `data: {"type":"message_start","message":{"id":"msg_complete","type":"message","role":"assistant","model":"kimi","content":[]}}
+
+data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
+
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"ok"}}
+
+data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"input_tokens":1,"output_tokens":1}}
+
+data: {"type":"message_stop"}
+`)
 }
 
 func collectEvents(t *testing.T, stream *sigma.Stream) []sigma.Event {

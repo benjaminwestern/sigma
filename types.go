@@ -149,6 +149,9 @@ const (
 	ProviderOpenCodeGo ProviderID = "opencode-go"
 	// ProviderFireworks identifies Fireworks AI.
 	ProviderFireworks ProviderID = "fireworks"
+	// ProviderFireworksAnthropic identifies Fireworks AI's Anthropic-compatible
+	// Messages endpoint.
+	ProviderFireworksAnthropic ProviderID = "fireworks-anthropic"
 	// ProviderKimi identifies Kimi.
 	ProviderKimi ProviderID = "kimi"
 	// ProviderXiaomi identifies Xiaomi.

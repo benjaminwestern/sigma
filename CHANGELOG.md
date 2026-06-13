@@ -31,6 +31,9 @@ See [release notes](docs/release-notes-v0.5.0.md).
 - Generated Anthropic metadata now includes Claude Fable 5 with adaptive
   thinking metadata, xhigh thinking-level mapping, image input support, current
   limits, and pricing.
+- Fireworks now exposes a separate Anthropic-compatible provider registration
+  path and generated metadata for `accounts/fireworks/models/kimi-k2p6` under
+  the `fireworks-anthropic` provider ID.
 - Anthropic Messages now has typed options for native `output_format` payloads
   and `disable_parallel_tool_use` tool-choice controls.
 - Bedrock Converse Stream now supports typed structured-output requests by
@@ -322,8 +325,8 @@ See [release notes](docs/release-notes-v0.3.0.md).
 - Bedrock credential-chain integration, profiles, SSO, web identity, IMDS,
   shared AWS config loading, broader regional alias expansion beyond the built-in
   EU inference-profile fallback, and live Bedrock CI coverage remain deferred.
-- Anthropic-compatible Fireworks model routing remains deferred; the built-in
-  Fireworks row continues to target the OpenAI-compatible Fire Pass route.
+- Broader Fireworks catalog expansion remains deferred beyond the built-in Fire
+  Pass route and the verified Anthropic-compatible Kimi K2.6 row.
 - Live Google Gemini API and Vertex AI validation remains deferred; deterministic
   fixtures are the release evidence for the Google preview adapters.
 - The Go package targets server/CLI use; browser-specific behavior is out of

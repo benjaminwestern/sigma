@@ -68,7 +68,9 @@ func detectedMessagesCompat(provider sigma.ProviderID, baseURL string) messagesC
 			supportsDisabledThinking: true,
 			thinkingFormat:           sigma.AnthropicThinkingBudget,
 		}
-	case provider == sigma.ProviderFireworks || strings.Contains(host, "fireworks.ai"):
+	case provider == sigma.ProviderFireworks ||
+		provider == sigma.ProviderFireworksAnthropic ||
+		strings.Contains(host, "fireworks.ai"):
 		return messagesCompat{
 			sessionAffinityHeaders:   true,
 			adaptiveThinking:         true,

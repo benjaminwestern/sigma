@@ -19,8 +19,9 @@ login with Claude Code identity support, fixes provider thinking payload
 shapes for Claude Fable 5, Z.ai, and Moonshot routes, hardens Bedrock replay
 against blank text blocks, and corrects Azure GPT-5.4/5.5, GPT-5 Pro,
 Moonshot, and OpenCode request metadata. It also broadens provider
-context-overflow detection and adds a final-message helper for callers that
-need to distinguish oversized-context failures from ordinary provider errors.
+context-overflow detection, adds a Fireworks Anthropic-compatible Kimi K2.6
+route, and adds a final-message helper for callers that need to distinguish
+oversized-context failures from ordinary provider errors.
 
 ## Added
 
@@ -41,6 +42,8 @@ need to distinguish oversized-context failures from ordinary provider errors.
 - Generated Anthropic metadata now includes Claude Fable 5 with adaptive
   thinking metadata, xhigh thinking-level mapping, image input support, current
   limits, and pricing.
+- Fireworks now has a separate Anthropic-compatible provider registration path
+  and generated Kimi K2.6 metadata under `ProviderFireworksAnthropic`.
 - Anthropic Messages now accepts typed `sigma.AnthropicOptions.OutputFormat`
   values and sends them as native `output_format` payloads.
 - Anthropic Messages can disable parallel tool use with
