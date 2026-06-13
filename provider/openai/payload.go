@@ -40,6 +40,9 @@ func chatCompletionsPayload(model sigma.Model, req sigma.Request, opts sigma.Opt
 	if err := validateReasoningLevel(model, opts); err != nil {
 		return nil, err
 	}
+	if err := validateChatToolChoice(model, opts, compat); err != nil {
+		return nil, err
+	}
 
 	payload := map[string]any{
 		"model":    string(model.ID),
@@ -87,6 +90,34 @@ func chatCompletionsPayload(model sigma.Model, req sigma.Request, opts sigma.Opt
 	}
 	addRouting(payload, opts, model.Provider, compat)
 	return payload, nil
+}
+
+func validateChatToolChoice(model sigma.Model, opts sigma.Options, compat completionsCompat) error {
+	if compat.supportsRequiredToolChoice || opts.OpenAIOptions == nil || opts.OpenAIOptions.ToolChoice == nil {
+		return nil
+	}
+	if !openAIToolChoiceRequired(opts.OpenAIOptions.ToolChoice) {
+		return nil
+	}
+	return &sigma.Error{
+		Code:     sigma.ErrorInvalidOptions,
+		Message:  "tool choice required is not supported by model metadata",
+		Provider: model.Provider,
+		Model:    model.ID,
+		Err:      sigma.ErrInvalidOptions,
+	}
+}
+
+func openAIToolChoiceRequired(value any) bool {
+	switch choice := value.(type) {
+	case string:
+		return choice == "required"
+	case map[string]any:
+		kind, _ := choice[providerToolOptionTypeKey].(string)
+		return kind == "required"
+	default:
+		return false
+	}
 }
 
 func validateReasoningLevel(model sigma.Model, opts sigma.Options) error {

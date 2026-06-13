@@ -250,6 +250,9 @@ upstream.
 - [x] Add the direct Moonshot AI Kimi K2.7 Code row with text/image input,
       reasoning, tools, current limits, pricing, and `MOONSHOT_API_KEY`
       discovery.
+- [x] Add OpenCode Go Kimi K2.6 and Kimi K2.7 Code metadata with
+      `reasoning_effort` requests so thinking-off/default requests omit
+      rejected disabled `thinking` objects.
 - [x] Add disabled-thinking compatibility metadata to the generated Claude
       Fable 5 row so thinking-off requests omit the rejected disabled payload.
 - [ ] Add an offline-friendly refresh command that can ingest `models.dev` and
@@ -302,7 +305,7 @@ still be promoted only with deterministic evidence.
       Anthropic Messages, and Google API models before promoting them to
       built-in metadata.
 - [x] Promote strict OpenCode Zen/Go metadata for the covered DeepSeek V4,
-      MiniMax M3, Grok Build, Kimi K2.6, and Claude adaptive-thinking rows,
+      MiniMax M3, Grok Build, Kimi K2.6/K2.7 Code, and Claude adaptive-thinking rows,
       including unsupported thinking-level and temperature compatibility
       metadata.
 - [ ] Cover each promoted OpenCode addition with deterministic modeldata and

@@ -68,6 +68,9 @@ need to distinguish oversized-context failures from ordinary provider errors.
   `MOONSHOT_API_KEY` discovery.
 - OpenCode Zen and OpenCode Go Chat Completions now send explicit `max_tokens`
   instead of `max_completion_tokens`.
+- Generated OpenCode Go metadata now uses `reasoning_effort` requests for Kimi
+  K2.6 and Kimi K2.7 Code, avoiding rejected disabled `thinking` objects for
+  thinking-off/default requests.
 - Generated Azure GPT-5.4 and GPT-5.5 context windows now match the
   1,050,000-token Azure Foundry deployments, and OpenAI/Azure GPT-5 Pro max
   output tokens are corrected to 128,000.

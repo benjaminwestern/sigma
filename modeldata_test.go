@@ -318,19 +318,35 @@ func TestGeneratedModelMetadataRegistersIntoFreshRegistry(t *testing.T) {
 	assertOpenCodeAPI(t, registry, ProviderOpenCodeGo, "minimax-m3", APIAnthropicMessages)
 	assertOpenCodeAPI(t, registry, ProviderOpenCodeGo, "qwen3.7-max", APIAnthropicMessages)
 
-	openCodeGoKimi, ok := registry.Model(ProviderOpenCodeGo, "kimi-k2.6")
-	if !ok {
-		t.Fatal("fresh registry missing generated OpenCode Go Kimi model")
+	for _, id := range []ModelID{"kimi-k2.5", "kimi-k2.6", "kimi-k2.7-code"} {
+		model, ok := registry.Model(ProviderOpenCodeGo, id)
+		if !ok {
+			t.Fatalf("fresh registry missing generated OpenCode Go Kimi model %s", id)
+		}
+		if model.OpenAICompletionsCompat == nil ||
+			model.OpenAICompletionsCompat.ReasoningFormat != OpenAICompletionsReasoningEffort {
+			t.Fatalf("OpenCode Go Kimi %s compat = %#v, want reasoning effort", id, model.OpenAICompletionsCompat)
+		}
+		if !model.SupportsTools || !model.SupportsImages() || !model.SupportsReasoning() {
+			t.Fatalf("OpenCode Go Kimi %s capabilities were not generated: %+v", id, model)
+		}
 	}
-	if openCodeGoKimi.OpenAICompletionsCompat == nil ||
-		openCodeGoKimi.OpenAICompletionsCompat.ReasoningFormat != OpenAICompletionsReasoningDeepSeek ||
-		openCodeGoKimi.OpenAICompletionsCompat.SupportsReasoningEffort != OpenAICompatUnsupported {
-		t.Fatalf("OpenCode Go Kimi compat = %#v, want deepseek reasoning without effort", openCodeGoKimi.OpenAICompletionsCompat)
+
+	openCodeGoKimi, _ := registry.Model(ProviderOpenCodeGo, "kimi-k2.6")
+	if !openCodeGoKimi.SupportsThinkingLevel(ThinkingLevelLow) ||
+		!openCodeGoKimi.SupportsThinkingLevel(ThinkingLevelMedium) ||
+		!openCodeGoKimi.SupportsThinkingLevel(ThinkingLevelHigh) {
+		t.Fatalf("OpenCode Go Kimi K2.6 thinking support = %+v / %+v, want low, medium, and high", openCodeGoKimi.ThinkingLevelMap, openCodeGoKimi.UnsupportedThinkingLevels)
 	}
-	if !openCodeGoKimi.SupportsThinkingLevel(ThinkingLevelOff) ||
-		!openCodeGoKimi.SupportsThinkingLevel(ThinkingLevelHigh) ||
-		openCodeGoKimi.SupportsThinkingLevel(ThinkingLevelMedium) {
-		t.Fatalf("OpenCode Go Kimi thinking support = %+v / %+v, want off and high only", openCodeGoKimi.ThinkingLevelMap, openCodeGoKimi.UnsupportedThinkingLevels)
+
+	openCodeGoKimiCode, _ := registry.Model(ProviderOpenCodeGo, "kimi-k2.7-code")
+	if openCodeGoKimiCode.OpenAICompletionsCompat.SupportsRequiredToolChoice != OpenAICompatUnsupported {
+		t.Fatalf("OpenCode Go Kimi K2.7 Code required tool choice support = %q, want unsupported", openCodeGoKimiCode.OpenAICompletionsCompat.SupportsRequiredToolChoice)
+	}
+	if !openCodeGoKimiCode.SupportsThinkingLevel(ThinkingLevelLow) ||
+		!openCodeGoKimiCode.SupportsThinkingLevel(ThinkingLevelMedium) ||
+		!openCodeGoKimiCode.SupportsThinkingLevel(ThinkingLevelHigh) {
+		t.Fatalf("OpenCode Go Kimi K2.7 Code thinking support = %+v / %+v, want low, medium, and high", openCodeGoKimiCode.ThinkingLevelMap, openCodeGoKimiCode.UnsupportedThinkingLevels)
 	}
 
 	assertProviderConstantsHaveGeneratedTextMetadata(t, registry)

@@ -21,6 +21,7 @@ type completionsCompat struct {
 	supportsReasoningEffort                     bool
 	supportsStreamingUsage                      bool
 	supportsStrictTools                         bool
+	supportsRequiredToolChoice                  bool
 	supportsToolStream                          bool
 	supportsJSONSchemaResponseFormat            bool
 	maxTokensField                              sigma.OpenAICompletionsMaxTokensField
@@ -46,6 +47,7 @@ func openAICompletionsCompat(model sigma.Model, baseURL string) completionsCompa
 	compat.supportsReasoningEffort = supportOverride(compat.supportsReasoningEffort, override.SupportsReasoningEffort)
 	compat.supportsStreamingUsage = supportOverride(compat.supportsStreamingUsage, override.SupportsStreamingUsage)
 	compat.supportsStrictTools = supportOverride(compat.supportsStrictTools, override.SupportsStrictTools)
+	compat.supportsRequiredToolChoice = supportOverride(compat.supportsRequiredToolChoice, override.SupportsRequiredToolChoice)
 	compat.supportsToolStream = supportOverride(compat.supportsToolStream, override.SupportsToolStream)
 	compat.supportsJSONSchemaResponseFormat = supportOverride(
 		compat.supportsJSONSchemaResponseFormat,
@@ -92,6 +94,7 @@ func detectedCompletionsCompat(model sigma.Model, baseURL string) completionsCom
 			supportsReasoningEffort:          true,
 			supportsStreamingUsage:           true,
 			supportsStrictTools:              true,
+			supportsRequiredToolChoice:       true,
 			supportsJSONSchemaResponseFormat: true,
 			maxTokensField:                   sigma.OpenAICompletionsMaxTokens,
 			cacheControlFormat:               sigma.OpenAICompletionsCacheControlMessage,
@@ -110,6 +113,7 @@ func detectedCompletionsCompat(model sigma.Model, baseURL string) completionsCom
 		compat.reasoningFormat = sigma.OpenAICompletionsReasoningFireworks
 		compat.supportsStreamingUsage = true
 		compat.supportsStrictTools = true
+		compat.supportsRequiredToolChoice = true
 	case provider == sigma.ProviderMoonshotAI || provider == sigma.ProviderMoonshotAICN || strings.Contains(host, "api.moonshot."):
 		compat.reasoningFormat = sigma.OpenAICompletionsReasoningDeepSeek
 		compat.supportsReasoningEffort = false
@@ -119,6 +123,7 @@ func detectedCompletionsCompat(model sigma.Model, baseURL string) completionsCom
 		compat.reasoningFormat = sigma.OpenAICompletionsReasoningEffort
 		compat.supportsStreamingUsage = true
 		compat.supportsStrictTools = true
+		compat.supportsRequiredToolChoice = true
 		compat.maxTokensField = sigma.OpenAICompletionsMaxTokens
 	case provider == sigma.ProviderTogether || strings.Contains(host, "together.ai"):
 	case provider == sigma.ProviderCerebras || strings.Contains(host, "cerebras.ai"):
@@ -126,6 +131,7 @@ func detectedCompletionsCompat(model sigma.Model, baseURL string) completionsCom
 		compat.supportsReasoningEffort = false
 		compat.supportsStreamingUsage = true
 		compat.supportsStrictTools = true
+		compat.supportsRequiredToolChoice = true
 		compat.maxTokensField = sigma.OpenAICompletionsMaxCompletionTokens
 	case providerText == "z.ai" || providerText == "zai" || strings.Contains(host, "z.ai"):
 	case providerText == "cloudflare" || strings.Contains(host, "workers-ai") || strings.Contains(host, "cloudflare.com"):
@@ -142,6 +148,7 @@ func conservativeCompletionsCompat() completionsCompat {
 	return completionsCompat{
 		reasoningFormat:                  sigma.OpenAICompletionsReasoningUnsupported,
 		supportsReasoningEffort:          true,
+		supportsRequiredToolChoice:       true,
 		supportsJSONSchemaResponseFormat: true,
 		maxTokensField:                   sigma.OpenAICompletionsMaxTokens,
 		cacheControlFormat:               sigma.OpenAICompletionsCacheControlUnsupported,

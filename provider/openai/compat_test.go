@@ -705,8 +705,7 @@ func TestOpenAICompletionsCompatMapsOpenCodeReasoning(t *testing.T) {
 		API:              sigma.APIOpenAICompletions,
 		SupportsThinking: true,
 		OpenAICompletionsCompat: &sigma.OpenAICompletionsCompat{
-			ReasoningFormat:         sigma.OpenAICompletionsReasoningDeepSeek,
-			SupportsReasoningEffort: sigma.OpenAICompatUnsupported,
+			ReasoningFormat: sigma.OpenAICompletionsReasoningEffort,
 		},
 	}
 
@@ -717,9 +716,9 @@ func TestOpenAICompletionsCompatMapsOpenCodeReasoning(t *testing.T) {
 		openAICompletionsCompat(goKimi, "https://opencode.ai/zen/go/v1"),
 	)
 	if err != nil {
-		t.Fatalf("chatCompletionsPayload for disabled OpenCode Go Kimi reasoning returned error: %v", err)
+		t.Fatalf("chatCompletionsPayload for default OpenCode Go Kimi reasoning returned error: %v", err)
 	}
-	goldentest.AssertJSON(t, payload, "provider/openai/compat/opencode_go_kimi_deepseek_reasoning_disabled.json")
+	goldentest.AssertJSON(t, payload, "provider/openai/compat/opencode_go_kimi_reasoning_effort_default.json")
 
 	payload, err = chatCompletionsPayload(
 		goKimi,
@@ -730,7 +729,64 @@ func TestOpenAICompletionsCompatMapsOpenCodeReasoning(t *testing.T) {
 	if err != nil {
 		t.Fatalf("chatCompletionsPayload for enabled OpenCode Go Kimi reasoning returned error: %v", err)
 	}
-	goldentest.AssertJSON(t, payload, "provider/openai/compat/opencode_go_kimi_deepseek_reasoning_enabled.json")
+	goldentest.AssertJSON(t, payload, "provider/openai/compat/opencode_go_kimi_reasoning_effort_enabled.json")
+
+	goKimiCode := sigma.Model{
+		ID:               "kimi-k2.7-code",
+		Provider:         sigma.ProviderOpenCodeGo,
+		API:              sigma.APIOpenAICompletions,
+		SupportsThinking: true,
+		OpenAICompletionsCompat: &sigma.OpenAICompletionsCompat{
+			ReasoningFormat:            sigma.OpenAICompletionsReasoningEffort,
+			SupportsRequiredToolChoice: sigma.OpenAICompatUnsupported,
+		},
+	}
+
+	payload, err = chatCompletionsPayload(
+		goKimiCode,
+		sigma.Request{Messages: []sigma.Message{sigma.UserText("hi")}},
+		sigma.Options{},
+		openAICompletionsCompat(goKimiCode, "https://opencode.ai/zen/go/v1"),
+	)
+	if err != nil {
+		t.Fatalf("chatCompletionsPayload for default OpenCode Go Kimi K2.7 Code reasoning returned error: %v", err)
+	}
+	goldentest.AssertJSON(t, payload, "provider/openai/compat/opencode_go_kimi_reasoning_default.json")
+
+	payload, err = chatCompletionsPayload(
+		goKimiCode,
+		sigma.Request{Messages: []sigma.Message{sigma.UserText("hi")}},
+		sigma.Options{ReasoningLevel: sigma.ThinkingLevelHigh},
+		openAICompletionsCompat(goKimiCode, "https://opencode.ai/zen/go/v1"),
+	)
+	if err != nil {
+		t.Fatalf("chatCompletionsPayload for enabled OpenCode Go Kimi K2.7 Code reasoning returned error: %v", err)
+	}
+	goldentest.AssertJSON(t, payload, "provider/openai/compat/opencode_go_kimi_reasoning_enabled.json")
+
+	_, err = chatCompletionsPayload(
+		goKimiCode,
+		sigma.Request{
+			Messages: []sigma.Message{sigma.UserText("hi")},
+			Tools: []sigma.Tool{{
+				Name:        "lookup",
+				Description: "Lookup",
+				InputSchema: sigma.Schema{
+					"type":       "object",
+					"properties": map[string]any{},
+				},
+			}},
+		},
+		sigma.Options{OpenAIOptions: &sigma.OpenAIOptions{ToolChoice: "required"}},
+		openAICompletionsCompat(goKimiCode, "https://opencode.ai/zen/go/v1"),
+	)
+	if err == nil {
+		t.Fatal("chatCompletionsPayload for unsupported required tool choice returned nil error")
+	}
+	var sigmaErr *sigma.Error
+	if !errors.As(err, &sigmaErr) || sigmaErr.Code != sigma.ErrorInvalidOptions {
+		t.Fatalf("unsupported required tool choice error = %T %[1]v, want invalid options", err)
+	}
 
 	grokBuild := sigma.Model{
 		ID:               "grok-build-0.1",

@@ -12512,6 +12512,9 @@
       "defaultTransport": "sse",
       "providerMetadata": {
         "modelFamily": "kimi"
+      },
+      "openAICompletionsCompat": {
+        "reasoningFormat": "reasoning_effort"
       }
     },
     {
@@ -12542,17 +12545,41 @@
       "providerMetadata": {
         "modelFamily": "kimi"
       },
-      "thinkingLevelMap": {
-        "high": "high"
-      },
-      "unsupportedThinkingLevels": [
-        "minimal",
-        "low",
-        "medium"
-      ],
       "openAICompletionsCompat": {
-        "reasoningFormat": "deepseek",
-        "supportsReasoningEffort": "unsupported"
+        "reasoningFormat": "reasoning_effort"
+      }
+    },
+    {
+      "id": "kimi-k2.7-code",
+      "name": "Kimi K2.7 Code",
+      "provider": "opencode-go",
+      "api": "openai-completions",
+      "baseURL": "https://opencode.ai/zen/go/v1",
+      "supportedInputs": [
+        "text",
+        "image"
+      ],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 0.95,
+        "outputPerMillion": 4,
+        "cacheReadInputPerMillion": 0.19,
+        "currency": "USD"
+      },
+      "contextWindow": 262144,
+      "maxOutputTokens": 262144,
+      "headers": {},
+      "authEnvNames": [
+        "OPENCODE_API_KEY"
+      ],
+      "defaultTransport": "sse",
+      "providerMetadata": {
+        "modelFamily": "kimi"
+      },
+      "openAICompletionsCompat": {
+        "reasoningFormat": "reasoning_effort",
+        "supportsRequiredToolChoice": "unsupported"
       }
     },
     {

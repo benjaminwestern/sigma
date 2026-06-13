@@ -120,6 +120,7 @@ type OpenAICompletionsCompat struct {
 	SupportsReasoningEffort                     string                            `json:"supportsReasoningEffort,omitempty"`
 	SupportsStreamingUsage                      string                            `json:"supportsStreamingUsage,omitempty"`
 	SupportsStrictTools                         string                            `json:"supportsStrictTools,omitempty"`
+	SupportsRequiredToolChoice                  string                            `json:"supportsRequiredToolChoice,omitempty"`
 	SupportsToolStream                          string                            `json:"supportsToolStream,omitempty"`
 	SupportsJSONSchemaResponseFormat            string                            `json:"supportsJSONSchemaResponseFormat,omitempty"`
 	MaxTokensField                              string                            `json:"maxTokensField,omitempty"`

@@ -36,7 +36,7 @@ type routeSpec struct {
 	APIKeyEnv        string
 	RegisterProvider func(*sigma.Registry, routeSpec) error
 	Model            func(routeSpec, string) sigma.Model
-	Cases            func(routeSpec) []probeCase
+	Cases            func(routeSpec, sigma.Model) []probeCase
 }
 
 type probeCase struct {
@@ -419,7 +419,7 @@ func probeModelEach(ctx context.Context, route routeSpec, modelID string, creden
 
 	client := probeClient(route, modelID)
 	model := route.Model(route, modelID)
-	cases := route.Cases(route)
+	cases := route.Cases(route, model)
 	for _, testCase := range cases {
 		result := runCase(ctx, route, client, model, testCase, credential, testCase.Name)
 		if result.Outcome == "ok" || !cfg.repair {
@@ -565,7 +565,7 @@ func discoveredOpenAICodexModel(route routeSpec, id string) sigma.Model {
 }
 
 func discoveredOpenCodeModel(route routeSpec, id string) sigma.Model {
-	return sigma.Model{
+	model := sigma.Model{
 		ID:               sigma.ModelID(id),
 		Provider:         route.Provider,
 		API:              sigma.APIOpenAICompletions,
@@ -579,6 +579,25 @@ func discoveredOpenCodeModel(route routeSpec, id string) sigma.Model {
 			"opencodeAPI":     string(openCodeRouteAPI(route.Name, id)),
 			"probeDiscovered": true,
 		},
+	}
+	applyDiscoveredOpenCodeCompat(&model, route.Name, id)
+	return model
+}
+
+func applyDiscoveredOpenCodeCompat(model *sigma.Model, routeName string, id string) {
+	if routeName != "go" {
+		return
+	}
+	switch id {
+	case "kimi-k2.6":
+		model.OpenAICompletionsCompat = &sigma.OpenAICompletionsCompat{
+			ReasoningFormat: sigma.OpenAICompletionsReasoningEffort,
+		}
+	case "kimi-k2.7-code":
+		model.OpenAICompletionsCompat = &sigma.OpenAICompletionsCompat{
+			ReasoningFormat:            sigma.OpenAICompletionsReasoningEffort,
+			SupportsRequiredToolChoice: sigma.OpenAICompatUnsupported,
+		}
 	}
 }
 
@@ -694,7 +713,7 @@ func authOptions(route routeSpec, credential routeCredential) []sigma.Option {
 	return []sigma.Option{sigma.WithAPIKey(credential.apiKey)}
 }
 
-func openAIResponsesProbeCases(route routeSpec) []probeCase {
+func openAIResponsesProbeCases(_ routeSpec, _ sigma.Model) []probeCase {
 	return []probeCase{
 		singleTurnCase("basic_text", "plain streaming text", basicRequest("Reply with exactly: sigma-ok."), []sigma.Option{sigma.WithMaxTokens(128)}),
 		singleTurnCase("developer_instruction", "developer instruction handling", sigma.Request{
@@ -719,8 +738,8 @@ func openAIResponsesProbeCases(route routeSpec) []probeCase {
 	}
 }
 
-func openAICodexProbeCases(route routeSpec) []probeCase {
-	cases := openAIResponsesProbeCases(route)
+func openAICodexProbeCases(route routeSpec, model sigma.Model) []probeCase {
+	cases := openAIResponsesProbeCases(route, model)
 	for index := range cases {
 		if cases[index].Name == "image_input" {
 			cases[index].Description = "text plus URL image input"
@@ -735,7 +754,7 @@ func openAICodexProbeCases(route routeSpec) []probeCase {
 	)
 }
 
-func openAICompatibleProbeCases(route routeSpec) []probeCase {
+func openAICompatibleProbeCases(route routeSpec, model sigma.Model) []probeCase {
 	cases := []probeCase{
 		singleTurnCase("basic_text", "plain streaming text", basicRequest("Reply with exactly: sigma-ok."), []sigma.Option{sigma.WithMaxTokens(128)}),
 		singleTurnCase("developer_instruction", "developer instruction handling", sigma.Request{
@@ -771,22 +790,57 @@ func openAICompatibleProbeCases(route routeSpec) []probeCase {
 		toolCase("strict_tool_required_write", "required strict write-file tool", "required"),
 		toolCase("three_turn_file_update", "multi-turn file update", "auto"),
 	}
-	if route.Provider != sigma.ProviderFireworks {
+	if route.Provider != sigma.ProviderFireworks && !isOpenCodeGoReasoningEffortKimi(model) {
 		return cases
 	}
 	filtered := cases[:0]
 	for _, testCase := range cases {
-		switch testCase.Name {
-		case "thinking_string_none", "thinking_bool_false", "enable_thinking_false":
+		if skipOpenAICompatibleProbeCase(route, model, testCase.Name) {
 			continue
-		default:
-			filtered = append(filtered, testCase)
 		}
+		filtered = append(filtered, testCase)
 	}
 	return filtered
 }
 
-func anthropicCompatibleProbeCases(_ routeSpec) []probeCase {
+func skipOpenAICompatibleProbeCase(route routeSpec, model sigma.Model, name string) bool {
+	switch {
+	case route.Provider == sigma.ProviderFireworks:
+		switch name {
+		case "thinking_string_none", "thinking_bool_false", "enable_thinking_false":
+			return true
+		default:
+			return false
+		}
+	case isOpenCodeGoReasoningEffortKimi(model):
+		switch name {
+		case "thinking_string_none", "thinking_object_disabled", "thinking_bool_false", "enable_thinking_false":
+			return true
+		case "tool_required_file_read", "strict_tool_required_write":
+			return !openAICompletionsRequiredToolChoiceSupported(model)
+		default:
+			return false
+		}
+	default:
+		return false
+	}
+}
+
+func openAICompletionsRequiredToolChoiceSupported(model sigma.Model) bool {
+	if model.OpenAICompletionsCompat == nil {
+		return true
+	}
+	return model.OpenAICompletionsCompat.SupportsRequiredToolChoice != sigma.OpenAICompatUnsupported
+}
+
+func isOpenCodeGoReasoningEffortKimi(model sigma.Model) bool {
+	return model.Provider == sigma.ProviderOpenCodeGo &&
+		model.OpenAICompletionsCompat != nil &&
+		model.OpenAICompletionsCompat.ReasoningFormat == sigma.OpenAICompletionsReasoningEffort &&
+		modelFamily(string(model.ID)) == "kimi"
+}
+
+func anthropicCompatibleProbeCases(_ routeSpec, _ sigma.Model) []probeCase {
 	return []probeCase{
 		singleTurnCase("basic_text", "plain streaming text", basicRequest("Reply with exactly: sigma-ok."), []sigma.Option{sigma.WithMaxTokens(128)}),
 		singleTurnCase("developer_instruction", "system instruction handling", sigma.Request{

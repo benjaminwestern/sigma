@@ -24,7 +24,8 @@ import (
 )
 
 func collectProbeModel(ctx context.Context, route routeSpec, modelID string, credential routeCredential, cfg config) []probeResult {
-	results := make([]probeResult, 0, len(route.Cases(route)))
+	model := route.Model(route, modelID)
+	results := make([]probeResult, 0, len(route.Cases(route, model)))
 	probeModelEach(ctx, route, modelID, credential, cfg, func(result probeResult) {
 		results = append(results, result)
 	})
@@ -180,7 +181,7 @@ func TestModelsForRouteDefaultsOpenAICodexWithoutDiscovery(t *testing.T) {
 func TestOpenAICompatibleProbeCasesUseRouteProviderOptions(t *testing.T) {
 	t.Parallel()
 
-	testCase := findProbeCase(t, openAICompatibleProbeCases(routes["fireworks-openai"]), "json_object")
+	testCase := findProbeCase(t, openAICompatibleProbeCases(routes["fireworks-openai"], sigma.Model{}), "json_object")
 	options := applyProbeOptions(testCase.Options)
 	if _, ok := options.ProviderOptions[sigma.ProviderFireworks]["extra_body"]; !ok {
 		t.Fatalf("fireworks provider options = %#v, want extra_body", options.ProviderOptions[sigma.ProviderFireworks])
@@ -193,7 +194,7 @@ func TestOpenAICompatibleProbeCasesUseRouteProviderOptions(t *testing.T) {
 func TestFireworksOpenAIProbeCasesSkipScalarThinkingControls(t *testing.T) {
 	t.Parallel()
 
-	cases := openAICompatibleProbeCases(routes["fireworks-openai"])
+	cases := openAICompatibleProbeCases(routes["fireworks-openai"], sigma.Model{})
 	if hasRepairVariant(cases, "thinking_string_none") {
 		t.Fatal("fireworks-openai should not probe scalar thinking string controls")
 	}
@@ -206,15 +207,48 @@ func TestFireworksOpenAIProbeCasesSkipScalarThinkingControls(t *testing.T) {
 	if !hasRepairVariant(cases, "thinking_object_disabled") {
 		t.Fatal("fireworks-openai should still probe object disabled thinking")
 	}
-	if !hasRepairVariant(openAICompatibleProbeCases(routes["xai"]), "thinking_string_none") {
+	if !hasRepairVariant(openAICompatibleProbeCases(routes["xai"], sigma.Model{}), "thinking_string_none") {
 		t.Fatal("non-Fireworks OpenAI-compatible routes should keep scalar thinking probes")
+	}
+}
+
+func TestOpenCodeGoKimiProbeCasesMatchReasoningFormat(t *testing.T) {
+	t.Parallel()
+
+	route := routes["go"]
+	kimiCode := discoveredOpenCodeModel(route, "kimi-k2.7-code")
+	codeCases := openAICompatibleProbeCases(route, kimiCode)
+	for _, name := range []string{"thinking_string_none", "thinking_object_disabled", "thinking_bool_false", "enable_thinking_false"} {
+		if hasRepairVariant(codeCases, name) {
+			t.Fatalf("OpenCode Go Kimi K2.7 Code should not probe raw thinking control %q", name)
+		}
+	}
+	if !hasRepairVariant(codeCases, "reasoning_effort_high") {
+		t.Fatal("OpenCode Go Kimi K2.7 Code should probe reasoning_effort")
+	}
+	if hasRepairVariant(codeCases, "tool_required_file_read") {
+		t.Fatal("OpenCode Go Kimi K2.7 Code should not probe unsupported required tool choice")
+	}
+	if hasRepairVariant(codeCases, "strict_tool_required_write") {
+		t.Fatal("OpenCode Go Kimi K2.7 Code should not probe unsupported strict required tool choice")
+	}
+
+	kimi26 := discoveredOpenCodeModel(route, "kimi-k2.6")
+	kimi26Cases := openAICompatibleProbeCases(route, kimi26)
+	for _, name := range []string{"thinking_string_none", "thinking_object_disabled", "thinking_bool_false", "enable_thinking_false"} {
+		if hasRepairVariant(kimi26Cases, name) {
+			t.Fatalf("OpenCode Go Kimi K2.6 should not probe raw thinking control %q", name)
+		}
+	}
+	if !hasRepairVariant(kimi26Cases, "reasoning_effort_high") {
+		t.Fatal("OpenCode Go Kimi K2.6 should probe reasoning_effort")
 	}
 }
 
 func TestXAIProbeCasesUseRouteProviderOptions(t *testing.T) {
 	t.Parallel()
 
-	testCase := findProbeCase(t, openAICompatibleProbeCases(routes["xai"]), "json_object")
+	testCase := findProbeCase(t, openAICompatibleProbeCases(routes["xai"], sigma.Model{}), "json_object")
 	options := applyProbeOptions(testCase.Options)
 	if _, ok := options.ProviderOptions[sigma.ProviderXAI]["extra_body"]; !ok {
 		t.Fatalf("xai provider options = %#v, want extra_body", options.ProviderOptions[sigma.ProviderXAI])
@@ -230,7 +264,7 @@ func TestXAIProbeCasesUseRouteProviderOptions(t *testing.T) {
 func TestOpenAIResponsesProbeCasesUseTypedResponseFormat(t *testing.T) {
 	t.Parallel()
 
-	testCase := findProbeCase(t, openAIResponsesProbeCases(routes["openai"]), "json_schema")
+	testCase := findProbeCase(t, openAIResponsesProbeCases(routes["openai"], sigma.Model{}), "json_schema")
 	options := applyProbeOptions(testCase.Options)
 	if options.OpenAIOptions == nil || options.OpenAIOptions.ResponseFormat == nil {
 		t.Fatalf("OpenAIOptions.ResponseFormat = %#v, want typed response format", options.OpenAIOptions)
@@ -304,7 +338,7 @@ func TestOpenAICodexCredentialRejectsMultipleOAuthModes(t *testing.T) {
 func TestOpenAICodexProbeCasesUseURLImageInput(t *testing.T) {
 	t.Parallel()
 
-	testCase := findProbeCase(t, openAICodexProbeCases(routes["openai-codex"]), "image_input")
+	testCase := findProbeCase(t, openAICodexProbeCases(routes["openai-codex"], sigma.Model{}), "image_input")
 	image := testCase.Request.Messages[0].Content[1]
 	if got, want := image.ImageSource, "url"; got != want {
 		t.Fatalf("image source = %q, want %q", got, want)
@@ -354,7 +388,7 @@ func openAIProbeTestCredentials() *openai.CodexOAuthCredentials {
 func TestAnthropicProbeCasesDoNotSendRawOpenAIExtraBody(t *testing.T) {
 	t.Parallel()
 
-	for _, testCase := range anthropicCompatibleProbeCases(routes["fireworks-anthropic"]) {
+	for _, testCase := range anthropicCompatibleProbeCases(routes["fireworks-anthropic"], sigma.Model{}) {
 		options := applyProbeOptions(testCase.Options)
 		if providerOptions := options.ProviderOptions[sigma.ProviderFireworks]; providerOptions != nil {
 			if _, ok := providerOptions["extra_body"]; ok {
@@ -696,7 +730,7 @@ func sigmatestProbeRouteWithCases(t *testing.T, cases []probeCase, scripts ...si
 			model.ID = sigma.ModelID(id)
 			return model
 		},
-		Cases: func(routeSpec) []probeCase {
+		Cases: func(routeSpec, sigma.Model) []probeCase {
 			return cases
 		},
 	}
