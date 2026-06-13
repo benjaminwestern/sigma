@@ -1,18 +1,17 @@
 # Release notes: sigma v0.5.0
 
-This is the maintainer-facing release note for the next `sigma` tag. It records
-the v0.5.0 summary and scope as changes land. For the itemized change list see
-[CHANGELOG.md](../CHANGELOG.md); for the validation commands and pre-tag
-checklist see [RELEASING.md](../RELEASING.md).
+This is the maintainer-facing release note for `sigma` v0.5.0. For the
+itemized change list see [CHANGELOG.md](../CHANGELOG.md); for the validation
+commands and pre-tag checklist see [RELEASING.md](../RELEASING.md).
 
 ## Release summary
 
-`sigma` v0.5.0 is open for development with focused provider hardening for
-Bedrock application inference profile routing, request-scoped Bedrock bearer
-tokens, typed Mistral tool selection, and advanced Anthropic and Bedrock
-request-shape controls. It also tightens the generated model-metadata workflow
-with a deterministic local catalog summary while keeping broad catalog refresh
-automation outside the release scope.
+`sigma` v0.5.0 focuses on provider hardening for Bedrock application inference
+profile routing, request-scoped Bedrock bearer tokens, typed Mistral tool
+selection, and advanced Anthropic and Bedrock request-shape controls. It also
+tightens the generated model-metadata workflow with a deterministic local
+catalog summary while keeping broad catalog refresh automation outside the
+release scope.
 
 This release additionally adds first-class Anthropic (Claude Pro/Max) OAuth
 login with Claude Code identity support, fixes provider thinking payload
@@ -46,8 +45,9 @@ exercise deterministically.
 - Generated Anthropic metadata now includes Claude Fable 5 with adaptive
   thinking metadata, xhigh thinking-level mapping, image input support, current
   limits, and pricing.
-- Fireworks now has generated Kimi K2.7 Code metadata for both the
-  OpenAI-compatible `ProviderFireworks` route and the Anthropic-compatible
+- Fireworks now has a first-class Anthropic-compatible provider registration
+  path, generated Kimi K2.7 Code metadata for both the OpenAI-compatible
+  `ProviderFireworks` route and the Anthropic-compatible
   `ProviderFireworksAnthropic` route, plus Kimi K2.6 metadata on
   `ProviderFireworksAnthropic`.
 - Anthropic Messages now accepts typed `sigma.AnthropicOptions.OutputFormat`
@@ -180,5 +180,7 @@ exercise deterministically.
 
 ## Validation status
 
-This release should use the validation process in [RELEASING.md](../RELEASING.md),
-including the local CI-equivalent `mise run ci` gate before tagging.
+Validated on 2026-06-13 with:
+
+- `mise run go:generate` with no generated metadata drift.
+- `mise run ci`.
