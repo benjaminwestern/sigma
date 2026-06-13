@@ -5786,6 +5786,48 @@
       }
     },
     {
+      "id": "accounts/fireworks/models/kimi-k2p7-code",
+      "name": "Kimi K2.7 Code (Fireworks)",
+      "provider": "fireworks",
+      "api": "openai-completions",
+      "baseURL": "https://api.fireworks.ai/inference/v1",
+      "supportedInputs": [
+        "text",
+        "image"
+      ],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "cost": {
+        "inputPerMillion": 0,
+        "outputPerMillion": 0,
+        "currency": "USD"
+      },
+      "contextWindow": 262144,
+      "maxOutputTokens": 262144,
+      "headers": {},
+      "authEnvNames": [
+        "FIREWORKS_API_KEY"
+      ],
+      "defaultTransport": "sse",
+      "openAICompletionsCompat": {
+        "reasoningFormat": "fireworks",
+        "supportsStreamingUsage": "supported",
+        "supportsStrictTools": "supported",
+        "maxTokensField": "max_tokens"
+      },
+      "providerMetadata": {
+        "disabledThinkingFormat": "object-disabled",
+        "fireworksSurface": "openai",
+        "modelFamily": "kimi",
+        "pricingStatus": "unverified"
+      }
+    },
+    {
       "id": "accounts/fireworks/models/kimi-k2p6",
       "name": "Kimi K2.6 (Fireworks Anthropic)",
       "provider": "fireworks-anthropic",
@@ -5809,6 +5851,48 @@
       },
       "contextWindow": 262000,
       "maxOutputTokens": 262000,
+      "headers": {},
+      "authEnvNames": [
+        "FIREWORKS_API_KEY"
+      ],
+      "defaultTransport": "sse",
+      "anthropicMessagesCompat": {
+        "supportsEagerToolInputStreaming": "unsupported",
+        "supportsLongCacheRetention": "unsupported",
+        "supportsSessionAffinity": "supported",
+        "supportsCacheControlOnTools": "unsupported",
+        "thinkingFormat": "budget"
+      },
+      "providerMetadata": {
+        "fireworksSurface": "anthropic",
+        "modelFamily": "kimi",
+        "pricingStatus": "unverified"
+      }
+    },
+    {
+      "id": "accounts/fireworks/models/kimi-k2p7-code",
+      "name": "Kimi K2.7 Code (Fireworks Anthropic)",
+      "provider": "fireworks-anthropic",
+      "api": "anthropic-messages",
+      "baseURL": "https://api.fireworks.ai/inference/v1",
+      "supportedInputs": [
+        "text",
+        "image"
+      ],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "thinkingLevels": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "cost": {
+        "inputPerMillion": 0,
+        "outputPerMillion": 0,
+        "currency": "USD"
+      },
+      "contextWindow": 262144,
+      "maxOutputTokens": 262144,
       "headers": {},
       "authEnvNames": [
         "FIREWORKS_API_KEY"

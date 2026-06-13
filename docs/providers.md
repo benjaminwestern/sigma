@@ -150,18 +150,20 @@ Environment: `FIREWORKS_API_KEY`.
 
 The built-in Fireworks text model route is the Fire Pass router
 `accounts/fireworks/routers/kimi-k2p6-turbo`, named
-`Kimi K2.6 Turbo (Firepass)`. The adapter uses Fireworks'
-OpenAI-compatible Chat Completions endpoint and supports streaming text,
-usage, thinking, and function tools in the shared `openai-completions` path.
+`Kimi K2.6 Turbo (Firepass)`. The same OpenAI-compatible path also includes
+`accounts/fireworks/models/kimi-k2p7-code`. The adapter uses Fireworks'
+OpenAI-compatible Chat Completions endpoint and supports streaming text, usage,
+thinking, and function tools in the shared `openai-completions` path.
 `sigma.WithReasoningLevel` maps to Fireworks `reasoning_effort`;
 `sigma.WithThinkingBudgetTokens` maps to the Fireworks `thinking` object.
 
-The built-in Fireworks Anthropic-compatible route is
-`accounts/fireworks/models/kimi-k2p6` under `ProviderFireworksAnthropic`.
-Register it with `fireworks.RegisterAnthropic`; it uses the shared
-Anthropic Messages adapter against Fireworks' `/messages` endpoint and carries
-compatibility metadata for image input, thinking levels, cache behavior, and
-tool use.
+The built-in Fireworks Anthropic-compatible routes are
+`accounts/fireworks/models/kimi-k2p6` and
+`accounts/fireworks/models/kimi-k2p7-code` under
+`ProviderFireworksAnthropic`. Register them with
+`fireworks.RegisterAnthropic`; they use the shared Anthropic Messages adapter
+against Fireworks' `/messages` endpoint and carry compatibility metadata for
+image input, thinking levels, cache behavior, and tool use.
 
 ### Google Generative AI
 

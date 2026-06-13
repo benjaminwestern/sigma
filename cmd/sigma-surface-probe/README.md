@@ -84,8 +84,10 @@ FIREWORKS_API_KEY=... mise run go:run -- ./cmd/sigma-surface-probe \
   -repair
 ```
 
-Use `accounts/fireworks/models/...` IDs with `fireworks-anthropic`.
-`accounts/fireworks/routers/...` IDs are for `fireworks-openai`.
+Use `accounts/fireworks/models/...` IDs with `fireworks-anthropic`; model IDs
+that Fireworks also serves through Chat Completions can be probed with
+`fireworks-openai`. `accounts/fireworks/routers/...` IDs are for
+`fireworks-openai`.
 
 Probe xAI/Grok with a known model:
 
