@@ -7,15 +7,22 @@ checklist see [RELEASING.md](../RELEASING.md).
 
 ## Release summary
 
-`sigma` v0.6.0 is open for development.
+`sigma` v0.6.0 opens with long prompt-cache usage accounting for providers
+that report a separate long-lived cache-write split.
 
 ## Added
 
-- Nothing yet.
+- Anthropic Messages usage now populates
+  `sigma.Usage.LongCacheWriteInputTokens` from long prompt-cache write usage
+  and `sigma.CostForUsage` prices those writes at the long-cache input
+  multiplier while preserving total cache-write token accounting.
 
 ## Compatibility
 
-- No compatibility changes yet.
+- `sigma.Usage.LongCacheWriteInputTokens` is additive metadata for cost
+  accounting. Existing `CacheWriteInputTokens` values remain the total cache
+  write count, so callers that ignore the long-cache split keep the same token
+  totals.
 
 ## Deferred work
 
