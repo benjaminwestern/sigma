@@ -496,6 +496,7 @@ func assertProviderConstantsHaveGeneratedTextMetadata(t *testing.T, registry *Re
 		ProviderGoogleVertexOpenAI,
 		ProviderGroq,
 		ProviderKimi,
+		ProviderKimiCoding,
 		ProviderMistral,
 		ProviderMiniMax,
 		ProviderMiniMaxCN,
@@ -726,6 +727,40 @@ func assertGeneratedAnthropicCompatibleProviderMetadata(t *testing.T, registry *
 	}
 	assertMetadataString(t, kimi.ProviderMetadata, "baseURL", "https://api.kimi.com/coding/v1")
 	assertMetadataStrings(t, kimi.ProviderMetadata, MetadataAPIKeyEnvVars, []string{"KIMI_API_KEY"})
+
+	for _, tt := range []struct {
+		id         ModelID
+		wantImages bool
+	}{
+		{id: "k2p7", wantImages: true},
+		{id: "kimi-for-coding", wantImages: true},
+		{id: "kimi-k2-thinking"},
+	} {
+		kimiCoding, ok := registry.Model(ProviderKimiCoding, tt.id)
+		if !ok {
+			t.Fatalf("fresh registry missing generated Kimi Coding model %q", tt.id)
+		}
+		if kimiCoding.API != APIAnthropicMessages || !kimiCoding.SupportsTools || !kimiCoding.SupportsReasoning() {
+			t.Fatalf("Kimi Coding model %q capabilities were not generated: %+v", tt.id, kimiCoding)
+		}
+		if got := kimiCoding.SupportsImages(); got != tt.wantImages {
+			t.Fatalf("Kimi Coding model %q SupportsImages() = %v, want %v", tt.id, got, tt.wantImages)
+		}
+		if kimiCoding.AnthropicMessagesCompat == nil ||
+			kimiCoding.AnthropicMessagesCompat.SupportsSessionAffinity != AnthropicCompatSupported ||
+			kimiCoding.AnthropicMessagesCompat.ThinkingFormat != AnthropicThinkingAdaptive {
+			t.Fatalf("Kimi Coding model %q compat = %#v, want adaptive Anthropic-compatible metadata", tt.id, kimiCoding.AnthropicMessagesCompat)
+		}
+		assertMetadataString(t, kimiCoding.ProviderMetadata, "baseURL", "https://api.kimi.com/coding/v1")
+		assertMetadataStrings(t, kimiCoding.ProviderMetadata, MetadataAPIKeyEnvVars, []string{"KIMI_API_KEY"})
+		headers, ok := kimiCoding.ProviderMetadata["headers"].(map[string]string)
+		if !ok {
+			t.Fatalf("Kimi Coding model %q headers metadata type = %T, want map[string]string", tt.id, kimiCoding.ProviderMetadata["headers"])
+		}
+		if got, want := headers["User-Agent"], "KimiCLI/1.5"; got != want {
+			t.Fatalf("Kimi Coding model %q User-Agent metadata = %q, want %q", tt.id, got, want)
+		}
+	}
 
 	minimax, ok := registry.Model(ProviderMiniMax, "MiniMax-M3")
 	if !ok {

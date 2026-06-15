@@ -174,6 +174,23 @@ This adapter also handles Anthropic-compatible endpoints used by some Kimi,
 Fireworks, and Xiaomi routes. Compatibility varies by endpoint; check
 [provider parity](provider-parity.md).
 
+### Kimi Coding
+
+```go
+registry := sigma.DefaultRegistry()
+_ = kimi.RegisterCoding(registry)
+client := sigma.NewClient(sigma.WithRegistry(registry))
+```
+
+Environment: `KIMI_API_KEY`.
+
+The Kimi Coding wrapper uses Sigma's shared Anthropic-compatible Messages
+adapter with the Kimi Coding base URL and Kimi CLI request header defaults.
+Built-in metadata is available under `ProviderKimiCoding` for `k2p7`,
+`kimi-for-coding`, and `kimi-k2-thinking`, including adaptive thinking,
+session-affinity, tool-use, and image-input metadata where supported by the
+model.
+
 ### Fireworks AI
 
 ```go

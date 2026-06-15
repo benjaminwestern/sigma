@@ -78,7 +78,11 @@ func detectedMessagesCompat(provider sigma.ProviderID, baseURL string) messagesC
 			supportsDisabledThinking: true,
 			thinkingFormat:           sigma.AnthropicThinkingBudget,
 		}
-	case provider == sigma.ProviderKimi || strings.Contains(providerText, "kimi") || strings.Contains(host, "moonshot") || strings.Contains(host, "kimi"):
+	case provider == sigma.ProviderKimi ||
+		provider == sigma.ProviderKimiCoding ||
+		strings.Contains(providerText, "kimi") ||
+		strings.Contains(host, "moonshot") ||
+		strings.Contains(host, "kimi"):
 		return messagesCompat{
 			sessionAffinityHeaders:   true,
 			adaptiveThinking:         true,

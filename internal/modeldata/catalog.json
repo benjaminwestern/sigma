@@ -8708,6 +8708,107 @@
       }
     },
     {
+      "id": "k2p7",
+      "name": "Kimi K2.7 Code",
+      "provider": "kimi-coding",
+      "api": "anthropic-messages",
+      "baseURL": "https://api.kimi.com/coding/v1",
+      "supportedInputs": [
+        "text",
+        "image"
+      ],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 0,
+        "outputPerMillion": 0,
+        "currency": "USD"
+      },
+      "contextWindow": 262144,
+      "maxOutputTokens": 32768,
+      "headers": {
+        "User-Agent": "KimiCLI/1.5"
+      },
+      "authEnvNames": [
+        "KIMI_API_KEY"
+      ],
+      "defaultTransport": "sse",
+      "anthropicMessagesCompat": {
+        "supportsSessionAffinity": "supported",
+        "thinkingFormat": "adaptive"
+      },
+      "providerMetadata": {
+        "modelFamily": "kimi"
+      }
+    },
+    {
+      "id": "kimi-for-coding",
+      "name": "Kimi For Coding",
+      "provider": "kimi-coding",
+      "api": "anthropic-messages",
+      "baseURL": "https://api.kimi.com/coding/v1",
+      "supportedInputs": [
+        "text",
+        "image"
+      ],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 0,
+        "outputPerMillion": 0,
+        "currency": "USD"
+      },
+      "contextWindow": 262144,
+      "maxOutputTokens": 32768,
+      "headers": {
+        "User-Agent": "KimiCLI/1.5"
+      },
+      "authEnvNames": [
+        "KIMI_API_KEY"
+      ],
+      "defaultTransport": "sse",
+      "anthropicMessagesCompat": {
+        "supportsSessionAffinity": "supported",
+        "thinkingFormat": "adaptive"
+      },
+      "providerMetadata": {
+        "modelFamily": "kimi"
+      }
+    },
+    {
+      "id": "kimi-k2-thinking",
+      "name": "Kimi K2 Thinking",
+      "provider": "kimi-coding",
+      "api": "anthropic-messages",
+      "baseURL": "https://api.kimi.com/coding/v1",
+      "supportedInputs": [
+        "text"
+      ],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 0,
+        "outputPerMillion": 0,
+        "currency": "USD"
+      },
+      "contextWindow": 262144,
+      "maxOutputTokens": 32768,
+      "headers": {
+        "User-Agent": "KimiCLI/1.5"
+      },
+      "authEnvNames": [
+        "KIMI_API_KEY"
+      ],
+      "defaultTransport": "sse",
+      "anthropicMessagesCompat": {
+        "supportsSessionAffinity": "supported",
+        "thinkingFormat": "adaptive"
+      },
+      "providerMetadata": {
+        "modelFamily": "kimi"
+      }
+    },
+    {
       "id": "MiniMax-M2.7",
       "name": "MiniMax-M2.7",
       "provider": "minimax-cn",

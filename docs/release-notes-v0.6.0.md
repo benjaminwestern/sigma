@@ -13,7 +13,10 @@ payloads for diagnostics, standalone provider/model identity on usage records,
 and a clear split between provider-reported cost and Sigma's model-metadata
 cost estimate. It also adds caller-owned GitHub Copilot OAuth helpers for
 device-code login, token refresh, request-time credential resolution, and
-explicit model-policy enablement.
+explicit model-policy enablement. Kimi Coding is promoted as a focused
+Anthropic-compatible provider slice with generated metadata, credential
+discovery, request headers, adaptive thinking metadata, and session-affinity
+support.
 
 ## Added
 
@@ -35,6 +38,11 @@ explicit model-policy enablement.
   `githubcopilot.EnableGitHubCopilotModel` and
   `githubcopilot.EnableGitHubCopilotModels`, which report per-model success or
   failure without making model enablement an automatic login side effect.
+- Kimi Coding can now be registered with `kimi.RegisterCoding` or
+  `kimi.RegisterCodingDefault`, using the shared Anthropic-compatible Messages
+  adapter with Kimi Coding base URL defaults, Kimi CLI request headers,
+  `KIMI_API_KEY` credential discovery, and generated metadata for `k2p7`,
+  `kimi-for-coding`, and `kimi-k2-thinking`.
 
 ## Compatibility
 
@@ -51,6 +59,8 @@ explicit model-policy enablement.
 - GitHub Copilot OAuth credentials remain caller-owned. Sigma does not persist
   tokens, does not automatically enable model policies after login, and does
   not change the existing GitHub Copilot request dispatch path.
+- Kimi Coding is additive: the existing `kimi` metadata row remains available,
+  and broader router or regional endpoint catalog expansion stays deferred.
 
 ## Deferred work
 

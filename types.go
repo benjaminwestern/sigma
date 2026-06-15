@@ -154,6 +154,8 @@ const (
 	ProviderFireworksAnthropic ProviderID = "fireworks-anthropic"
 	// ProviderKimi identifies Kimi.
 	ProviderKimi ProviderID = "kimi"
+	// ProviderKimiCoding identifies Kimi Coding.
+	ProviderKimiCoding ProviderID = "kimi-coding"
 	// ProviderXiaomi identifies Xiaomi.
 	ProviderXiaomi ProviderID = "xiaomi"
 	// ProviderCustom identifies a user-defined provider path.

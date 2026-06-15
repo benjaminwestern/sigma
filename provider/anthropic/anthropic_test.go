@@ -1075,6 +1075,7 @@ func TestDetectedCompatibleVariantsAddAdaptiveThinkingAndSessionHeader(t *testin
 		provider sigma.ProviderID
 	}{
 		{name: "kimi", provider: sigma.ProviderKimi},
+		{name: "kimi coding", provider: sigma.ProviderKimiCoding},
 		{name: "fireworks", provider: sigma.ProviderFireworks},
 		{name: "xiaomi", provider: sigma.ProviderXiaomi},
 	}

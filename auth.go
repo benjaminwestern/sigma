@@ -50,6 +50,7 @@ const (
 	defaultCopilotGitHubTokenEnv = "COPILOT_GITHUB_TOKEN"
 	defaultNVIDIAAPIKeyEnv       = "NVIDIA_API_KEY"
 	defaultMoonshotAPIKeyEnv     = "MOONSHOT_API_KEY"
+	defaultKimiAPIKeyEnv         = "KIMI_API_KEY"
 )
 
 var defaultProviderEnvNames = map[ProviderID][]string{
@@ -75,6 +76,8 @@ var defaultProviderEnvNames = map[ProviderID][]string{
 	ProviderMiniMax:               {"MINIMAX_API_KEY"},
 	ProviderMiniMaxCN:             {"MINIMAX_CN_API_KEY"},
 	ProviderVercelAIGateway:       {"AI_GATEWAY_API_KEY"},
+	ProviderKimi:                  {defaultKimiAPIKeyEnv},
+	ProviderKimiCoding:            {defaultKimiAPIKeyEnv},
 }
 
 // Credential carries authentication material for a provider.

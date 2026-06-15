@@ -289,9 +289,12 @@ upstream.
       OpenRouter, Vercel AI Gateway, OpenCode, and Bedrock only after route
       shape, auth, compatibility metadata, pricing, and regional availability
       are reviewed per provider family.
-- [ ] Evaluate new provider-family catalog candidates such as Hugging Face
-      router, Kimi coding, and Xiaomi token-plan endpoints only after deciding
-      provider IDs, credential env vars, compatibility metadata, and first-class
+- [x] Promote a focused Kimi Coding Anthropic-compatible provider slice with a
+      distinct provider ID, credential env var, compatibility metadata, and
+      deterministic wrapper coverage.
+- [ ] Evaluate remaining provider-family catalog candidates such as Hugging
+      Face router and Xiaomi token-plan endpoints only after deciding provider
+      IDs, credential env vars, compatibility metadata, and first-class
       provider-row promotion requirements.
 - [ ] Expand broad Vercel AI Gateway and OpenRouter text catalogs only after
       source-aware provider/API mapping, tool-capable filtering, reasoning

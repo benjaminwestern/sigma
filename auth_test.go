@@ -93,6 +93,8 @@ func TestEnvironmentAuthResolverCommonStaticKeys(t *testing.T) {
 		{name: "moonshot", provider: sigma.ProviderMoonshotAI, env: "MOONSHOT_API_KEY"},
 		{name: "minimax", provider: sigma.ProviderMiniMax, env: "MINIMAX_API_KEY"},
 		{name: "vercel ai gateway", provider: sigma.ProviderVercelAIGateway, env: "AI_GATEWAY_API_KEY"},
+		{name: "kimi", provider: sigma.ProviderKimi, env: "KIMI_API_KEY"},
+		{name: "kimi coding", provider: sigma.ProviderKimiCoding, env: "KIMI_API_KEY"},
 	}
 
 	for _, tt := range tests {

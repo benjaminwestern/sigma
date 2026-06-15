@@ -12,6 +12,10 @@ See [release notes](docs/release-notes-v0.6.0.md).
 
 ### Added
 
+- Kimi Coding now has a first-class Anthropic-compatible provider wrapper and
+  generated metadata for `k2p7`, `kimi-for-coding`, and `kimi-k2-thinking`,
+  including `KIMI_API_KEY` discovery, Kimi CLI request headers, adaptive
+  thinking metadata, and session-affinity support.
 - GitHub Copilot now has stdlib-only device-code OAuth login, Copilot token
   refresh helpers, an in-memory OAuth token provider that also implements
   Sigma's auth resolver interface, and explicit opt-in helpers for enabling
