@@ -179,8 +179,8 @@ work until their API boundaries are explicit.
       public shape across OpenAI-compatible, Anthropic, and Google metadata.
 - [ ] Add broader provider-neutral sampling controls such as top-p, top-k,
       seed, and penalty fields only after settling cross-provider semantics.
-- [ ] Add opt-in live provider metadata/replay probes without making live
-      provider calls part of `mise run ci`.
+- [x] Add opt-in live provider metadata/replay and pairwise handoff probes
+      without making live provider calls part of `mise run ci`.
 
 ## First-class provider rows
 
@@ -506,6 +506,6 @@ should still come through the catalog refresh workflow.
 
 - [ ] Add agent runtime integration on top of the provider-neutral primitives
       `sigma` exposes (orchestration is deferred to later integration cards).
-- [ ] Implement cross-provider context handoff.
+- [ ] Implement cross-provider context handoff beyond diagnostic surface probes.
 - [ ] Implement capability-loss reporting so unsupported handoff behavior remains
       explicit rather than silently degrading.

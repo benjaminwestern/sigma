@@ -30,6 +30,9 @@ See [release notes](docs/release-notes-v0.6.0.md).
   discovery helpers for ordered candidate variable names and configured
   variable names, with broader built-in API-key defaults for OpenAI-compatible
   provider IDs that previously relied only on generated model metadata.
+- `cmd/sigma-surface-probe` now has an opt-in cross-provider handoff diagnostic
+  that builds small tool-call contexts and replays them pairwise across selected
+  live routes without adding live provider calls to CI.
 
 ## [0.5.0] - 2026-06-13
 

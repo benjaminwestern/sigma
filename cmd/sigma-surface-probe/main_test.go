@@ -323,6 +323,41 @@ func TestParseConfigEnablesOpenAICodexBrowserOAuth(t *testing.T) {
 	}
 }
 
+func TestParseConfigHandoffDefaultOff(t *testing.T) {
+	oldCommandLine := flag.CommandLine
+	oldArgs := os.Args
+	flag.CommandLine = flag.NewFlagSet("sigma-surface-probe-test", flag.ContinueOnError)
+	os.Args = []string{"sigma-surface-probe"}
+	t.Cleanup(func() {
+		flag.CommandLine = oldCommandLine
+		os.Args = oldArgs
+	})
+
+	cfg := parseConfig()
+	if cfg.handoff {
+		t.Fatal("handoff = true, want default false")
+	}
+}
+
+func TestParseConfigEnablesHandoff(t *testing.T) {
+	oldCommandLine := flag.CommandLine
+	oldArgs := os.Args
+	flag.CommandLine = flag.NewFlagSet("sigma-surface-probe-test", flag.ContinueOnError)
+	os.Args = []string{"sigma-surface-probe", "-handoff", "-routes=sigmatest"}
+	t.Cleanup(func() {
+		flag.CommandLine = oldCommandLine
+		os.Args = oldArgs
+	})
+
+	cfg := parseConfig()
+	if !cfg.handoff {
+		t.Fatal("handoff = false, want true")
+	}
+	if !reflect.DeepEqual(cfg.routes, []string{"sigmatest"}) {
+		t.Fatalf("routes = %v, want sigmatest", cfg.routes)
+	}
+}
+
 func TestOpenAICodexCredentialRejectsMultipleOAuthModes(t *testing.T) {
 	t.Parallel()
 
@@ -435,6 +470,149 @@ func TestRunCaseKeepsDistinctRouteNames(t *testing.T) {
 		if result.Route != routeName {
 			t.Fatalf("route = %q, want %q", result.Route, routeName)
 		}
+	}
+}
+
+func TestGenerateHandoffSourceBuildsToolContext(t *testing.T) {
+	t.Parallel()
+
+	route := handoffProbeRoute(t, "handoff-source",
+		sigmatest.Script{Final: sigma.AssistantMessage{
+			Content:    []sigma.ContentBlock{sigma.ToolCallBlock("call_double", "double_number", map[string]any{"value": 21})},
+			StopReason: sigma.StopReasonToolCalls,
+		}},
+		sigmatest.Script{Final: sigma.AssistantMessage{
+			Content: []sigma.ContentBlock{sigma.Text("42")},
+		}},
+	)
+
+	source, result := generateHandoffSource(context.Background(), route, "model", routeCredential{apiKey: "key"}, config{})
+	if result.Outcome != "ok" {
+		t.Fatalf("result = %+v, want ok", result)
+	}
+	if len(source.Messages) != 4 {
+		t.Fatalf("source messages = %d, want 4", len(source.Messages))
+	}
+	if got, want := source.Messages[1].Content[0].ToolCallID, "call_double"; got != want {
+		t.Fatalf("tool call id = %q, want %q", got, want)
+	}
+	if got, want := source.Messages[2].Role, sigma.RoleTool; got != want {
+		t.Fatalf("tool result role = %q, want %q", got, want)
+	}
+	if got, want := source.Messages[2].ToolName, "double_number"; got != want {
+		t.Fatalf("tool result name = %q, want %q", got, want)
+	}
+	if got, want := source.Messages[2].Content[0].Text, "42"; got != want {
+		t.Fatalf("tool result text = %q, want %q", got, want)
+	}
+}
+
+func TestGenerateHandoffSourceSkipsWithoutToolCall(t *testing.T) {
+	t.Parallel()
+
+	route := handoffProbeRoute(t, "handoff-no-tool",
+		sigmatest.Script{Final: sigma.AssistantMessage{
+			Content: []sigma.ContentBlock{sigma.Text("no tool")},
+		}},
+	)
+
+	_, result := generateHandoffSource(context.Background(), route, "model", routeCredential{apiKey: "key"}, config{})
+	if got, want := result.Outcome, "skipped"; got != want {
+		t.Fatalf("outcome = %q, want %q", got, want)
+	}
+	if !strings.Contains(result.Error, "did not emit a tool call") {
+		t.Fatalf("error = %q, want no-tool-call diagnostic", result.Error)
+	}
+}
+
+func TestRunHandoffTargetEmitsSourceMetadata(t *testing.T) {
+	t.Parallel()
+
+	sourceRoute := handoffProbeRoute(t, "handoff-source")
+	targetRoute := handoffProbeRoute(t, "handoff-target",
+		sigmatest.Script{Final: sigma.AssistantMessage{
+			Content: []sigma.ContentBlock{sigma.Text("Hello, handoff successful.")},
+		}},
+	)
+	source := handoffSource{
+		Route: sourceRoute,
+		Model: sourceRoute.Model(sourceRoute, "source-model"),
+		Messages: []sigma.Message{
+			sigma.UserText("Use the tool."),
+			{
+				Role:    sigma.RoleAssistant,
+				Content: []sigma.ContentBlock{sigma.ToolCallBlock("call_double", "double_number", map[string]any{"value": 21})},
+			},
+			{Role: sigma.RoleTool, ToolCallID: "call_double", ToolName: "double_number", Content: []sigma.ContentBlock{sigma.Text("42")}},
+			{Role: sigma.RoleAssistant, Content: []sigma.ContentBlock{sigma.Text("42")}},
+		},
+	}
+	target := handoffSource{
+		Route:      targetRoute,
+		Model:      targetRoute.Model(targetRoute, "target-model"),
+		Credential: routeCredential{apiKey: "key"},
+	}
+
+	result := runHandoffTarget(context.Background(), source, target)
+	if result.Outcome != "ok" {
+		t.Fatalf("result = %+v, want ok", result)
+	}
+	if got, want := result.SourceRoute, "handoff-source"; got != want {
+		t.Fatalf("source route = %q, want %q", got, want)
+	}
+	if got, want := result.SourceModel, "source-model"; got != want {
+		t.Fatalf("source model = %q, want %q", got, want)
+	}
+}
+
+func TestRunHandoffProbesEmitsPairwiseResults(t *testing.T) {
+	oldRoutes := routes
+	t.Cleanup(func() {
+		routes = oldRoutes
+	})
+
+	routes = map[string]routeSpec{
+		"handoff-a": handoffProbeRoute(t, "handoff-a",
+			sigmatest.Script{Final: sigma.AssistantMessage{
+				Content:    []sigma.ContentBlock{sigma.ToolCallBlock("call_a", "double_number", map[string]any{"value": 21})},
+				StopReason: sigma.StopReasonToolCalls,
+			}},
+			sigmatest.Script{Final: sigma.AssistantMessage{Content: []sigma.ContentBlock{sigma.Text("42")}}},
+			sigmatest.Script{Final: sigma.AssistantMessage{Content: []sigma.ContentBlock{sigma.Text("Hello, handoff successful.")}}},
+		),
+		"handoff-b": handoffProbeRoute(t, "handoff-b",
+			sigmatest.Script{Final: sigma.AssistantMessage{
+				Content:    []sigma.ContentBlock{sigma.ToolCallBlock("call_b", "double_number", map[string]any{"value": 21})},
+				StopReason: sigma.StopReasonToolCalls,
+			}},
+			sigmatest.Script{Final: sigma.AssistantMessage{Content: []sigma.ContentBlock{sigma.Text("42")}}},
+			sigmatest.Script{Final: sigma.AssistantMessage{Content: []sigma.ContentBlock{sigma.Text("Hello, handoff successful.")}}},
+		),
+	}
+	t.Setenv("SIGMATEST_API_KEY", "key")
+
+	var emitted []probeResult
+	runHandoffProbes(context.Background(), config{
+		routes: []string{"handoff-a", "handoff-b"},
+		models: map[string]bool{"model": true},
+	}, func(result probeResult) {
+		emitted = append(emitted, result)
+	})
+
+	if len(emitted) != 4 {
+		t.Fatalf("emitted results = %d, want 4: %#v", len(emitted), emitted)
+	}
+	if emitted[0].Case != "handoff_source" || emitted[0].Outcome != "ok" {
+		t.Fatalf("first source result = %+v, want ok handoff_source", emitted[0])
+	}
+	if emitted[1].Case != "handoff_source" || emitted[1].Outcome != "ok" {
+		t.Fatalf("second source result = %+v, want ok handoff_source", emitted[1])
+	}
+	if emitted[2].Case != "handoff_replay" || emitted[2].SourceRoute != "handoff-a" || emitted[2].Route != "handoff-b" {
+		t.Fatalf("first pairwise result = %+v, want handoff-a -> handoff-b", emitted[2])
+	}
+	if emitted[3].Case != "handoff_replay" || emitted[3].SourceRoute != "handoff-b" || emitted[3].Route != "handoff-a" {
+		t.Fatalf("second pairwise result = %+v, want handoff-b -> handoff-a", emitted[3])
 	}
 }
 
@@ -732,6 +910,31 @@ func sigmatestProbeRouteWithCases(t *testing.T, cases []probeCase, scripts ...si
 		},
 		Cases: func(routeSpec, sigma.Model) []probeCase {
 			return cases
+		},
+	}
+}
+
+func handoffProbeRoute(t *testing.T, name string, scripts ...sigmatest.Script) routeSpec {
+	t.Helper()
+
+	providerID := sigma.ProviderID(name)
+	provider := sigmatest.NewFauxProvider(scripts...)
+	return routeSpec{
+		Name:      name,
+		Provider:  providerID,
+		BaseURL:   "https://example.test",
+		APIKeyEnv: "SIGMATEST_API_KEY",
+		RegisterProvider: func(registry *sigma.Registry, _ routeSpec) error {
+			return registry.RegisterTextProvider(providerID, provider)
+		},
+		Model: func(route routeSpec, id string) sigma.Model {
+			model := sigmatest.TextModel()
+			model.ID = sigma.ModelID(id)
+			model.Provider = route.Provider
+			return model
+		},
+		Cases: func(routeSpec, sigma.Model) []probeCase {
+			return nil
 		},
 	}
 }

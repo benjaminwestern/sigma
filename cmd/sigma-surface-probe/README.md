@@ -23,6 +23,7 @@ Common flags:
 -repair                 try targeted repair variants after a failing case
 -include-unavailable    probe known unavailable advertised models instead of skipping
 -codex-oauth            run OpenAI Codex device-code OAuth for openai-codex
+-handoff                run cross-provider replay handoff diagnostics
 -timeout                overall probe timeout, default 10m
 ```
 
@@ -121,6 +122,19 @@ For non-interactive Codex runs, set `OPENAI_CODEX_ACCESS_TOKEN`, or set
 `OPENAI_CODEX_REFRESH_TOKEN` and let the probe refresh it in memory before the
 run. The probe does not persist refreshed Codex credentials.
 
+Probe pairwise cross-provider replay handoff between selected routes:
+
+```bash
+OPENAI_API_KEY=... XAI_API_KEY=... mise run go:run -- ./cmd/sigma-surface-probe \
+  -handoff \
+  -routes openai,xai
+```
+
+Handoff mode asks each selected route/model to produce a small tool-call
+context, appends a deterministic tool result, then replays each source context
+into every other selected target route/model. Missing credentials and source
+models that do not emit a tool call are reported as skipped diagnostics.
+
 Discover and probe every model returned by one provider:
 
 ```bash
@@ -192,6 +206,13 @@ repair variant:
 
 ```json
 {"route":"fireworks-openai","model":"accounts/fireworks/routers/kimi-k2p6-turbo","case":"image_input","attempt":"image_url_fallback","outcome":"fixed_by_repair_variant","originalError":"provider rejected base64 image input","failedAttempts":[{"attempt":"image_input","error":"provider rejected base64 image input"}],"hint":"base64_image_rejected_url_image_ok"}
+```
+
+Handoff replay results include the target route/model in `route` and `model`,
+and the source context in `sourceRoute` and `sourceModel`:
+
+```json
+{"route":"xai","model":"grok-4.3","case":"handoff_replay","attempt":"target_replay","sourceRoute":"openai","sourceModel":"gpt-5.5","outcome":"ok"}
 ```
 
 The final line is a summary report:

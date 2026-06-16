@@ -18,7 +18,9 @@ Anthropic-compatible provider slice with generated metadata, credential
 discovery, request headers, adaptive thinking metadata, and session-affinity
 support. The environment credential resolver also exposes non-secret discovery
 helpers so applications can inspect candidate and configured API-key variable
-names before making a request.
+names before making a request. The surface probe command adds a credential-gated
+cross-provider handoff diagnostic for replaying small tool-call contexts across
+selected live routes without moving live provider calls into CI.
 
 ## Added
 
@@ -49,6 +51,10 @@ names before making a request.
   helpers for model-aware environment credential discovery. They return ordered
   variable names only, respect model metadata before provider defaults, and add
   built-in fallback names for additional OpenAI-compatible provider IDs.
+- `cmd/sigma-surface-probe -handoff` now builds a small tool-call context for
+  each selected live route/model and replays it pairwise into the other selected
+  routes, emitting JSONL diagnostics with `sourceRoute` and `sourceModel` so
+  replay failures can be attributed without making handoff checks part of CI.
 
 ## Compatibility
 
@@ -78,10 +84,13 @@ names before making a request.
 - Billing reconciliation, subscription analytics, and UI presentation of usage
   totals remain caller-owned. Sigma normalizes and preserves provider data but
   does not claim invoice-grade billing accuracy.
+- Cross-provider handoff remains a diagnostic probe, not a public orchestration
+  runtime. Full context handoff APIs and capability-loss reporting remain
+  deferred.
 
 ## Validation status
 
-Current v0.6.0 development state validated on 2026-06-15 with:
+Current v0.6.0 development state validated on 2026-06-16 with:
 
 - `mise run mise:validate`.
 - `mise run clean`.

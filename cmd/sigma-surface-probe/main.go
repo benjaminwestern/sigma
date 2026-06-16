@@ -50,6 +50,8 @@ type probeResult struct {
 	Model          string          `json:"model"`
 	Case           string          `json:"case"`
 	Attempt        string          `json:"attempt"`
+	SourceRoute    string          `json:"sourceRoute,omitempty"`
+	SourceModel    string          `json:"sourceModel,omitempty"`
 	Outcome        string          `json:"outcome"`
 	Error          string          `json:"error,omitempty"`
 	OriginalError  string          `json:"originalError,omitempty"`
@@ -95,11 +97,19 @@ type config struct {
 	timeout            time.Duration
 	codexOAuth         bool
 	codexOAuthBrowser  bool
+	handoff            bool
 }
 
 type routeCredential struct {
 	apiKey string
 	codex  *openai.CodexOAuthCredentials
+}
+
+type handoffSource struct {
+	Route      routeSpec
+	Model      sigma.Model
+	Credential routeCredential
+	Messages   []sigma.Message
 }
 
 var routes = map[string]routeSpec{
@@ -187,6 +197,20 @@ func main() {
 
 	var totals summary
 	var recommendations []probeRecommendation
+	if cfg.handoff {
+		runHandoffProbes(ctx, cfg, func(result probeResult) {
+			totals.add(result)
+			if recommendation, ok := recommendationFor(result); ok {
+				recommendations = append(recommendations, recommendation)
+			}
+			writeResult(writer, result)
+			_ = writer.Flush()
+		})
+		writeSummary(writer, totals, recommendations)
+		_ = writer.Flush()
+		return
+	}
+
 	for _, routeName := range cfg.routes {
 		route, ok := routes[routeName]
 		if !ok {
@@ -226,12 +250,14 @@ func parseConfig() config {
 	var includeUnavailable bool
 	var codexOAuth bool
 	var codexOAuthBrowser bool
+	var handoff bool
 	flag.StringVar(&routeList, "routes", "zen,go", "comma-separated routes: openai,openai-codex,zen,go,fireworks-openai,fireworks-anthropic,xai")
 	flag.StringVar(&modelList, "models", "", "comma-separated model IDs to probe")
 	flag.BoolVar(&repair, "repair", false, "try targeted repair variants after a failing case")
 	flag.BoolVar(&includeUnavailable, "include-unavailable", false, "run known unavailable advertised models instead of skipping them")
 	flag.BoolVar(&codexOAuth, "codex-oauth", false, "run OpenAI Codex device-code OAuth for the openai-codex route")
 	flag.BoolVar(&codexOAuthBrowser, "codex-oauth-browser", false, "run OpenAI Codex browser callback OAuth for the openai-codex route")
+	flag.BoolVar(&handoff, "handoff", false, "run cross-provider replay handoff diagnostics instead of per-route surface cases")
 	flag.DurationVar(&timeout, "timeout", 10*time.Minute, "overall probe timeout")
 	flag.Parse()
 
@@ -243,6 +269,7 @@ func parseConfig() config {
 		timeout:            timeout,
 		codexOAuth:         codexOAuth,
 		codexOAuthBrowser:  codexOAuthBrowser,
+		handoff:            handoff,
 	}
 }
 
@@ -455,6 +482,195 @@ func probeModelEach(ctx context.Context, route routeSpec, modelID string, creden
 			repaired = availability
 		}
 		emit(repaired)
+	}
+}
+
+func runHandoffProbes(ctx context.Context, cfg config, emit func(probeResult)) {
+	sources := make([]handoffSource, 0)
+	for _, routeName := range cfg.routes {
+		route, ok := routes[routeName]
+		if !ok {
+			emit(probeResult{
+				Route:   routeName,
+				Case:    "handoff_source",
+				Attempt: "route",
+				Outcome: "skipped",
+				Error:   fmt.Sprintf("unknown route %q", routeName),
+			})
+			continue
+		}
+		credential, err := credentialForRoute(ctx, route, cfg)
+		if err != nil {
+			emit(probeResult{
+				Route:   route.Name,
+				Case:    "handoff_source",
+				Attempt: "credential",
+				Outcome: "skipped",
+				Error:   err.Error(),
+			})
+			continue
+		}
+		models, err := modelsForRoute(ctx, route, credential, cfg.models)
+		if err != nil {
+			emit(probeResult{
+				Route:   route.Name,
+				Case:    "handoff_source",
+				Attempt: "model_discovery",
+				Outcome: "no_working_attempt",
+				Error:   err.Error(),
+			})
+			continue
+		}
+		for _, modelID := range models {
+			source, result := generateHandoffSource(ctx, route, modelID, credential, cfg)
+			emit(result)
+			if result.Outcome == "ok" {
+				sources = append(sources, source)
+			}
+		}
+	}
+
+	for _, source := range sources {
+		for _, target := range sources {
+			if source.Route.Name == target.Route.Name && source.Model.ID == target.Model.ID {
+				continue
+			}
+			emit(runHandoffTarget(ctx, source, target))
+		}
+	}
+}
+
+func generateHandoffSource(ctx context.Context, route routeSpec, modelID string, credential routeCredential, cfg config) (handoffSource, probeResult) {
+	model := route.Model(route, modelID)
+	result := probeResult{
+		Route:   route.Name,
+		Model:   string(model.ID),
+		Case:    "handoff_source",
+		Attempt: "source_context",
+	}
+	if !cfg.includeUnavailable && knownUnavailable(route.Name, modelID) {
+		result.Attempt = "skip_known_unavailable"
+		result.Outcome = "skipped"
+		return handoffSource{}, result
+	}
+
+	client := probeClient(route, modelID)
+	user := sigma.UserText("Use the double_number tool with value 21, then wait for the tool result.")
+	req := sigma.Request{
+		SystemPrompt: "You are a handoff probe source. Use tools when requested.",
+		Messages:     []sigma.Message{user},
+		Tools:        handoffTools(),
+	}
+	options := append(authOptions(route, credential), sigma.WithMaxTokens(512))
+	first, err := client.Complete(ctx, model, req, options...)
+	if err != nil {
+		result.Outcome = classifyFailure(route, model, err)
+		result.Error = err.Error()
+		return handoffSource{}, result
+	}
+	toolCall, ok := firstToolCall(first)
+	if !ok {
+		result.Outcome = "skipped"
+		result.Error = "source response did not emit a tool call"
+		return handoffSource{}, result
+	}
+
+	assistant := assistantMessage(model, first)
+	toolResult := sigma.Message{
+		Role:       sigma.RoleTool,
+		ToolCallID: toolCall.ToolCallID,
+		ToolName:   toolCall.ToolName,
+		Content:    []sigma.ContentBlock{sigma.Text("42")},
+	}
+	messages := make([]sigma.Message, 0, 4)
+	messages = append(messages, user, assistant, toolResult)
+	final, err := client.Complete(ctx, model, sigma.Request{
+		SystemPrompt: "You are a handoff probe source. Answer after tool results.",
+		Messages:     messages,
+		Tools:        handoffTools(),
+	}, options...)
+	if err != nil {
+		result.Attempt = "source_final"
+		result.Outcome = classifyFailure(route, model, err)
+		result.Error = err.Error()
+		return handoffSource{}, result
+	}
+
+	messages = append(messages, assistantMessage(model, final))
+	result.Outcome = "ok"
+	return handoffSource{
+		Route:      route,
+		Model:      model,
+		Credential: credential,
+		Messages:   messages,
+	}, result
+}
+
+func runHandoffTarget(ctx context.Context, source handoffSource, target handoffSource) probeResult {
+	client := probeClient(target.Route, string(target.Model.ID))
+	messages := append([]sigma.Message(nil), source.Messages...)
+	messages = append(messages, sigma.UserText("Great, thanks. Reply with exactly: Hello, handoff successful."))
+	result := probeResult{
+		Route:       target.Route.Name,
+		Model:       string(target.Model.ID),
+		Case:        "handoff_replay",
+		Attempt:     "target_replay",
+		SourceRoute: source.Route.Name,
+		SourceModel: string(source.Model.ID),
+	}
+	options := append(authOptions(target.Route, target.Credential), sigma.WithMaxTokens(512))
+	_, err := client.Complete(ctx, target.Model, sigma.Request{
+		Messages: messages,
+		Tools:    handoffTools(),
+	}, options...)
+	if err != nil {
+		result.Outcome = classifyFailure(target.Route, target.Model, err)
+		result.Error = err.Error()
+		return result
+	}
+	result.Outcome = "ok"
+	return result
+}
+
+func handoffTools() []sigma.Tool {
+	return []sigma.Tool{{
+		Name:        "double_number",
+		Description: "Doubles a number and returns the result.",
+		InputSchema: sigma.Schema{
+			jsonTypeKey: "object",
+			"properties": map[string]any{
+				"value": map[string]any{jsonTypeKey: "number"},
+			},
+			"required": []any{"value"},
+		},
+	}}
+}
+
+func firstToolCall(message sigma.AssistantMessage) (sigma.ContentBlock, bool) {
+	for _, block := range message.Content {
+		if block.Type == sigma.ContentBlockToolCall && block.ToolCallID != "" && block.ToolName != "" {
+			return block, true
+		}
+	}
+	return sigma.ContentBlock{}, false
+}
+
+func assistantMessage(model sigma.Model, final sigma.AssistantMessage) sigma.Message {
+	provider := final.Provider
+	if provider == "" {
+		provider = model.Provider
+	}
+	modelID := final.Model
+	if modelID == "" {
+		modelID = model.ID
+	}
+	return sigma.Message{
+		Role:       sigma.RoleAssistant,
+		Content:    append([]sigma.ContentBlock(nil), final.Content...),
+		Provider:   provider,
+		API:        model.API,
+		Model:      modelID,
+		StopReason: final.StopReason,
 	}
 }
 
