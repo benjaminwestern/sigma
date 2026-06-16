@@ -81,6 +81,30 @@ final, err := client.Complete(ctx, model, req)
 errors if the assistant produced thinking blocks, image blocks, or tool calls,
 so non-text output is not silently discarded.
 
+## Sources And Citations
+
+Grounded or citation-bearing provider responses may include source metadata on
+the final assistant message or citations on individual content blocks. Use the
+typed accessors instead of reading provider metadata maps directly:
+
+```go
+final, err := client.Complete(ctx, model, req)
+if err != nil {
+	return err
+}
+
+for _, source := range final.Sources() {
+	fmt.Println(source.Title, source.URL, source.URI)
+}
+for _, citation := range final.Citations() {
+	fmt.Println(citation.Title, citation.URL, citation.CitedText)
+}
+```
+
+The returned entries are copied views over provider metadata. Rendering,
+ranking, de-duplication, and provider-specific citation policy remain
+application-owned.
+
 ## Backpressure And Closing
 
 Streams use a small event buffer. Providers can emit one unread event, but a

@@ -1285,6 +1285,22 @@ data: {"type":"message_stop"}
 	if got, want := citations[0]["url"], "https://example.com"; got != want {
 		t.Fatalf("citation url = %v, want %v", got, want)
 	}
+	resultCitations := final.Content[0].Citations()
+	if got, want := len(resultCitations), 1; got != want {
+		t.Fatalf("result citation count = %d, want %d", got, want)
+	}
+	if got, want := resultCitations[0].Type, "web_search_result_location"; got != want {
+		t.Fatalf("result citation type = %q, want %q", got, want)
+	}
+	if got, want := resultCitations[0].URL, "https://example.com"; got != want {
+		t.Fatalf("result citation url = %q, want %q", got, want)
+	}
+	if got, want := resultCitations[0].CitedText, "fact"; got != want {
+		t.Fatalf("result cited text = %q, want %q", got, want)
+	}
+	if got, want := len(final.Citations()), 1; got != want {
+		t.Fatalf("assistant citation count = %d, want %d", got, want)
+	}
 	if got, want := final.Content[1].ProviderMetadata["type"], "server_tool_use"; got != want {
 		t.Fatalf("tool metadata type = %v, want %v", got, want)
 	}

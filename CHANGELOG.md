@@ -33,6 +33,10 @@ See [release notes](docs/release-notes-v0.6.0.md).
 - `cmd/sigma-surface-probe` now has an opt-in cross-provider handoff diagnostic
   that builds small tool-call contexts and replays them pairwise across selected
   live routes without adding live provider calls to CI.
+- Assistant messages and content blocks now expose provider-neutral source and
+  citation accessors, letting callers read normalized URLs, URIs, titles,
+  offsets, cited text, and copied provider metadata without scraping opaque
+  provider metadata maps directly.
 
 ## [0.5.0] - 2026-06-13
 

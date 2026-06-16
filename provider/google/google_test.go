@@ -956,6 +956,22 @@ func TestCompletePreservesGroundingMetadataSources(t *testing.T) {
 	if got, want := sources[1]["uri"], "gs://bucket/doc.pdf"; got != want {
 		t.Fatalf("source uri = %v, want %v", got, want)
 	}
+	resultSources := final.Sources()
+	if got, want := len(resultSources), 2; got != want {
+		t.Fatalf("result source count = %d, want %d", got, want)
+	}
+	if got, want := resultSources[0].Type, "web"; got != want {
+		t.Fatalf("result source type = %q, want %q", got, want)
+	}
+	if got, want := resultSources[0].URL, "https://example.com"; got != want {
+		t.Fatalf("result source url = %q, want %q", got, want)
+	}
+	if got, want := resultSources[1].Type, "retrievedContext"; got != want {
+		t.Fatalf("result retrieved source type = %q, want %q", got, want)
+	}
+	if got, want := resultSources[1].URI, "gs://bucket/doc.pdf"; got != want {
+		t.Fatalf("result retrieved source uri = %q, want %q", got, want)
+	}
 }
 
 func TestFunctionCallArgumentsGenerateSyntheticIDsWhenMissingOrDuplicate(t *testing.T) {

@@ -20,7 +20,10 @@ support. The environment credential resolver also exposes non-secret discovery
 helpers so applications can inspect candidate and configured API-key variable
 names before making a request. The surface probe command adds a credential-gated
 cross-provider handoff diagnostic for replaying small tool-call contexts across
-selected live routes without moving live provider calls into CI.
+selected live routes without moving live provider calls into CI. Assistant
+results now also expose provider-neutral source and citation accessors for the
+source metadata Sigma already captures from grounded and citation-bearing
+responses.
 
 ## Added
 
@@ -55,6 +58,10 @@ selected live routes without moving live provider calls into CI.
   each selected live route/model and replays it pairwise into the other selected
   routes, emitting JSONL diagnostics with `sourceRoute` and `sourceModel` so
   replay failures can be attributed without making handoff checks part of CI.
+- `sigma.AssistantMessage.Sources`, `sigma.ContentBlock.Citations`, and
+  `sigma.AssistantMessage.Citations` now expose normalized source and citation
+  entries from provider metadata, including URLs, URIs, titles, offsets, cited
+  text, and copied provider metadata for provider-specific details.
 
 ## Compatibility
 
@@ -76,6 +83,9 @@ selected live routes without moving live provider calls into CI.
 - Environment credential discovery is additive and non-secret. `Resolve`
   remains the API that returns credential values, and the new helper methods do
   not probe ambient cloud credentials or OAuth token stores.
+- Source and citation accessors are additive views over existing provider
+  metadata. They do not change persisted request shape, replay behavior,
+  provider dispatch, or the raw `ProviderMetadata` maps.
 
 ## Deferred work
 
@@ -87,6 +97,9 @@ selected live routes without moving live provider calls into CI.
 - Cross-provider handoff remains a diagnostic probe, not a public orchestration
   runtime. Full context handoff APIs and capability-loss reporting remain
   deferred.
+- Provider-neutral document/PDF content blocks, source ranking, citation
+  rendering, and provider-specific citation UI policy remain deferred and
+  caller-owned.
 
 ## Validation status
 

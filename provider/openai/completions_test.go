@@ -936,6 +936,22 @@ func TestStreamingParsesOpenAICompatibleMetadataAndFallbackToolID(t *testing.T) 
 	if got, want := sources[1]["url"], "https://top.example"; got != want {
 		t.Fatalf("top-level source URL = %v, want %v", got, want)
 	}
+	resultSources := final.Sources()
+	if got, want := len(resultSources), 2; got != want {
+		t.Fatalf("result source count = %d, want %d", got, want)
+	}
+	if got, want := resultSources[0].URL, "https://annotation.example"; got != want {
+		t.Fatalf("result annotation source URL = %q, want %q", got, want)
+	}
+	if resultSources[0].StartIndex == nil || *resultSources[0].StartIndex != 0 {
+		t.Fatalf("result annotation start index = %#v, want 0", resultSources[0].StartIndex)
+	}
+	if resultSources[0].EndIndex == nil || *resultSources[0].EndIndex != 5 {
+		t.Fatalf("result annotation end index = %#v, want 5", resultSources[0].EndIndex)
+	}
+	if got, want := resultSources[1].URL, "https://top.example"; got != want {
+		t.Fatalf("result top-level source URL = %q, want %q", got, want)
+	}
 }
 
 func TestStreamingParsesChoiceUsage(t *testing.T) {

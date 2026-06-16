@@ -175,8 +175,9 @@ work until their API boundaries are explicit.
       request, replay, debug-redaction, and provider compatibility semantics.
 - [x] Add typed Anthropic native `output_format` and parallel-tool suppression
       controls without adding provider-neutral structured-output semantics.
-- [ ] Add provider-neutral source/citation result APIs only after settling the
-      public shape across OpenAI-compatible, Anthropic, and Google metadata.
+- [x] Add provider-neutral source/citation result APIs over existing
+      OpenAI-compatible, Anthropic, and Google metadata while keeping
+      provider-specific rendering and document/PDF content blocks deferred.
 - [ ] Add broader provider-neutral sampling controls such as top-p, top-k,
       seed, and penalty fields only after settling cross-provider semantics.
 - [x] Add opt-in live provider metadata/replay and pairwise handoff probes
