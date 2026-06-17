@@ -16,14 +16,16 @@ device-code login, token refresh, request-time credential resolution, and
 explicit model-policy enablement. Kimi Coding is promoted as a focused
 Anthropic-compatible provider slice with generated metadata, credential
 discovery, request headers, adaptive thinking metadata, and session-affinity
-support. The environment credential resolver also exposes non-secret discovery
-helpers so applications can inspect candidate and configured API-key variable
-names before making a request. The surface probe command adds a credential-gated
-cross-provider handoff diagnostic for replaying small tool-call contexts across
-selected live routes without moving live provider calls into CI. Assistant
-results now also expose provider-neutral source and citation accessors for the
-source metadata Sigma already captures from grounded and citation-bearing
-responses.
+support. Xiaomi is promoted as a focused OpenAI-compatible provider slice with
+API-billing and regional token-plan registration helpers, generated MiMo
+metadata, and regional API-key discovery. The environment credential resolver
+also exposes non-secret discovery helpers so applications can inspect candidate
+and configured API-key variable names before making a request. The surface probe
+command adds a credential-gated cross-provider handoff diagnostic for replaying
+small tool-call contexts across selected live routes without moving live
+provider calls into CI. Assistant results now also expose provider-neutral
+source and citation accessors for the source metadata Sigma already captures
+from grounded and citation-bearing responses.
 
 ## Added
 
@@ -50,6 +52,12 @@ responses.
   adapter with Kimi Coding base URL defaults, Kimi CLI request headers,
   `KIMI_API_KEY` credential discovery, and generated metadata for `k2p7`,
   `kimi-for-coding`, and `kimi-k2-thinking`.
+- Xiaomi can now be registered with `xiaomi.Register`,
+  `xiaomi.RegisterTokenPlanCN`, `xiaomi.RegisterTokenPlanAMS`, or
+  `xiaomi.RegisterTokenPlanSGP`, using the shared OpenAI-compatible Chat
+  Completions adapter with API-billing and regional token-plan base URL
+  defaults, regional API-key discovery, generated MiMo metadata, and
+  DeepSeek-style reasoning replay compatibility.
 - `sigma.EnvironmentAuthResolver` now has `EnvVars` and `ConfiguredEnvVars`
   helpers for model-aware environment credential discovery. They return ordered
   variable names only, respect model metadata before provider defaults, and add
@@ -80,6 +88,10 @@ responses.
   not change the existing GitHub Copilot request dispatch path.
 - Kimi Coding is additive: the existing `kimi` metadata row remains available,
   and broader router or regional endpoint catalog expansion stays deferred.
+- Xiaomi token-plan support is additive and uses distinct provider IDs for the
+  CN, AMS, and SGP regional OpenAI-compatible routes. The API-billing
+  `ProviderXiaomi` rows remain available, and `mimo-v2-flash` remains scoped to
+  the API-billing provider rather than the token-plan providers.
 - Environment credential discovery is additive and non-secret. `Resolve`
   remains the API that returns credential values, and the new helper methods do
   not probe ambient cloud credentials or OAuth token stores.
@@ -97,16 +109,21 @@ responses.
 - Cross-provider handoff remains a diagnostic probe, not a public orchestration
   runtime. Full context handoff APIs and capability-loss reporting remain
   deferred.
+- Xiaomi Anthropic-compatible token-plan routes remain deferred until they have
+  separate provider IDs, compatibility metadata, and deterministic replay
+  fixtures.
 - Provider-neutral document/PDF content blocks, source ranking, citation
   rendering, and provider-specific citation UI policy remain deferred and
   caller-owned.
 
 ## Validation status
 
-Current v0.6.0 development state validated on 2026-06-16 with:
+Current v0.6.0 development state validated on 2026-06-18 with:
 
 - `mise run mise:validate`.
 - `mise run clean`.
+- `mise run go:generate`.
+- `mise run go:fmt`.
 - `mise run go:build`.
 - `mise run go:test`.
 - `mise run go:race`.

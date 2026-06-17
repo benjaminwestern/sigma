@@ -28,6 +28,7 @@ Release scope values:
 | OpenAI-compatible Chat Completions, including OpenRouter text and custom endpoints | `openai-completions` | `MVP` | `fixture-tested` | `fixture-tested` | `not supported by provider` | `fixture-tested` | `fixture-tested` | `fixture-tested` | `partial` | `fixture-tested` | `fixture-tested` | `fixture-tested` | `fixture-tested` | `intentionally omitted` | `fixture-tested` | `intentionally omitted` |
 | Fireworks OpenAI-compatible Chat Completions | `openai-completions` | `preview` | `fixture-tested` | `partial` | `not supported by provider` | `fixture-tested` | `fixture-tested` | `fixture-tested` | `fixture-tested` | `partial` | `fixture-tested` | `fixture-tested` | `fixture-tested` | `intentionally omitted` | `fixture-tested` | `intentionally omitted` |
 | xAI/Grok OpenAI-compatible Chat Completions | `openai-completions` | `preview` | `fixture-tested` | `partial` | `not supported by provider` | `fixture-tested` | `fixture-tested` | `fixture-tested` | `partial` | `partial` | `fixture-tested` | `fixture-tested` | `fixture-tested` | `intentionally omitted` | `fixture-tested` | `intentionally omitted` |
+| Xiaomi MiMo OpenAI-compatible Chat Completions and token-plan routes | `openai-completions` | `preview` | `fixture-tested` | `partial` | `not supported by provider` | `fixture-tested` | `fixture-tested` | `fixture-tested` | `fixture-tested` | `partial` | `fixture-tested` | `implemented` | `fixture-tested` | `intentionally omitted` | `fixture-tested` | `intentionally omitted` |
 | OpenCode Zen and OpenCode Go OpenAI-compatible Chat Completions | `openai-completions` | `preview` | `fixture-tested` | `partial` | `not supported by provider` | `fixture-tested` | `fixture-tested` | `fixture-tested` | `fixture-tested` | `partial` | `fixture-tested` | `implemented` | `fixture-tested` | `intentionally omitted` | `partial` | `intentionally omitted` |
 | OpenAI Responses | `openai-responses` | `preview` | `fixture-tested` | `fixture-tested` | `not supported by provider` | `fixture-tested` | `fixture-tested` | `fixture-tested` | `fixture-tested` | `partial` | `fixture-tested` | `fixture-tested` | `fixture-tested` | `not supported by provider` | `fixture-tested` | `intentionally omitted` |
 | Azure OpenAI Responses | `azure-openai-responses` | `preview` | `fixture-tested` | `partial` | `not supported by provider` | `fixture-tested` | `partial` | `partial` | `partial` | `partial` | `fixture-tested` | `implemented` | `fixture-tested` | `fixture-tested` | `fixture-tested` | `intentionally omitted` |
@@ -51,6 +52,7 @@ Release scope values:
 - `openai-completions`: [provider/openai/completions_test.go](../provider/openai/completions_test.go), [provider/openai/compat_test.go](../provider/openai/compat_test.go), [internal/sse/testdata/openai/text_usage.sse](../internal/sse/testdata/openai/text_usage.sse), [internal/sse/testdata/openai/tool_call.sse](../internal/sse/testdata/openai/tool_call.sse).
 - Fireworks `openai-completions`: [provider/fireworks/fireworks_test.go](../provider/fireworks/fireworks_test.go), [provider/openai/compat_test.go](../provider/openai/compat_test.go).
 - xAI/Grok `openai-completions`: [provider/xai/xai_test.go](../provider/xai/xai_test.go), [provider/openai/compat_test.go](../provider/openai/compat_test.go).
+- Xiaomi MiMo `openai-completions`: [provider/xiaomi/xiaomi_test.go](../provider/xiaomi/xiaomi_test.go), [modeldata_test.go](../modeldata_test.go).
 - OpenCode `openai-completions`: [provider/openai/compat_test.go](../provider/openai/compat_test.go), [internal/modeldata/modeldata_test.go](../internal/modeldata/modeldata_test.go).
 - `openai-responses`: [provider/openai/responses_test.go](../provider/openai/responses_test.go).
 - `azure-openai-responses`: [provider/openai/azure_responses_test.go](../provider/openai/azure_responses_test.go).
@@ -82,7 +84,7 @@ Release scope values:
 - Azure and Codex adapters are implemented provider packages, but their APIs are
   not represented by generated default model metadata yet. Vertex now has a
   representative metadata-only route.
-- OpenAI-compatible provider IDs beyond OpenAI/OpenRouter/Fireworks/xAI/OpenCode,
+- OpenAI-compatible provider IDs beyond OpenAI/OpenRouter/Fireworks/xAI/Xiaomi/OpenCode,
   GitHub Copilot, and Cloudflare AI Gateway rely on shared compatibility
   detection or explicit `OpenAICompletionsCompat` metadata. They are
   future-scope rows and are not independently release-complete.
@@ -109,7 +111,9 @@ Release scope values:
   deterministic compatibility coverage in `provider/anthropic`; Kimi Coding,
   Fireworks, MiniMax, and MiniMax CN also use thin provider wrappers over the
   same Anthropic-compatible adapter with direct registration and endpoint-path
-  coverage.
+  coverage. Xiaomi API-billing and token-plan rows use a separate
+  OpenAI-compatible provider wrapper with deterministic registration and
+  endpoint-path coverage.
 - Mistral Conversations cache retention is marked `partial` because
   `sigma.WithSessionID` maps to Mistral `x-affinity` for prefix-cache reuse, but
   explicit cache-retention controls and cache-token accounting are not exposed by

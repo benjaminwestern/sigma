@@ -12,6 +12,10 @@ See [release notes](docs/release-notes-v0.6.0.md).
 
 ### Added
 
+- Xiaomi now has a first-class OpenAI-compatible provider wrapper for the
+  API-billing route and regional token-plan routes, including generated
+  metadata, regional API-key discovery, and deterministic registration/request
+  coverage for `mimo-v2.5-pro-ultraspeed` and the token-plan MiMo rows.
 - Kimi Coding now has a first-class Anthropic-compatible provider wrapper and
   generated metadata for `k2p7`, `kimi-for-coding`, and `kimi-k2-thinking`,
   including `KIMI_API_KEY` discovery, Kimi CLI request headers, adaptive
@@ -380,7 +384,7 @@ See [release notes](docs/release-notes-v0.3.0.md).
   capability-loss reporting are deferred to later integration work; this release
   exposes only provider-neutral primitives.
 - DeepSeek, Groq, Cerebras, Together, GitHub Copilot, Cloudflare, NVIDIA,
-  Z.ai, Ant Ling, Moonshot AI, MiniMax, Kimi, and Xiaomi are not yet
+  Z.ai, Ant Ling, Moonshot AI, MiniMax, and Kimi are not yet
   first-class provider rows; generated metadata and routing may exist, but
   independent provider-quality claims still need fixtures.
 - Future xAI/Grok catalog refreshes and provider-specific Grok

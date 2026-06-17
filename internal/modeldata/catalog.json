@@ -15927,6 +15927,524 @@
       }
     },
     {
+      "id": "mimo-v2.5-pro-ultraspeed",
+      "name": "MiMo-V2.5-Pro-UltraSpeed",
+      "provider": "xiaomi",
+      "api": "openai-completions",
+      "baseURL": "https://api.xiaomimimo.com/v1",
+      "supportedInputs": [
+        "text"
+      ],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 1.305,
+        "outputPerMillion": 2.61,
+        "cacheReadInputPerMillion": 0.0108,
+        "currency": "USD"
+      },
+      "contextWindow": 1048576,
+      "maxOutputTokens": 131072,
+      "headers": {},
+      "authEnvNames": [
+        "XIAOMI_API_KEY"
+      ],
+      "defaultTransport": "sse",
+      "providerMetadata": {
+        "modelFamily": "mimo"
+      },
+      "openAICompletionsCompat": {
+        "reasoningFormat": "deepseek",
+        "requiresReasoningContentOnAssistantMessages": "supported"
+      }
+    },
+    {
+      "id": "mimo-v2-omni",
+      "name": "MiMo-V2-Omni",
+      "provider": "xiaomi-token-plan-cn",
+      "api": "openai-completions",
+      "baseURL": "https://token-plan-cn.xiaomimimo.com/v1",
+      "supportedInputs": [
+        "text",
+        "image"
+      ],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 0.4,
+        "outputPerMillion": 2,
+        "cacheReadInputPerMillion": 0.08,
+        "currency": "USD"
+      },
+      "contextWindow": 262144,
+      "maxOutputTokens": 131072,
+      "headers": {},
+      "authEnvNames": [
+        "XIAOMI_TOKEN_PLAN_CN_API_KEY"
+      ],
+      "defaultTransport": "sse",
+      "providerMetadata": {
+        "modelFamily": "mimo"
+      },
+      "openAICompletionsCompat": {
+        "reasoningFormat": "deepseek",
+        "requiresReasoningContentOnAssistantMessages": "supported"
+      }
+    },
+    {
+      "id": "mimo-v2-pro",
+      "name": "MiMo-V2-Pro",
+      "provider": "xiaomi-token-plan-cn",
+      "api": "openai-completions",
+      "baseURL": "https://token-plan-cn.xiaomimimo.com/v1",
+      "supportedInputs": [
+        "text"
+      ],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 1,
+        "outputPerMillion": 3,
+        "cacheReadInputPerMillion": 0.2,
+        "currency": "USD"
+      },
+      "contextWindow": 1048576,
+      "maxOutputTokens": 131072,
+      "headers": {},
+      "authEnvNames": [
+        "XIAOMI_TOKEN_PLAN_CN_API_KEY"
+      ],
+      "defaultTransport": "sse",
+      "providerMetadata": {
+        "modelFamily": "mimo"
+      },
+      "openAICompletionsCompat": {
+        "reasoningFormat": "deepseek",
+        "requiresReasoningContentOnAssistantMessages": "supported"
+      }
+    },
+    {
+      "id": "mimo-v2.5",
+      "name": "MiMo-V2.5",
+      "provider": "xiaomi-token-plan-cn",
+      "api": "openai-completions",
+      "baseURL": "https://token-plan-cn.xiaomimimo.com/v1",
+      "supportedInputs": [
+        "text",
+        "image"
+      ],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 0.4,
+        "outputPerMillion": 2,
+        "cacheReadInputPerMillion": 0.08,
+        "currency": "USD"
+      },
+      "contextWindow": 1048576,
+      "maxOutputTokens": 131072,
+      "headers": {},
+      "authEnvNames": [
+        "XIAOMI_TOKEN_PLAN_CN_API_KEY"
+      ],
+      "defaultTransport": "sse",
+      "providerMetadata": {
+        "modelFamily": "mimo"
+      },
+      "openAICompletionsCompat": {
+        "reasoningFormat": "deepseek",
+        "requiresReasoningContentOnAssistantMessages": "supported"
+      }
+    },
+    {
+      "id": "mimo-v2.5-pro",
+      "name": "MiMo-V2.5-Pro",
+      "provider": "xiaomi-token-plan-cn",
+      "api": "openai-completions",
+      "baseURL": "https://token-plan-cn.xiaomimimo.com/v1",
+      "supportedInputs": [
+        "text"
+      ],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 1,
+        "outputPerMillion": 3,
+        "cacheReadInputPerMillion": 0.2,
+        "currency": "USD"
+      },
+      "contextWindow": 1048576,
+      "maxOutputTokens": 131072,
+      "headers": {},
+      "authEnvNames": [
+        "XIAOMI_TOKEN_PLAN_CN_API_KEY"
+      ],
+      "defaultTransport": "sse",
+      "providerMetadata": {
+        "modelFamily": "mimo"
+      },
+      "openAICompletionsCompat": {
+        "reasoningFormat": "deepseek",
+        "requiresReasoningContentOnAssistantMessages": "supported"
+      }
+    },
+    {
+      "id": "mimo-v2.5-pro-ultraspeed",
+      "name": "MiMo-V2.5-Pro-UltraSpeed",
+      "provider": "xiaomi-token-plan-cn",
+      "api": "openai-completions",
+      "baseURL": "https://token-plan-cn.xiaomimimo.com/v1",
+      "supportedInputs": [
+        "text"
+      ],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 1.305,
+        "outputPerMillion": 2.61,
+        "cacheReadInputPerMillion": 0.0108,
+        "currency": "USD"
+      },
+      "contextWindow": 1048576,
+      "maxOutputTokens": 131072,
+      "headers": {},
+      "authEnvNames": [
+        "XIAOMI_TOKEN_PLAN_CN_API_KEY"
+      ],
+      "defaultTransport": "sse",
+      "providerMetadata": {
+        "modelFamily": "mimo"
+      },
+      "openAICompletionsCompat": {
+        "reasoningFormat": "deepseek",
+        "requiresReasoningContentOnAssistantMessages": "supported"
+      }
+    },
+    {
+      "id": "mimo-v2-omni",
+      "name": "MiMo-V2-Omni",
+      "provider": "xiaomi-token-plan-ams",
+      "api": "openai-completions",
+      "baseURL": "https://token-plan-ams.xiaomimimo.com/v1",
+      "supportedInputs": [
+        "text",
+        "image"
+      ],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 0.4,
+        "outputPerMillion": 2,
+        "cacheReadInputPerMillion": 0.08,
+        "currency": "USD"
+      },
+      "contextWindow": 262144,
+      "maxOutputTokens": 131072,
+      "headers": {},
+      "authEnvNames": [
+        "XIAOMI_TOKEN_PLAN_AMS_API_KEY"
+      ],
+      "defaultTransport": "sse",
+      "providerMetadata": {
+        "modelFamily": "mimo"
+      },
+      "openAICompletionsCompat": {
+        "reasoningFormat": "deepseek",
+        "requiresReasoningContentOnAssistantMessages": "supported"
+      }
+    },
+    {
+      "id": "mimo-v2-pro",
+      "name": "MiMo-V2-Pro",
+      "provider": "xiaomi-token-plan-ams",
+      "api": "openai-completions",
+      "baseURL": "https://token-plan-ams.xiaomimimo.com/v1",
+      "supportedInputs": [
+        "text"
+      ],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 1,
+        "outputPerMillion": 3,
+        "cacheReadInputPerMillion": 0.2,
+        "currency": "USD"
+      },
+      "contextWindow": 1048576,
+      "maxOutputTokens": 131072,
+      "headers": {},
+      "authEnvNames": [
+        "XIAOMI_TOKEN_PLAN_AMS_API_KEY"
+      ],
+      "defaultTransport": "sse",
+      "providerMetadata": {
+        "modelFamily": "mimo"
+      },
+      "openAICompletionsCompat": {
+        "reasoningFormat": "deepseek",
+        "requiresReasoningContentOnAssistantMessages": "supported"
+      }
+    },
+    {
+      "id": "mimo-v2.5",
+      "name": "MiMo-V2.5",
+      "provider": "xiaomi-token-plan-ams",
+      "api": "openai-completions",
+      "baseURL": "https://token-plan-ams.xiaomimimo.com/v1",
+      "supportedInputs": [
+        "text",
+        "image"
+      ],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 0.4,
+        "outputPerMillion": 2,
+        "cacheReadInputPerMillion": 0.08,
+        "currency": "USD"
+      },
+      "contextWindow": 1048576,
+      "maxOutputTokens": 131072,
+      "headers": {},
+      "authEnvNames": [
+        "XIAOMI_TOKEN_PLAN_AMS_API_KEY"
+      ],
+      "defaultTransport": "sse",
+      "providerMetadata": {
+        "modelFamily": "mimo"
+      },
+      "openAICompletionsCompat": {
+        "reasoningFormat": "deepseek",
+        "requiresReasoningContentOnAssistantMessages": "supported"
+      }
+    },
+    {
+      "id": "mimo-v2.5-pro",
+      "name": "MiMo-V2.5-Pro",
+      "provider": "xiaomi-token-plan-ams",
+      "api": "openai-completions",
+      "baseURL": "https://token-plan-ams.xiaomimimo.com/v1",
+      "supportedInputs": [
+        "text"
+      ],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 1,
+        "outputPerMillion": 3,
+        "cacheReadInputPerMillion": 0.2,
+        "currency": "USD"
+      },
+      "contextWindow": 1048576,
+      "maxOutputTokens": 131072,
+      "headers": {},
+      "authEnvNames": [
+        "XIAOMI_TOKEN_PLAN_AMS_API_KEY"
+      ],
+      "defaultTransport": "sse",
+      "providerMetadata": {
+        "modelFamily": "mimo"
+      },
+      "openAICompletionsCompat": {
+        "reasoningFormat": "deepseek",
+        "requiresReasoningContentOnAssistantMessages": "supported"
+      }
+    },
+    {
+      "id": "mimo-v2.5-pro-ultraspeed",
+      "name": "MiMo-V2.5-Pro-UltraSpeed",
+      "provider": "xiaomi-token-plan-ams",
+      "api": "openai-completions",
+      "baseURL": "https://token-plan-ams.xiaomimimo.com/v1",
+      "supportedInputs": [
+        "text"
+      ],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 1.305,
+        "outputPerMillion": 2.61,
+        "cacheReadInputPerMillion": 0.0108,
+        "currency": "USD"
+      },
+      "contextWindow": 1048576,
+      "maxOutputTokens": 131072,
+      "headers": {},
+      "authEnvNames": [
+        "XIAOMI_TOKEN_PLAN_AMS_API_KEY"
+      ],
+      "defaultTransport": "sse",
+      "providerMetadata": {
+        "modelFamily": "mimo"
+      },
+      "openAICompletionsCompat": {
+        "reasoningFormat": "deepseek",
+        "requiresReasoningContentOnAssistantMessages": "supported"
+      }
+    },
+    {
+      "id": "mimo-v2-omni",
+      "name": "MiMo-V2-Omni",
+      "provider": "xiaomi-token-plan-sgp",
+      "api": "openai-completions",
+      "baseURL": "https://token-plan-sgp.xiaomimimo.com/v1",
+      "supportedInputs": [
+        "text",
+        "image"
+      ],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 0.4,
+        "outputPerMillion": 2,
+        "cacheReadInputPerMillion": 0.08,
+        "currency": "USD"
+      },
+      "contextWindow": 262144,
+      "maxOutputTokens": 131072,
+      "headers": {},
+      "authEnvNames": [
+        "XIAOMI_TOKEN_PLAN_SGP_API_KEY"
+      ],
+      "defaultTransport": "sse",
+      "providerMetadata": {
+        "modelFamily": "mimo"
+      },
+      "openAICompletionsCompat": {
+        "reasoningFormat": "deepseek",
+        "requiresReasoningContentOnAssistantMessages": "supported"
+      }
+    },
+    {
+      "id": "mimo-v2-pro",
+      "name": "MiMo-V2-Pro",
+      "provider": "xiaomi-token-plan-sgp",
+      "api": "openai-completions",
+      "baseURL": "https://token-plan-sgp.xiaomimimo.com/v1",
+      "supportedInputs": [
+        "text"
+      ],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 1,
+        "outputPerMillion": 3,
+        "cacheReadInputPerMillion": 0.2,
+        "currency": "USD"
+      },
+      "contextWindow": 1048576,
+      "maxOutputTokens": 131072,
+      "headers": {},
+      "authEnvNames": [
+        "XIAOMI_TOKEN_PLAN_SGP_API_KEY"
+      ],
+      "defaultTransport": "sse",
+      "providerMetadata": {
+        "modelFamily": "mimo"
+      },
+      "openAICompletionsCompat": {
+        "reasoningFormat": "deepseek",
+        "requiresReasoningContentOnAssistantMessages": "supported"
+      }
+    },
+    {
+      "id": "mimo-v2.5",
+      "name": "MiMo-V2.5",
+      "provider": "xiaomi-token-plan-sgp",
+      "api": "openai-completions",
+      "baseURL": "https://token-plan-sgp.xiaomimimo.com/v1",
+      "supportedInputs": [
+        "text",
+        "image"
+      ],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 0.4,
+        "outputPerMillion": 2,
+        "cacheReadInputPerMillion": 0.08,
+        "currency": "USD"
+      },
+      "contextWindow": 1048576,
+      "maxOutputTokens": 131072,
+      "headers": {},
+      "authEnvNames": [
+        "XIAOMI_TOKEN_PLAN_SGP_API_KEY"
+      ],
+      "defaultTransport": "sse",
+      "providerMetadata": {
+        "modelFamily": "mimo"
+      },
+      "openAICompletionsCompat": {
+        "reasoningFormat": "deepseek",
+        "requiresReasoningContentOnAssistantMessages": "supported"
+      }
+    },
+    {
+      "id": "mimo-v2.5-pro",
+      "name": "MiMo-V2.5-Pro",
+      "provider": "xiaomi-token-plan-sgp",
+      "api": "openai-completions",
+      "baseURL": "https://token-plan-sgp.xiaomimimo.com/v1",
+      "supportedInputs": [
+        "text"
+      ],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 1,
+        "outputPerMillion": 3,
+        "cacheReadInputPerMillion": 0.2,
+        "currency": "USD"
+      },
+      "contextWindow": 1048576,
+      "maxOutputTokens": 131072,
+      "headers": {},
+      "authEnvNames": [
+        "XIAOMI_TOKEN_PLAN_SGP_API_KEY"
+      ],
+      "defaultTransport": "sse",
+      "providerMetadata": {
+        "modelFamily": "mimo"
+      },
+      "openAICompletionsCompat": {
+        "reasoningFormat": "deepseek",
+        "requiresReasoningContentOnAssistantMessages": "supported"
+      }
+    },
+    {
+      "id": "mimo-v2.5-pro-ultraspeed",
+      "name": "MiMo-V2.5-Pro-UltraSpeed",
+      "provider": "xiaomi-token-plan-sgp",
+      "api": "openai-completions",
+      "baseURL": "https://token-plan-sgp.xiaomimimo.com/v1",
+      "supportedInputs": [
+        "text"
+      ],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 1.305,
+        "outputPerMillion": 2.61,
+        "cacheReadInputPerMillion": 0.0108,
+        "currency": "USD"
+      },
+      "contextWindow": 1048576,
+      "maxOutputTokens": 131072,
+      "headers": {},
+      "authEnvNames": [
+        "XIAOMI_TOKEN_PLAN_SGP_API_KEY"
+      ],
+      "defaultTransport": "sse",
+      "providerMetadata": {
+        "modelFamily": "mimo"
+      },
+      "openAICompletionsCompat": {
+        "reasoningFormat": "deepseek",
+        "requiresReasoningContentOnAssistantMessages": "supported"
+      }
+    },
+    {
       "id": "glm-4.5-air",
       "name": "GLM-4.5-Air",
       "provider": "zai-coding-cn",

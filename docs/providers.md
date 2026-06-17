@@ -230,6 +230,27 @@ The built-in Fireworks Anthropic-compatible routes are
 against Fireworks' `/messages` endpoint and carry compatibility metadata for
 image input, thinking levels, cache behavior, and tool use.
 
+### Xiaomi MiMo
+
+```go
+registry := sigma.DefaultRegistry()
+_ = xiaomi.Register(registry)
+_ = xiaomi.RegisterTokenPlanAMS(registry)
+client := sigma.NewClient(sigma.WithRegistry(registry))
+```
+
+Environment: `XIAOMI_API_KEY` for `ProviderXiaomi`,
+`XIAOMI_TOKEN_PLAN_CN_API_KEY` for `ProviderXiaomiTokenPlanCN`,
+`XIAOMI_TOKEN_PLAN_AMS_API_KEY` for `ProviderXiaomiTokenPlanAMS`, and
+`XIAOMI_TOKEN_PLAN_SGP_API_KEY` for `ProviderXiaomiTokenPlanSGP`.
+
+The Xiaomi wrapper uses Sigma's shared OpenAI-compatible Chat Completions
+adapter for the API-billing and regional token-plan `/v1` routes. Built-in
+metadata includes the API-billing MiMo rows plus token-plan rows for
+`mimo-v2-omni`, `mimo-v2-pro`, `mimo-v2.5`, `mimo-v2.5-pro`, and
+`mimo-v2.5-pro-ultraspeed`. Token-plan metadata intentionally omits
+`mimo-v2-flash`, which remains scoped to the API-billing provider.
+
 ### Google Generative AI
 
 ```go

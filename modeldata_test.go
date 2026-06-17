@@ -512,6 +512,9 @@ func assertProviderConstantsHaveGeneratedTextMetadata(t *testing.T, registry *Re
 		ProviderVercelAIGateway,
 		ProviderXAI,
 		ProviderXiaomi,
+		ProviderXiaomiTokenPlanAMS,
+		ProviderXiaomiTokenPlanCN,
+		ProviderXiaomiTokenPlanSGP,
 		ProviderZAI,
 		ProviderZAICodingCN,
 	} {
@@ -568,6 +571,46 @@ func assertGeneratedOpenAICompatibleProviderMetadata(t *testing.T, registry *Reg
 		xiaomi.OpenAICompletionsCompat.ReasoningFormat != OpenAICompletionsReasoningDeepSeek ||
 		xiaomi.OpenAICompletionsCompat.RequiresReasoningContentOnAssistantMessages != OpenAICompatSupported {
 		t.Fatalf("Xiaomi compat = %#v, want deepseek reasoning content replay", xiaomi.OpenAICompletionsCompat)
+	}
+	xiaomiUltra, ok := registry.Model(ProviderXiaomi, "mimo-v2.5-pro-ultraspeed")
+	if !ok {
+		t.Fatal("fresh registry missing generated Xiaomi ultraspeed model")
+	}
+	if xiaomiUltra.ContextWindow != 1048576 || xiaomiUltra.MaxOutputTokens != 131072 {
+		t.Fatalf("Xiaomi ultraspeed limits = context %d max %d, want 1048576/131072", xiaomiUltra.ContextWindow, xiaomiUltra.MaxOutputTokens)
+	}
+	if xiaomiUltra.InputCostPerMillion != 1.305 ||
+		xiaomiUltra.OutputCostPerMillion != 2.61 ||
+		xiaomiUltra.CacheReadInputCostPerMillion != 0.0108 {
+		t.Fatalf("Xiaomi ultraspeed costs = input %v output %v cache read %v, want 1.305/2.61/0.0108",
+			xiaomiUltra.InputCostPerMillion,
+			xiaomiUltra.OutputCostPerMillion,
+			xiaomiUltra.CacheReadInputCostPerMillion)
+	}
+
+	for _, tt := range []struct {
+		provider ProviderID
+		baseURL  string
+		envVars  []string
+	}{
+		{provider: ProviderXiaomiTokenPlanCN, baseURL: "https://token-plan-cn.xiaomimimo.com/v1", envVars: []string{"XIAOMI_TOKEN_PLAN_CN_API_KEY"}},
+		{provider: ProviderXiaomiTokenPlanAMS, baseURL: "https://token-plan-ams.xiaomimimo.com/v1", envVars: []string{"XIAOMI_TOKEN_PLAN_AMS_API_KEY"}},
+		{provider: ProviderXiaomiTokenPlanSGP, baseURL: "https://token-plan-sgp.xiaomimimo.com/v1", envVars: []string{"XIAOMI_TOKEN_PLAN_SGP_API_KEY"}},
+	} {
+		if _, ok := registry.Model(tt.provider, "mimo-v2-flash"); ok {
+			t.Fatalf("%s should not include mimo-v2-flash", tt.provider)
+		}
+		tokenPlan, ok := registry.Model(tt.provider, "mimo-v2.5-pro-ultraspeed")
+		if !ok {
+			t.Fatalf("fresh registry missing generated %s ultraspeed model", tt.provider)
+		}
+		assertMetadataString(t, tokenPlan.ProviderMetadata, "baseURL", tt.baseURL)
+		assertMetadataStrings(t, tokenPlan.ProviderMetadata, MetadataAPIKeyEnvVars, tt.envVars)
+		if tokenPlan.OpenAICompletionsCompat == nil ||
+			tokenPlan.OpenAICompletionsCompat.ReasoningFormat != OpenAICompletionsReasoningDeepSeek ||
+			tokenPlan.OpenAICompletionsCompat.RequiresReasoningContentOnAssistantMessages != OpenAICompatSupported {
+			t.Fatalf("%s compat = %#v, want deepseek reasoning content replay", tt.provider, tokenPlan.OpenAICompletionsCompat)
+		}
 	}
 
 	for _, provider := range []ProviderID{ProviderMoonshotAI, ProviderMoonshotAICN} {

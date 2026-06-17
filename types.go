@@ -158,6 +158,12 @@ const (
 	ProviderKimiCoding ProviderID = "kimi-coding"
 	// ProviderXiaomi identifies Xiaomi.
 	ProviderXiaomi ProviderID = "xiaomi"
+	// ProviderXiaomiTokenPlanCN identifies Xiaomi Token Plan CN.
+	ProviderXiaomiTokenPlanCN ProviderID = "xiaomi-token-plan-cn"
+	// ProviderXiaomiTokenPlanAMS identifies Xiaomi Token Plan AMS.
+	ProviderXiaomiTokenPlanAMS ProviderID = "xiaomi-token-plan-ams"
+	// ProviderXiaomiTokenPlanSGP identifies Xiaomi Token Plan SGP.
+	ProviderXiaomiTokenPlanSGP ProviderID = "xiaomi-token-plan-sgp"
 	// ProviderCustom identifies a user-defined provider path.
 	ProviderCustom ProviderID = "custom"
 )

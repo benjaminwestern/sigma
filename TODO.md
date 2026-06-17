@@ -216,7 +216,7 @@ metadata-only and backed by compatibility checks.
       behavior beyond the shared Anthropic-compatible adapter.
 - [ ] Vercel AI Gateway — promote to a first-class provider row with fixtures.
 - [ ] Kimi — promote to a first-class provider row with fixtures.
-- [ ] Xiaomi — promote to a first-class provider row with fixtures.
+- [x] Xiaomi — promote to a first-class provider row with fixtures.
 - [ ] For each promoted provider, add streaming, tools, usage, typed error
       classification, redaction, and cancellation coverage.
 
@@ -302,9 +302,9 @@ upstream.
       distinct provider ID, credential env var, compatibility metadata, and
       deterministic wrapper coverage.
 - [ ] Evaluate remaining provider-family catalog candidates such as Hugging
-      Face router and Xiaomi token-plan endpoints only after deciding provider
-      IDs, credential env vars, compatibility metadata, and first-class
-      provider-row promotion requirements.
+      Face router only after deciding provider IDs, credential env vars,
+      compatibility metadata, and first-class provider-row promotion
+      requirements.
 - [ ] Expand broad Vercel AI Gateway and OpenRouter text catalogs only after
       source-aware provider/API mapping, tool-capable filtering, reasoning
       metadata, and cost/routing diff reports are in place.
