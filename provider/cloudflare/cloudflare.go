@@ -16,11 +16,13 @@ import (
 const (
 	DefaultAIGatewayOpenAIBaseURL    = "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/openai"
 	DefaultAIGatewayAnthropicBaseURL = "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic"
+	DefaultWorkersAIBaseURL          = "https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai/v1"
 )
 
 const (
 	aiGatewayAccountIDOption = "cloudflare_ai_gateway_account_id"
 	aiGatewayIDOption        = "cloudflare_ai_gateway_id"
+	workersAIAccountIDOption = "cloudflare_workers_ai_account_id"
 )
 
 // Provider adapts Cloudflare AI Gateway's OpenAI-compatible Chat Completions endpoint.
@@ -41,6 +43,12 @@ type AnthropicProviderOption = anthropic.ProviderOption
 // NewAIGatewayProvider constructs a Cloudflare AI Gateway Chat Completions provider.
 func NewAIGatewayProvider(opts ...ProviderOption) *Provider {
 	providerOpts := append([]ProviderOption{openai.WithBaseURL(DefaultAIGatewayOpenAIBaseURL)}, opts...)
+	return openai.NewProvider(providerOpts...)
+}
+
+// NewWorkersAIProvider constructs a Cloudflare Workers AI Chat Completions provider.
+func NewWorkersAIProvider(opts ...ProviderOption) *Provider {
+	providerOpts := append([]ProviderOption{openai.WithBaseURL(DefaultWorkersAIBaseURL)}, opts...)
 	return openai.NewProvider(providerOpts...)
 }
 
@@ -113,12 +121,26 @@ func WithAIGatewayID(gatewayID string) sigma.Option {
 	return sigma.WithProviderOption(sigma.ProviderCloudflareAIGateway, aiGatewayIDOption, gatewayID)
 }
 
+// WithWorkersAIAccountID configures the request-scoped Cloudflare account ID
+// used to resolve Workers AI base URL placeholders.
+func WithWorkersAIAccountID(accountID string) sigma.Option {
+	return sigma.WithProviderOption(sigma.ProviderCloudflareWorkersAI, workersAIAccountIDOption, accountID)
+}
+
 // RegisterAIGateway adds a Cloudflare AI Gateway Chat Completions provider to registry.
 func RegisterAIGateway(registry *sigma.Registry, opts ...ProviderOption) error {
 	if registry == nil {
 		return &sigma.Error{Code: sigma.ErrorUnsupported, Message: "registry is required"}
 	}
 	return registry.RegisterTextProvider(sigma.ProviderCloudflareAIGateway, NewAIGatewayProvider(opts...))
+}
+
+// RegisterWorkersAI adds a Cloudflare Workers AI Chat Completions provider to registry.
+func RegisterWorkersAI(registry *sigma.Registry, opts ...ProviderOption) error {
+	if registry == nil {
+		return &sigma.Error{Code: sigma.ErrorUnsupported, Message: "registry is required"}
+	}
+	return registry.RegisterTextProvider(sigma.ProviderCloudflareWorkersAI, NewWorkersAIProvider(opts...))
 }
 
 // RegisterAIGatewayResponses adds a Cloudflare AI Gateway Responses provider to registry.
@@ -140,6 +162,11 @@ func RegisterAIGatewayAnthropic(registry *sigma.Registry, opts ...AnthropicProvi
 // RegisterDefaultAIGateway adds a Cloudflare AI Gateway Chat Completions provider to sigma's default registry.
 func RegisterDefaultAIGateway(opts ...ProviderOption) error {
 	return sigma.RegisterDefaultTextProvider(sigma.ProviderCloudflareAIGateway, NewAIGatewayProvider(opts...))
+}
+
+// RegisterDefaultWorkersAI adds a Cloudflare Workers AI Chat Completions provider to sigma's default registry.
+func RegisterDefaultWorkersAI(opts ...ProviderOption) error {
+	return sigma.RegisterDefaultTextProvider(sigma.ProviderCloudflareWorkersAI, NewWorkersAIProvider(opts...))
 }
 
 // RegisterDefaultAIGatewayResponses adds a Cloudflare AI Gateway Responses provider to sigma's default registry.

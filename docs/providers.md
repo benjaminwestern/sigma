@@ -158,9 +158,21 @@ Environment: `CLOUDFLARE_API_KEY`, `CLOUDFLARE_ACCOUNT_ID`, and
 `provider/cloudflare` exposes AI Gateway helpers for OpenAI-compatible and
 Anthropic-compatible text routes. The wrapper resolves account and gateway
 placeholders in the base URL and sends API keys with Cloudflare's
-`cf-aig-authorization` header. Direct Cloudflare Workers AI routes remain
-metadata-only until their direct endpoint behavior has separate fixture
-coverage.
+`cf-aig-authorization` header.
+
+Direct Cloudflare Workers AI Chat Completions routes use the same package with
+normal bearer-token auth:
+
+```go
+registry := sigma.DefaultRegistry()
+_ = cloudflare.RegisterWorkersAI(registry)
+client := sigma.NewClient(sigma.WithRegistry(registry))
+```
+
+Environment: `CLOUDFLARE_API_KEY` and `CLOUDFLARE_ACCOUNT_ID`.
+
+Use `cloudflare.WithWorkersAIAccountID` for request-scoped account placeholder
+resolution when the process environment should not provide the account ID.
 
 ### Anthropic Messages
 

@@ -35,6 +35,7 @@ Release scope values:
 | OpenAI Codex Responses | `openai-codex-responses` | `preview` | `fixture-tested` | `partial` | `not supported by provider` | `fixture-tested` | `fixture-tested` | `fixture-tested` | `partial` | `partial` | `fixture-tested` | `implemented` | `partial` | `fixture-tested` | `fixture-tested` | `intentionally omitted` |
 | GitHub Copilot compatible text routes | `openai-completions`, `openai-responses`, `anthropic-messages` | `preview` | `fixture-tested` | `partial` | `not supported by provider` | `fixture-tested` | `partial` | `partial` | `partial` | `partial` | `partial` | `implemented` | `fixture-tested` | `intentionally omitted` | `fixture-tested` | `intentionally omitted` |
 | Cloudflare AI Gateway compatible text routes | `openai-completions`, `openai-responses`, `anthropic-messages` | `preview` | `fixture-tested` | `partial` | `not supported by provider` | `fixture-tested` | `partial` | `partial` | `partial` | `partial` | `partial` | `implemented` | `fixture-tested` | `intentionally omitted` | `fixture-tested` | `intentionally omitted` |
+| Cloudflare Workers AI direct Chat Completions | `openai-completions` | `preview` | `fixture-tested` | `partial` | `not supported by provider` | `fixture-tested` | `partial` | `partial` | `partial` | `partial` | `partial` | `implemented` | `fixture-tested` | `intentionally omitted` | `fixture-tested` | `intentionally omitted` |
 | Anthropic Messages and Anthropic-compatible Kimi/Kimi Coding/Fireworks/Xiaomi routing | `anthropic-messages` | `MVP` | `fixture-tested` | `fixture-tested` | `not supported by provider` | `fixture-tested` | `fixture-tested` | `fixture-tested` | `fixture-tested` | `fixture-tested` | `fixture-tested` | `implemented` | `fixture-tested` | `fixture-tested` | `fixture-tested` | `intentionally omitted` |
 | Google Generative AI | `google-generative-ai` | `preview` | `fixture-tested` | `fixture-tested` | `not supported by provider` | `fixture-tested` | `fixture-tested` | `not supported by provider` | `fixture-tested` | `partial` | `fixture-tested` | `implemented` | `fixture-tested` | `partial` | `fixture-tested` | `intentionally omitted` |
 | Google Vertex AI | `google-vertex` | `preview` | `fixture-tested` | `partial` | `not supported by provider` | `fixture-tested` | `partial` | `not supported by provider` | `partial` | `partial` | `fixture-tested` | `implemented` | `implemented` | `fixture-tested` | `fixture-tested` | `intentionally omitted` |
@@ -59,6 +60,7 @@ Release scope values:
 - `openai-codex-responses`: [provider/openai/codex_responses_test.go](../provider/openai/codex_responses_test.go).
 - GitHub Copilot compatible text routes: [provider/githubcopilot/githubcopilot_test.go](../provider/githubcopilot/githubcopilot_test.go), [provider/openai/completions_test.go](../provider/openai/completions_test.go), [provider/openai/responses_test.go](../provider/openai/responses_test.go).
 - Cloudflare AI Gateway compatible text routes: [provider/cloudflare/cloudflare_test.go](../provider/cloudflare/cloudflare_test.go), [provider/openai/completions_test.go](../provider/openai/completions_test.go), [provider/openai/responses_test.go](../provider/openai/responses_test.go).
+- Cloudflare Workers AI direct Chat Completions: [provider/cloudflare/cloudflare_test.go](../provider/cloudflare/cloudflare_test.go), [provider/openai/completions_test.go](../provider/openai/completions_test.go).
 - `anthropic-messages`: [provider/anthropic/anthropic_test.go](../provider/anthropic/anthropic_test.go), [provider/anthropic/oauth_test.go](../provider/anthropic/oauth_test.go), [provider/kimi/kimi_test.go](../provider/kimi/kimi_test.go).
 - `google-generative-ai`: [provider/google/google_test.go](../provider/google/google_test.go).
 - `google-vertex`: [provider/google/vertex_test.go](../provider/google/vertex_test.go).
@@ -85,9 +87,10 @@ Release scope values:
   not represented by generated default model metadata yet. Vertex now has a
   representative metadata-only route.
 - OpenAI-compatible provider IDs beyond OpenAI/OpenRouter/Fireworks/xAI/Xiaomi/OpenCode,
-  GitHub Copilot, and Cloudflare AI Gateway rely on shared compatibility
-  detection or explicit `OpenAICompletionsCompat` metadata. They are
-  future-scope rows and are not independently release-complete.
+  GitHub Copilot, Cloudflare AI Gateway, and Cloudflare Workers AI rely on
+  shared compatibility detection or explicit `OpenAICompletionsCompat`
+  metadata. They are future-scope rows and are not independently
+  release-complete.
 - OpenCode Zen and OpenCode Go coverage is limited to curated
   `openai-completions` models. Source-package OpenCode models that route through
   OpenAI Responses, Anthropic Messages, or Google APIs are not Go parity today.
@@ -95,8 +98,8 @@ Release scope values:
   MVP `openai-completions` row when they use explicit compatibility metadata.
 - OpenAI-compatible Chat Completions supports typed `tool_choice`, opt-in
   Anthropic-style cache markers, and opt-in `tool_stream`; GitHub Copilot and
-  Cloudflare AI Gateway provider-specific headers are fixture-tested through
-  their wrappers.
+  Cloudflare AI Gateway provider-specific headers plus Cloudflare Workers AI
+  account placeholder resolution are fixture-tested through their wrappers.
 - OpenAI Responses and Codex Responses support typed prompt cache retention,
   parallel tool calls, text verbosity, bounded replay IDs, and image-capable
   tool-result replay through fixture-tested payload coverage.

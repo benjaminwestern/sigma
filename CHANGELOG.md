@@ -45,6 +45,10 @@ See [release notes](docs/release-notes-v0.6.0.md).
   request configuration helpers for AI Gateway account/gateway placeholder
   resolution, Bedrock request regions, and Bedrock request-scoped static AWS
   credentials while preserving existing environment fallbacks.
+- Cloudflare Workers AI now has a first-class OpenAI-compatible Chat
+  Completions wrapper for direct Workers AI routes, including request-scoped
+  account placeholder resolution, normal bearer-token auth, generated metadata,
+  and deterministic registration/request coverage.
 - `cmd/sigma-surface-probe` now has an opt-in cross-provider handoff diagnostic
   that builds small tool-call contexts and replays them pairwise across selected
   live routes without adding live provider calls to CI.

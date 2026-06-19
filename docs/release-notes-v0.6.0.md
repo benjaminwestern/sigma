@@ -27,13 +27,16 @@ also exposes non-secret discovery helpers so applications can inspect candidate
 and configured API-key variable names before making a request, and focused
 provider helpers now let callers pass Cloudflare AI Gateway placeholder values
 and Bedrock region/static credential values without mutating process
-environment. The surface probe command adds a credential-gated cross-provider
-handoff diagnostic for replaying small tool-call contexts across selected live
-routes without moving live provider calls into CI. Assistant results now also
-expose provider-neutral source and citation accessors for the source metadata
-Sigma already captures from grounded and citation-bearing responses. Local
-tool-call validation also now evaluates composed JSON Schema branches so
-callers can reject invalid model-emitted arguments before running tools.
+environment. Cloudflare Workers AI is also promoted as a direct
+OpenAI-compatible Chat Completions wrapper with account placeholder resolution
+and normal bearer-token auth for the direct Workers AI endpoint. The surface
+probe command adds a credential-gated cross-provider handoff diagnostic for
+replaying small tool-call contexts across selected live routes without moving
+live provider calls into CI. Assistant results now also expose provider-neutral
+source and citation accessors for the source metadata Sigma already captures
+from grounded and citation-bearing responses. Local tool-call validation also
+now evaluates composed JSON Schema branches so callers can reject invalid
+model-emitted arguments before running tools.
 
 ## Added
 
@@ -82,6 +85,12 @@ callers can reject invalid model-emitted arguments before running tools.
   provide request-scoped Cloudflare AI Gateway placeholder values before the
   existing `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_GATEWAY_ID` environment
   fallback.
+- Cloudflare Workers AI can now be registered with
+  `cloudflare.RegisterWorkersAI` or `cloudflare.RegisterDefaultWorkersAI`,
+  using the shared OpenAI-compatible Chat Completions adapter with the direct
+  Workers AI base URL, `CLOUDFLARE_API_KEY` credential discovery,
+  request-scoped `cloudflare.WithWorkersAIAccountID`, and
+  `CLOUDFLARE_ACCOUNT_ID` environment fallback.
 - `bedrock.WithRequestRegion` and `bedrock.WithRequestStaticCredentials` now
   provide request-scoped Bedrock runtime region and static AWS credential values
   before the existing AWS region and static credential environment fallbacks.
@@ -133,6 +142,9 @@ callers can reject invalid model-emitted arguments before running tools.
 - Cloudflare and Bedrock request configuration helpers are provider-specific
   request options. They do not add a root-level environment override map, and
   existing process environment fallback behavior remains available.
+- Cloudflare Workers AI direct routing is additive and Chat Completions-only in
+  this release. It uses normal bearer-token auth, while Cloudflare AI Gateway
+  routes continue to use `cf-aig-authorization`.
 - Bedrock credential precedence remains explicit: typed bearer-token options
   and auth resolvers run before request static credentials, and request static
   credentials run before the existing static environment credential path.
@@ -162,6 +174,9 @@ callers can reject invalid model-emitted arguments before running tools.
 - Xiaomi Anthropic-compatible token-plan routes remain deferred until they have
   separate provider IDs, compatibility metadata, and deterministic replay
   fixtures.
+- Cloudflare Workers AI Responses, Anthropic-compatible, image, embedding, and
+  live validation routes remain deferred until each surface has deterministic
+  request, stream, error, and metadata evidence.
 - Provider-neutral document/PDF content blocks, source ranking, citation
   rendering, and provider-specific citation UI policy remain deferred and
   caller-owned.

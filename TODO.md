@@ -211,7 +211,7 @@ metadata-only and backed by compatibility checks.
 - [x] GitHub Copilot — promote to a first-class provider row with fixtures.
 - [x] Cloudflare AI Gateway — promote to a first-class provider row with
       fixtures.
-- [ ] Cloudflare Workers AI — promote to a first-class provider row with
+- [x] Cloudflare Workers AI — promote to a first-class provider row with
       fixtures.
 - [ ] NVIDIA NIM — promote to a first-class provider row with fixtures.
 - [ ] Z.ai and Z.ai Coding CN — promote to first-class provider rows with

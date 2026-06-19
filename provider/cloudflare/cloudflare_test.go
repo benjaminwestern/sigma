@@ -157,6 +157,117 @@ func TestAIGatewayResponsesReportsMissingPlaceholderBeforeNetwork(t *testing.T) 
 	}
 }
 
+func TestWorkersAIResolvesPlaceholderAndUsesBearerAuth(t *testing.T) {
+	requests := make(chan capturedRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captureRequest(t, requests, r)
+		writeChatCompletionsCompleted(w)
+	}))
+	t.Cleanup(server.Close)
+
+	model := cloudflareWorkersAIModel()
+	registry := sigma.NewRegistry()
+	if err := cloudflare.RegisterWorkersAI(
+		registry,
+		cloudflare.WithBaseURL(server.URL+"/{CLOUDFLARE_ACCOUNT_ID}/ai/v1"),
+	); err != nil {
+		t.Fatalf("RegisterWorkersAI returned error: %v", err)
+	}
+	registerModel(t, registry, model)
+
+	client := sigma.NewClient(sigma.WithRegistry(registry))
+	if _, err := client.Complete(
+		context.Background(),
+		model,
+		sigma.Request{Messages: []sigma.Message{sigma.UserText("hi")}},
+		sigma.WithAPIKey("cf-token"),
+		cloudflare.WithWorkersAIAccountID("account"),
+	); err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+
+	request := receiveRequest(t, requests)
+	if got, want := request.Path, "/account/ai/v1/chat/completions"; got != want {
+		t.Fatalf("path = %q, want %q", got, want)
+	}
+	assertHeader(t, request.Headers, "Authorization", "Bearer cf-token")
+	assertHeader(t, request.Headers, "cf-aig-authorization", "")
+}
+
+func TestWorkersAIFallsBackToEnvironmentPlaceholder(t *testing.T) {
+	t.Setenv("CLOUDFLARE_ACCOUNT_ID", "env-account")
+
+	requests := make(chan capturedRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captureRequest(t, requests, r)
+		writeChatCompletionsCompleted(w)
+	}))
+	t.Cleanup(server.Close)
+
+	model := cloudflareWorkersAIModel()
+	registry := sigma.NewRegistry()
+	if err := cloudflare.RegisterWorkersAI(
+		registry,
+		cloudflare.WithBaseURL(server.URL+"/{CLOUDFLARE_ACCOUNT_ID}/ai/v1"),
+	); err != nil {
+		t.Fatalf("RegisterWorkersAI returned error: %v", err)
+	}
+	registerModel(t, registry, model)
+
+	client := sigma.NewClient(sigma.WithRegistry(registry))
+	if _, err := client.Complete(
+		context.Background(),
+		model,
+		sigma.Request{Messages: []sigma.Message{sigma.UserText("hi")}},
+		sigma.WithAPIKey("cf-token"),
+	); err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+
+	request := receiveRequest(t, requests)
+	if got, want := request.Path, "/env-account/ai/v1/chat/completions"; got != want {
+		t.Fatalf("path = %q, want %q", got, want)
+	}
+}
+
+func TestWorkersAIReportsMissingPlaceholderBeforeNetwork(t *testing.T) {
+	requests := make(chan capturedRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captureRequest(t, requests, r)
+		writeChatCompletionsCompleted(w)
+	}))
+	t.Cleanup(server.Close)
+
+	model := cloudflareWorkersAIModel()
+	registry := sigma.NewRegistry()
+	if err := cloudflare.RegisterWorkersAI(
+		registry,
+		cloudflare.WithBaseURL(server.URL+"/{CLOUDFLARE_ACCOUNT_ID}/ai/v1"),
+	); err != nil {
+		t.Fatalf("RegisterWorkersAI returned error: %v", err)
+	}
+	registerModel(t, registry, model)
+
+	client := sigma.NewClient(sigma.WithRegistry(registry))
+	_, err := client.Complete(
+		context.Background(),
+		model,
+		sigma.Request{Messages: []sigma.Message{sigma.UserText("hi")}},
+		sigma.WithAPIKey("cf-token"),
+	)
+	if err == nil {
+		t.Fatal("Complete returned nil error")
+	}
+	if !strings.Contains(err.Error(), "CLOUDFLARE_ACCOUNT_ID is required") {
+		t.Fatalf("error = %v, want missing account placeholder", err)
+	}
+	select {
+	case request := <-requests:
+		t.Fatalf("unexpected request before placeholder error: %#v", request)
+	default:
+	}
+}
+
 func cloudflareResponsesModel() sigma.Model {
 	return sigma.Model{
 		ID:              "gpt-test",
@@ -171,6 +282,15 @@ func cloudflareAnthropicModel() sigma.Model {
 		ID:              "claude-test",
 		Provider:        sigma.ProviderCloudflareAIGateway,
 		API:             sigma.APIAnthropicMessages,
+		SupportedInputs: []sigma.ContentBlockType{sigma.ContentBlockText},
+	}
+}
+
+func cloudflareWorkersAIModel() sigma.Model {
+	return sigma.Model{
+		ID:              "@cf/meta/llama-test",
+		Provider:        sigma.ProviderCloudflareWorkersAI,
+		API:             sigma.APIOpenAICompletions,
 		SupportedInputs: []sigma.ContentBlockType{sigma.ContentBlockText},
 	}
 }
@@ -218,6 +338,11 @@ func assertHeader(t *testing.T, headers http.Header, key string, want string) {
 func writeResponsesCompleted(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	_, _ = io.WriteString(w, `data: {"type":"response.completed","response":{"id":"resp_test","model":"gpt-test","status":"completed","output":[{"type":"message","id":"msg_test","role":"assistant","content":[{"type":"output_text","id":"text_test","text":"ok"}]}]}}`+"\n\n")
+}
+
+func writeChatCompletionsCompleted(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "text/event-stream")
+	_, _ = io.WriteString(w, `data: {"id":"chatcmpl_test","model":"@cf/meta/llama-test","choices":[{"index":0,"delta":{"content":"ok"},"finish_reason":"stop"}]}`+"\n\n")
 }
 
 func writeAnthropicCompleted(w http.ResponseWriter) {

@@ -21,6 +21,7 @@ var cloudflareBaseURLVariable = regexp.MustCompile(`\{([A-Z_][A-Z0-9_]*)\}`)
 const (
 	cloudflareAIGatewayAccountIDOption = "cloudflare_ai_gateway_account_id"
 	cloudflareAIGatewayIDOption        = "cloudflare_ai_gateway_id"
+	cloudflareWorkersAIAccountIDOption = "cloudflare_workers_ai_account_id"
 )
 
 func addCopilotDynamicHeaders(req *http.Request, model sigma.Model, request sigma.Request) {
@@ -54,7 +55,7 @@ func hasCopilotVisionInput(messages []sigma.Message) bool {
 }
 
 func resolveCloudflareBaseURL(provider sigma.ProviderID, baseURL string, opts sigma.Options) (string, error) {
-	if !isCloudflareRoute(provider, baseURL) {
+	if !isCloudflareBaseURLRoute(provider, baseURL) {
 		return baseURL, nil
 	}
 	var missing string
@@ -80,7 +81,11 @@ func cloudflareBaseURLVariableValue(provider sigma.ProviderID, opts sigma.Option
 	options := providerOptions(opts, provider)
 	switch name {
 	case "CLOUDFLARE_ACCOUNT_ID":
-		if value, ok := stringOption(options, cloudflareAIGatewayAccountIDOption); ok {
+		optionName := cloudflareAIGatewayAccountIDOption
+		if provider == sigma.ProviderCloudflareWorkersAI {
+			optionName = cloudflareWorkersAIAccountIDOption
+		}
+		if value, ok := stringOption(options, optionName); ok {
 			return value
 		}
 	case "CLOUDFLARE_GATEWAY_ID":
@@ -89,6 +94,19 @@ func cloudflareBaseURLVariableValue(provider sigma.ProviderID, opts sigma.Option
 		}
 	}
 	return os.Getenv(name)
+}
+
+func isCloudflareBaseURLRoute(provider sigma.ProviderID, baseURL string) bool {
+	if provider == sigma.ProviderCloudflareAIGateway || provider == sigma.ProviderCloudflareWorkersAI {
+		return true
+	}
+	parsed, err := url.Parse(baseURL)
+	if err != nil {
+		text := strings.ToLower(baseURL)
+		return strings.Contains(text, "gateway.ai.cloudflare.com") || strings.Contains(text, "api.cloudflare.com")
+	}
+	host := strings.ToLower(parsed.Hostname())
+	return host == "gateway.ai.cloudflare.com" || host == "api.cloudflare.com"
 }
 
 func isCloudflareRoute(provider sigma.ProviderID, baseURL string) bool {
