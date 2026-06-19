@@ -101,8 +101,8 @@ integrations remain future work until they have the same local evidence bar.
 - [x] Add proxy-aware Codex WebSocket dialing for standard HTTP(S) proxy
       environment variables and `NO_PROXY` exclusions while preserving SSE
       fallback.
-- [ ] Keep Codex WebSocket-specific timeout knobs and debug-stat parity
-      deferred; the current preview transport uses request contexts, explicit
+- [x] Add Codex WebSocket-specific connect timeout and session-cache debug
+      stats while keeping the preview transport on request contexts, explicit
       session cleanup helpers, and SSE fallback.
 - [x] Add OpenAI Codex device-code OAuth login and refresh helpers while keeping
       token persistence caller-owned.

@@ -425,6 +425,9 @@ func validateOptions(model Model, options Options) error {
 		if options.OpenAIOptions.TopLogprobs < 0 {
 			return invalidOptionsError(model, "openai top logprobs must be non-negative")
 		}
+		if options.OpenAIOptions.CodexWebSocketConnectTimeout != nil && *options.OpenAIOptions.CodexWebSocketConnectTimeout < 0 {
+			return invalidOptionsError(model, "openai codex websocket connect timeout must be non-negative")
+		}
 		if options.OpenAIOptions.TopLogprobs > 0 && api != APIOpenAICompletions {
 			return invalidOptionsError(model, "openai logprobs are only supported by openai-completions")
 		}

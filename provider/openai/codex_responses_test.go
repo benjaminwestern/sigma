@@ -451,9 +451,11 @@ func TestCodexResponsesWebSocketStreamsAndSendsRequest(t *testing.T) {
 
 func TestCodexResponsesWebSocketSessionCacheSendsInputDelta(t *testing.T) {
 	openai.CloseCodexResponsesWebSocketSessions()
+	openai.ResetCodexResponsesWebSocketStatsAll()
 	t.Cleanup(openai.CloseCodexResponsesWebSocketSessions)
+	t.Cleanup(openai.ResetCodexResponsesWebSocketStatsAll)
 
-	requests := make(chan map[string]any, 2)
+	requests := make(chan map[string]any, 3)
 	server := newCodexWebSocketTestServer(t, func(_ *http.Request, ws *codexWebSocketTestConn) {
 		first := ws.readJSON(t)
 		requests <- first
@@ -461,6 +463,9 @@ func TestCodexResponsesWebSocketSessionCacheSendsInputDelta(t *testing.T) {
 		second := ws.readJSON(t)
 		requests <- second
 		writeCodexWebSocketTextResponse(t, ws, "resp_2", "msg_2", "txt_2", "Second")
+		third := ws.readJSON(t)
+		requests <- third
+		writeCodexWebSocketTextResponse(t, ws, "resp_3", "msg_3", "txt_3", "Third")
 	})
 	t.Cleanup(server.Close)
 
@@ -486,7 +491,7 @@ func TestCodexResponsesWebSocketSessionCacheSendsInputDelta(t *testing.T) {
 		Model:      first.Model,
 		StopReason: first.StopReason,
 	}
-	_, err = client.Complete(
+	secondFinal, err := client.Complete(
 		context.Background(),
 		model,
 		sigma.Request{Messages: []sigma.Message{
@@ -516,6 +521,80 @@ func TestCodexResponsesWebSocketSessionCacheSendsInputDelta(t *testing.T) {
 	item := input[0].(map[string]any)
 	if got, want := item["role"], "user"; got != want {
 		t.Fatalf("delta role = %v, want %v", got, want)
+	}
+	stats, ok := openai.CodexResponsesWebSocketStats(sessionID)
+	if !ok {
+		t.Fatal("CodexResponsesWebSocketStats returned ok=false")
+	}
+	if got, want := stats.Requests, 2; got != want {
+		t.Fatalf("stats requests = %d, want %d", got, want)
+	}
+	if got, want := stats.ConnectionsCreated, 1; got != want {
+		t.Fatalf("stats connections created = %d, want %d", got, want)
+	}
+	if got, want := stats.ConnectionsReused, 1; got != want {
+		t.Fatalf("stats connections reused = %d, want %d", got, want)
+	}
+	if got, want := stats.FullContextRequests, 1; got != want {
+		t.Fatalf("stats full context requests = %d, want %d", got, want)
+	}
+	if got, want := stats.DeltaContextRequests, 1; got != want {
+		t.Fatalf("stats delta context requests = %d, want %d", got, want)
+	}
+	if got, want := stats.LastPreviousResponseID, "resp_1"; got != want {
+		t.Fatalf("stats last previous response id = %q, want %q", got, want)
+	}
+	if got, want := stats.LastInputItems, 1; got != want {
+		t.Fatalf("stats last input items = %d, want %d", got, want)
+	}
+	if got, want := stats.LastDeltaInputItems, 1; got != want {
+		t.Fatalf("stats last delta input items = %d, want %d", got, want)
+	}
+
+	openai.ResetCodexResponsesWebSocketStats(sessionID)
+	if _, ok := openai.CodexResponsesWebSocketStats(sessionID); ok {
+		t.Fatal("CodexResponsesWebSocketStats returned ok=true after reset")
+	}
+
+	secondAssistant := sigma.Message{
+		Role:       sigma.RoleAssistant,
+		Content:    secondFinal.Content,
+		Provider:   secondFinal.Provider,
+		Model:      secondFinal.Model,
+		StopReason: secondFinal.StopReason,
+	}
+	_, err = client.Complete(
+		context.Background(),
+		model,
+		sigma.Request{Messages: []sigma.Message{
+			sigma.UserText("first"),
+			assistant,
+			sigma.UserText("second"),
+			secondAssistant,
+			sigma.UserText("third"),
+		}},
+		sigma.WithTransport(sigma.TransportWebSocket),
+		sigma.WithSessionID(sessionID),
+	)
+	if err != nil {
+		t.Fatalf("third Complete returned error: %v", err)
+	}
+	third := receiveMap(t, requests)
+	if got, want := third["previous_response_id"], "resp_2"; got != want {
+		t.Fatalf("third previous response id = %v, want %v", got, want)
+	}
+	stats, ok = openai.CodexResponsesWebSocketStats(sessionID)
+	if !ok {
+		t.Fatal("CodexResponsesWebSocketStats after reset returned ok=false")
+	}
+	if got, want := stats.Requests, 1; got != want {
+		t.Fatalf("stats requests after reset = %d, want %d", got, want)
+	}
+	if got, want := stats.ConnectionsReused, 1; got != want {
+		t.Fatalf("stats connections reused after reset = %d, want %d", got, want)
+	}
+	if got, want := stats.LastPreviousResponseID, "resp_2"; got != want {
+		t.Fatalf("stats last previous response id after reset = %q, want %q", got, want)
 	}
 }
 
@@ -558,6 +637,70 @@ func TestCodexResponsesWebSocketFallsBackToSSEBeforeStart(t *testing.T) {
 	}
 	if got, want := postCalls, 1; got != want {
 		t.Fatalf("fallback POST calls = %d, want %d", got, want)
+	}
+}
+
+func TestCodexResponsesWebSocketConnectTimeoutFallsBackToSSE(t *testing.T) {
+	openai.CloseCodexResponsesWebSocketSessions()
+	openai.ResetCodexResponsesWebSocketStatsAll()
+	t.Cleanup(openai.CloseCodexResponsesWebSocketSessions)
+	t.Cleanup(openai.ResetCodexResponsesWebSocketStatsAll)
+
+	var postCalls int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
+			hijacker, ok := w.(http.Hijacker)
+			if !ok {
+				t.Fatal("response writer cannot hijack")
+			}
+			conn, _, err := hijacker.Hijack()
+			if err != nil {
+				t.Fatalf("Hijack returned error: %v", err)
+			}
+			time.Sleep(100 * time.Millisecond)
+			_ = conn.Close()
+			return
+		}
+		postCalls++
+		writeResponsesSSE(t, w, responsesCompletedEvent)
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("codex-responses-ws-connect-timeout-test")
+	model := codexResponsesTestModel(providerID)
+	client := codexResponsesTestClient(t, providerID, model, server.URL, codexTokenProvider("codex-oauth-token"))
+	sessionID := "connect-timeout-session"
+	connectTimeout := 20 * time.Millisecond
+
+	_, err := client.Complete(
+		context.Background(),
+		model,
+		sigma.Request{Messages: []sigma.Message{sigma.UserText("hi")}},
+		sigma.WithTransport(sigma.TransportWebSocket),
+		sigma.WithSessionID(sessionID),
+		sigma.WithOpenAIOptions(sigma.OpenAIOptions{CodexWebSocketConnectTimeout: &connectTimeout}),
+	)
+	if err != nil {
+		t.Fatalf("Complete returned error after fallback: %v", err)
+	}
+	if got, want := postCalls, 1; got != want {
+		t.Fatalf("fallback POST calls = %d, want %d", got, want)
+	}
+	stats, ok := openai.CodexResponsesWebSocketStats(sessionID)
+	if !ok {
+		t.Fatal("CodexResponsesWebSocketStats returned ok=false")
+	}
+	if got, want := stats.WebSocketFailures, 1; got != want {
+		t.Fatalf("stats websocket failures = %d, want %d", got, want)
+	}
+	if got, want := stats.SSEFallbacks, 1; got != want {
+		t.Fatalf("stats sse fallbacks = %d, want %d", got, want)
+	}
+	if !stats.WebSocketFallbackActive {
+		t.Fatal("stats websocket fallback active = false, want true")
+	}
+	if !strings.Contains(stats.LastWebSocketError, "websocket connect timeout after 20ms") {
+		t.Fatalf("last websocket error = %q, want connect timeout", stats.LastWebSocketError)
 	}
 }
 

@@ -31,8 +31,9 @@ import (
 )
 
 const (
-	codexWebSocketIdleTTL = 5 * time.Minute
-	webSocketGUID         = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+	codexWebSocketIdleTTL               = 5 * time.Minute
+	codexWebSocketDefaultConnectTimeout = 15 * time.Second
+	webSocketGUID                       = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
 	webSocketOpcodeContinuation = 0x0
 	webSocketOpcodeText         = 0x1
@@ -61,13 +62,33 @@ type codexWebSocketContinuation struct {
 	lastResponseItems []any
 }
 
+// CodexResponsesWebSocketStatsSnapshot reports observable behavior from the
+// Codex Responses WebSocket session cache.
+type CodexResponsesWebSocketStatsSnapshot struct {
+	Requests                int
+	ConnectionsCreated      int
+	ConnectionsReused       int
+	CachedContextRequests   int
+	FullContextRequests     int
+	DeltaContextRequests    int
+	LastInputItems          int
+	LastDeltaInputItems     int
+	LastPreviousResponseID  string
+	WebSocketFailures       int
+	SSEFallbacks            int
+	WebSocketFallbackActive bool
+	LastWebSocketError      string
+}
+
 var codexWebSocketSessions = struct {
 	sync.Mutex
 	entries       map[string]*codexWebSocketSessionEntry
 	fallbackState map[string]bool
+	stats         map[string]*CodexResponsesWebSocketStatsSnapshot
 }{
 	entries:       make(map[string]*codexWebSocketSessionEntry),
 	fallbackState: make(map[string]bool),
+	stats:         make(map[string]*CodexResponsesWebSocketStatsSnapshot),
 }
 
 // CloseCodexResponsesWebSocketSession closes and forgets a cached Codex
@@ -97,6 +118,43 @@ func CloseCodexResponsesWebSocketSessions() {
 	}
 }
 
+// CodexResponsesWebSocketStats returns a copy of the recorded WebSocket stats
+// for sessionID.
+func CodexResponsesWebSocketStats(sessionID string) (CodexResponsesWebSocketStatsSnapshot, bool) {
+	if sessionID == "" {
+		return CodexResponsesWebSocketStatsSnapshot{}, false
+	}
+	codexWebSocketSessions.Lock()
+	stats := codexWebSocketSessions.stats[sessionID]
+	if stats == nil {
+		codexWebSocketSessions.Unlock()
+		return CodexResponsesWebSocketStatsSnapshot{}, false
+	}
+	out := *stats
+	out.WebSocketFallbackActive = codexWebSocketSessions.fallbackState[sessionID]
+	codexWebSocketSessions.Unlock()
+	return out, true
+}
+
+// ResetCodexResponsesWebSocketStats clears recorded WebSocket stats for
+// sessionID without closing cached sessions or changing fallback state.
+func ResetCodexResponsesWebSocketStats(sessionID string) {
+	if sessionID == "" {
+		return
+	}
+	codexWebSocketSessions.Lock()
+	delete(codexWebSocketSessions.stats, sessionID)
+	codexWebSocketSessions.Unlock()
+}
+
+// ResetCodexResponsesWebSocketStatsAll clears all recorded WebSocket stats
+// without closing cached sessions or changing fallback state.
+func ResetCodexResponsesWebSocketStatsAll() {
+	codexWebSocketSessions.Lock()
+	codexWebSocketSessions.stats = make(map[string]*CodexResponsesWebSocketStatsSnapshot)
+	codexWebSocketSessions.Unlock()
+}
+
 func (p *CodexResponsesProvider) runWebSocket(ctx context.Context, writer sigma.StreamWriter, model sigma.Model, req sigma.Request, opts sigma.Options, final sigma.AssistantMessage) {
 	if codexWebSocketFallbackActive(opts.SessionID) {
 		p.runSSE(ctx, writer, model, req, opts, final)
@@ -113,6 +171,7 @@ func (p *CodexResponsesProvider) runWebSocket(ctx context.Context, writer sigma.
 		_ = writer.Error(ctx, contextError(ctx, err), final)
 		return
 	}
+	recordCodexWebSocketFailure(opts.SessionID, err)
 	if parser == nil || !parser.started {
 		recordCodexWebSocketFallback(opts.SessionID)
 		p.runSSE(ctx, writer, model, req, opts, final)
@@ -183,7 +242,7 @@ func (p *CodexResponsesProvider) processWebSocket(ctx context.Context, writer si
 	if err != nil {
 		return nil, err
 	}
-	acquired, err := acquireCodexWebSocket(ctx, wsURL, headers, opts.SessionID)
+	acquired, err := acquireCodexWebSocket(ctx, wsURL, headers, opts.SessionID, codexWebSocketConnectTimeout(opts))
 	if err != nil {
 		return nil, err
 	}
@@ -198,6 +257,7 @@ func (p *CodexResponsesProvider) processWebSocket(ctx context.Context, writer si
 	if acquired.entry != nil {
 		sendBody = cachedCodexWebSocketRequestBody(acquired.entry, requestBody)
 	}
+	recordCodexWebSocketRequest(opts.SessionID, acquired.reused, sendBody, acquired.entry != nil)
 	wireBody := map[string]any{providerToolOptionTypeKey: "response.create"}
 	for key, value := range sendBody {
 		wireBody[key] = value
@@ -240,12 +300,13 @@ func (p *CodexResponsesProvider) processWebSocket(ctx context.Context, writer si
 type acquiredCodexWebSocket struct {
 	conn    *codexWebSocketConnection
 	entry   *codexWebSocketSessionEntry
+	reused  bool
 	release func(keep bool)
 }
 
-func acquireCodexWebSocket(ctx context.Context, wsURL string, headers http.Header, sessionID string) (*acquiredCodexWebSocket, error) {
+func acquireCodexWebSocket(ctx context.Context, wsURL string, headers http.Header, sessionID string, connectTimeout time.Duration) (*acquiredCodexWebSocket, error) {
 	if sessionID == "" {
-		conn, err := dialCodexWebSocket(ctx, wsURL, headers)
+		conn, err := dialCodexWebSocket(ctx, wsURL, headers, connectTimeout)
 		if err != nil {
 			return nil, err
 		}
@@ -267,8 +328,9 @@ func acquireCodexWebSocket(ctx context.Context, wsURL string, headers http.Heade
 			entry.busy = true
 			codexWebSocketSessions.Unlock()
 			return &acquiredCodexWebSocket{
-				conn:  entry.conn,
-				entry: entry,
+				conn:   entry.conn,
+				entry:  entry,
+				reused: true,
 				release: func(keep bool) {
 					releaseCodexWebSocketSession(sessionID, entry, keep)
 				},
@@ -278,10 +340,10 @@ func acquireCodexWebSocket(ctx context.Context, wsURL string, headers http.Heade
 			delete(codexWebSocketSessions.entries, sessionID)
 			codexWebSocketSessions.Unlock()
 			closeCodexWebSocketEntry(entry)
-			return acquireCodexWebSocket(ctx, wsURL, headers, sessionID)
+			return acquireCodexWebSocket(ctx, wsURL, headers, sessionID, connectTimeout)
 		}
 		codexWebSocketSessions.Unlock()
-		conn, err := dialCodexWebSocket(ctx, wsURL, headers)
+		conn, err := dialCodexWebSocket(ctx, wsURL, headers, connectTimeout)
 		if err != nil {
 			return nil, err
 		}
@@ -294,7 +356,7 @@ func acquireCodexWebSocket(ctx context.Context, wsURL string, headers http.Heade
 	}
 	codexWebSocketSessions.Unlock()
 
-	conn, err := dialCodexWebSocket(ctx, wsURL, headers)
+	conn, err := dialCodexWebSocket(ctx, wsURL, headers, connectTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -368,7 +430,60 @@ func recordCodexWebSocketFallback(sessionID string) {
 	}
 	codexWebSocketSessions.Lock()
 	codexWebSocketSessions.fallbackState[sessionID] = true
+	stats := getCodexWebSocketStatsLocked(sessionID)
+	stats.SSEFallbacks++
+	stats.WebSocketFallbackActive = true
 	codexWebSocketSessions.Unlock()
+}
+
+func recordCodexWebSocketFailure(sessionID string, err error) {
+	if sessionID == "" {
+		return
+	}
+	codexWebSocketSessions.Lock()
+	stats := getCodexWebSocketStatsLocked(sessionID)
+	stats.WebSocketFailures++
+	stats.LastWebSocketError = err.Error()
+	stats.WebSocketFallbackActive = codexWebSocketSessions.fallbackState[sessionID]
+	codexWebSocketSessions.Unlock()
+}
+
+func recordCodexWebSocketRequest(sessionID string, reused bool, body map[string]any, cachedContext bool) {
+	if sessionID == "" {
+		return
+	}
+	codexWebSocketSessions.Lock()
+	stats := getCodexWebSocketStatsLocked(sessionID)
+	stats.Requests++
+	if reused {
+		stats.ConnectionsReused++
+	} else {
+		stats.ConnectionsCreated++
+	}
+	if cachedContext {
+		stats.CachedContextRequests++
+	}
+	stats.LastInputItems = lenAnySlice(body["input"])
+	if previousResponseID, _ := body["previous_response_id"].(string); previousResponseID != "" {
+		stats.DeltaContextRequests++
+		stats.LastDeltaInputItems = lenAnySlice(body["input"])
+		stats.LastPreviousResponseID = previousResponseID
+	} else {
+		stats.FullContextRequests++
+		stats.LastDeltaInputItems = 0
+		stats.LastPreviousResponseID = ""
+	}
+	stats.WebSocketFallbackActive = codexWebSocketSessions.fallbackState[sessionID]
+	codexWebSocketSessions.Unlock()
+}
+
+func getCodexWebSocketStatsLocked(sessionID string) *CodexResponsesWebSocketStatsSnapshot {
+	stats := codexWebSocketSessions.stats[sessionID]
+	if stats == nil {
+		stats = &CodexResponsesWebSocketStatsSnapshot{}
+		codexWebSocketSessions.stats[sessionID] = stats
+	}
+	return stats
 }
 
 func cachedCodexWebSocketRequestBody(entry *codexWebSocketSessionEntry, body map[string]any) map[string]any {
@@ -464,7 +579,10 @@ func (p *CodexResponsesProvider) codexWebSocketHeaders(ctx context.Context, mode
 	return req.Header, nil
 }
 
-func dialCodexWebSocket(ctx context.Context, rawURL string, headers http.Header) (*codexWebSocketConnection, error) {
+func dialCodexWebSocket(ctx context.Context, rawURL string, headers http.Header, connectTimeout time.Duration) (*codexWebSocketConnection, error) {
+	connectCtx, cancel := codexWebSocketConnectContext(ctx, connectTimeout)
+	defer cancel()
+
 	parsed, err := url.Parse(rawURL)
 	if err != nil {
 		return nil, fmt.Errorf("openai codex responses: websocket URL: %w", err)
@@ -473,27 +591,64 @@ func dialCodexWebSocket(ctx context.Context, rawURL string, headers http.Header)
 		return nil, fmt.Errorf("openai codex responses: unsupported websocket scheme %q", parsed.Scheme)
 	}
 	host := codexWebSocketHostPort(parsed)
-	conn, err := dialCodexWebSocketConn(ctx, parsed, host)
+	conn, err := dialCodexWebSocketConn(connectCtx, parsed, host)
 	if err != nil {
-		return nil, err
+		return nil, codexWebSocketConnectError(ctx, connectCtx, connectTimeout, err)
 	}
+	clearDeadline := codexWebSocketConnDeadline(connectCtx, conn)
+	defer clearDeadline()
+
 	if parsed.Scheme == "wss" {
 		tlsConn := tls.Client(conn, &tls.Config{
 			ServerName: parsed.Hostname(),
 			MinVersion: tls.VersionTLS12,
 		})
-		if err := tlsConn.HandshakeContext(ctx); err != nil {
+		if err := tlsConn.HandshakeContext(connectCtx); err != nil {
 			_ = conn.Close()
-			return nil, fmt.Errorf("openai codex responses: websocket tls handshake: %w", err)
+			err = fmt.Errorf("openai codex responses: websocket tls handshake: %w", err)
+			return nil, codexWebSocketConnectError(ctx, connectCtx, connectTimeout, err)
 		}
 		conn = tlsConn
 	}
 	ws := &codexWebSocketConnection{conn: conn, reader: bufio.NewReader(conn)}
-	if err := ws.handshake(ctx, parsed, headers); err != nil {
+	if err := ws.handshake(connectCtx, parsed, headers); err != nil {
 		ws.Close()
-		return nil, err
+		return nil, codexWebSocketConnectError(ctx, connectCtx, connectTimeout, err)
 	}
 	return ws, nil
+}
+
+func codexWebSocketConnectTimeout(opts sigma.Options) time.Duration {
+	if opts.OpenAIOptions == nil || opts.OpenAIOptions.CodexWebSocketConnectTimeout == nil {
+		return codexWebSocketDefaultConnectTimeout
+	}
+	return *opts.OpenAIOptions.CodexWebSocketConnectTimeout
+}
+
+func codexWebSocketConnectContext(ctx context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
+	if timeout == 0 {
+		return ctx, func() {}
+	}
+	return context.WithTimeout(ctx, timeout)
+}
+
+func codexWebSocketConnectError(parent context.Context, connectCtx context.Context, timeout time.Duration, err error) error {
+	var netErr net.Error
+	if timeout > 0 && parent.Err() == nil && (connectCtx.Err() != nil || errors.As(err, &netErr) && netErr.Timeout()) {
+		return fmt.Errorf("openai codex responses: websocket connect timeout after %s", timeout)
+	}
+	return err
+}
+
+func codexWebSocketConnDeadline(ctx context.Context, conn net.Conn) func() {
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		return func() {}
+	}
+	_ = conn.SetDeadline(deadline)
+	return func() {
+		_ = conn.SetDeadline(time.Time{})
+	}
 }
 
 func dialCodexWebSocketConn(ctx context.Context, parsed *url.URL, host string) (net.Conn, error) {
@@ -519,6 +674,9 @@ func dialCodexWebSocketProxy(ctx context.Context, proxyURL *url.URL, targetHost 
 	if err != nil {
 		return nil, fmt.Errorf("openai codex responses: websocket proxy dial: %w", err)
 	}
+	clearDeadline := codexWebSocketConnDeadline(ctx, conn)
+	defer clearDeadline()
+
 	if proxyURL.Scheme == "https" {
 		tlsConn := tls.Client(conn, &tls.Config{
 			ServerName: proxyURL.Hostname(),
@@ -923,6 +1081,14 @@ func cloneJSONMap(value map[string]any) map[string]any {
 func anySlice(value any) ([]any, bool) {
 	items, ok := value.([]any)
 	return items, ok
+}
+
+func lenAnySlice(value any) int {
+	items, ok := anySlice(value)
+	if !ok {
+		return 0
+	}
+	return len(items)
 }
 
 func jsonValuesEqual(a any, b any) bool {

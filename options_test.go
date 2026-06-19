@@ -301,6 +301,48 @@ func TestTypedProviderOptionsAreCopied(t *testing.T) {
 	}
 }
 
+func TestOpenAIOptionsAreCopied(t *testing.T) {
+	t.Parallel()
+
+	parallelToolCalls := true
+	connectTimeout := 50 * time.Millisecond
+	client, provider, model := newOptionsTestClient(t,
+		sigma.WithDefaultOptions(sigma.WithOpenAIOptions(sigma.OpenAIOptions{
+			ParallelToolCalls:            &parallelToolCalls,
+			CodexWebSocketConnectTimeout: &connectTimeout,
+		})),
+	)
+	parallelToolCalls = false
+	connectTimeout = time.Second
+
+	if _, err := client.Complete(context.Background(), model, sigma.Request{}); err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+	got := provider.opts.OpenAIOptions
+	if got == nil {
+		t.Fatal("openai options = nil")
+	}
+	if got.ParallelToolCalls == nil || !*got.ParallelToolCalls {
+		t.Fatalf("openai parallel tool calls = %v, want true", got.ParallelToolCalls)
+	}
+	if gotTimeout, want := valueOf(got.CodexWebSocketConnectTimeout), 50*time.Millisecond; gotTimeout != want {
+		t.Fatalf("openai codex websocket connect timeout = %s, want %s", gotTimeout, want)
+	}
+
+	*provider.opts.OpenAIOptions.ParallelToolCalls = false
+	*provider.opts.OpenAIOptions.CodexWebSocketConnectTimeout = 2 * time.Second
+	if _, err := client.Complete(context.Background(), model, sigma.Request{}); err != nil {
+		t.Fatalf("second Complete returned error: %v", err)
+	}
+	got = provider.opts.OpenAIOptions
+	if got.ParallelToolCalls == nil || !*got.ParallelToolCalls {
+		t.Fatalf("openai parallel tool calls after mutation = %v, want true", got.ParallelToolCalls)
+	}
+	if gotTimeout, want := valueOf(got.CodexWebSocketConnectTimeout), 50*time.Millisecond; gotTimeout != want {
+		t.Fatalf("openai codex websocket connect timeout after mutation = %s, want %s", gotTimeout, want)
+	}
+}
+
 func TestBedrockOptionsAreCopied(t *testing.T) {
 	t.Parallel()
 
@@ -433,6 +475,7 @@ func TestOptionsValidateCommonInvalidValues(t *testing.T) {
 		{name: "max retry delay", opt: sigma.WithMaxRetryDelay(-time.Second)},
 		{name: "thinking budget", opt: sigma.WithThinkingBudgetTokens(-1)},
 		{name: "openai top logprobs", opt: sigma.WithOpenAIOptions(sigma.OpenAIOptions{TopLogprobs: -1})},
+		{name: "openai codex websocket connect timeout", opt: sigma.WithOpenAIOptions(sigma.OpenAIOptions{CodexWebSocketConnectTimeout: testDurationPtr(-time.Second)})},
 		{name: "mistral simple tool choice with name", opt: sigma.WithMistralOptions(sigma.MistralOptions{ToolChoice: &sigma.MistralToolChoice{Type: sigma.MistralToolChoiceAuto, Name: "lookup"}})},
 		{name: "mistral named tool without name", opt: sigma.WithMistralOptions(sigma.MistralOptions{ToolChoice: &sigma.MistralToolChoice{Type: sigma.MistralToolChoiceTool}})},
 		{name: "bedrock top p", opt: sigma.WithBedrockOptions(sigma.BedrockOptions{TopP: testFloat64Ptr(-0.1)})},
@@ -571,6 +614,10 @@ func valueOf[T comparable](value *T) T {
 		return zero
 	}
 	return *value
+}
+
+func testDurationPtr(value time.Duration) *time.Duration {
+	return &value
 }
 
 func testFloat64Ptr(value float64) *float64 {

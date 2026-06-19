@@ -17,7 +17,9 @@ also adds caller-owned GitHub Copilot OAuth helpers for
 device-code login, token refresh, request-time credential resolution, and
 explicit model-policy enablement. Codex Responses WebSocket transport now also
 honors standard HTTP(S) proxy environment variables with `NO_PROXY` exclusions
-while keeping the existing SSE fallback. Kimi Coding is promoted as a focused
+while keeping the existing SSE fallback, and now exposes a Codex-specific
+connect timeout plus session-cache debug stats for connection reuse, cached
+context deltas, and fallback diagnostics. Kimi Coding is promoted as a focused
 Anthropic-compatible provider slice with generated metadata, credential
 discovery, request headers, adaptive thinking metadata, and session-affinity
 support. Xiaomi is promoted as a focused OpenAI-compatible provider slice with
@@ -66,6 +68,12 @@ model-emitted arguments before running tools.
   `HTTPS_PROXY`, lowercase aliases, and `ALL_PROXY` for `ws://` and `wss://`
   endpoints, respects `NO_PROXY`, and tunnels through HTTP/HTTPS `CONNECT`
   proxies before running the existing WebSocket handshake.
+- OpenAI Codex Responses WebSocket transport now honors
+  `OpenAIOptions.CodexWebSocketConnectTimeout` for the connection and handshake
+  phase, defaults that cap to 15 seconds, treats zero as disabled, and records
+  per-session debug stats for created/reused WebSocket connections, full and
+  delta context requests, previous response IDs, WebSocket failures, and SSE
+  fallback activation.
 - Kimi Coding can now be registered with `kimi.RegisterCoding` or
   `kimi.RegisterCodingDefault`, using the shared Anthropic-compatible Messages
   adapter with Kimi Coding base URL defaults, Kimi CLI request headers,
@@ -130,6 +138,11 @@ model-emitted arguments before running tools.
   only to the Codex Responses WebSocket transport; SSE/HTTP requests continue
   to use their existing HTTP client paths, and unsupported proxy protocols
   still fall back before streaming starts.
+- Codex WebSocket connect timeout and stats are additive and Codex-specific.
+  `sigma.WithTimeout` still controls the overall request context; the new
+  connect timeout only bounds WebSocket dial, proxy, TLS, and handshake work
+  before any stream event starts. Stats reset helpers clear counters without
+  closing cached sessions.
 - Kimi Coding is additive: the existing `kimi` metadata row remains available,
   and broader router or regional endpoint catalog expansion stays deferred.
 - Xiaomi token-plan support is additive and uses distinct provider IDs for the
@@ -168,9 +181,11 @@ model-emitted arguments before running tools.
 - Cross-provider handoff remains a diagnostic probe, not a public orchestration
   runtime. Full context handoff APIs and capability-loss reporting remain
   deferred.
-- Codex WebSocket-specific timeout knobs and debug-stat parity remain deferred;
-  the current preview transport uses request contexts, explicit session cleanup
-  helpers, standard HTTP(S) proxy environment variables, and SSE fallback.
+- Non-Codex WebSocket transport support remains deferred until route-specific
+  wire protocols have deterministic fixtures. The Codex preview transport now
+  has request contexts, explicit session cleanup helpers, standard HTTP(S)
+  proxy environment variables, a connect timeout, session-cache debug stats,
+  and SSE fallback.
 - Xiaomi Anthropic-compatible token-plan routes remain deferred until they have
   separate provider IDs, compatibility metadata, and deterministic replay
   fixtures.

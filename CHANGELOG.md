@@ -27,6 +27,10 @@ See [release notes](docs/release-notes-v0.6.0.md).
 - OpenAI Codex Responses WebSocket transport now honors standard HTTP(S) proxy
   environment variables with `NO_PROXY` exclusions by tunneling through
   HTTP/HTTPS `CONNECT` proxies while preserving the existing SSE fallback.
+- OpenAI Codex Responses WebSocket transport now has a Codex-specific connect
+  timeout plus session-cache debug stats for created/reused connections,
+  full/delta context requests, previous response IDs, WebSocket failures, and
+  SSE fallback activation.
 - Anthropic Messages usage now preserves long prompt-cache write tokens
   separately and prices those writes at the provider's long-cache input
   multiplier while keeping total cache-write tokens unchanged.
