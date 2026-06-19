@@ -15,7 +15,9 @@ cost estimate. Mistral Conversations now also maps cache-enabled session IDs to
 prompt-cache keys and reports provider cached prompt tokens as cache reads. It
 also adds caller-owned GitHub Copilot OAuth helpers for
 device-code login, token refresh, request-time credential resolution, and
-explicit model-policy enablement. Kimi Coding is promoted as a focused
+explicit model-policy enablement. Codex Responses WebSocket transport now also
+honors standard HTTP(S) proxy environment variables with `NO_PROXY` exclusions
+while keeping the existing SSE fallback. Kimi Coding is promoted as a focused
 Anthropic-compatible provider slice with generated metadata, credential
 discovery, request headers, adaptive thinking metadata, and session-affinity
 support. Xiaomi is promoted as a focused OpenAI-compatible provider slice with
@@ -57,6 +59,10 @@ callers can reject invalid model-emitted arguments before running tools.
   `githubcopilot.EnableGitHubCopilotModel` and
   `githubcopilot.EnableGitHubCopilotModels`, which report per-model success or
   failure without making model enablement an automatic login side effect.
+- OpenAI Codex Responses WebSocket transport now resolves `HTTP_PROXY`,
+  `HTTPS_PROXY`, lowercase aliases, and `ALL_PROXY` for `ws://` and `wss://`
+  endpoints, respects `NO_PROXY`, and tunnels through HTTP/HTTPS `CONNECT`
+  proxies before running the existing WebSocket handshake.
 - Kimi Coding can now be registered with `kimi.RegisterCoding` or
   `kimi.RegisterCodingDefault`, using the shared Anthropic-compatible Messages
   adapter with Kimi Coding base URL defaults, Kimi CLI request headers,
@@ -111,6 +117,10 @@ callers can reject invalid model-emitted arguments before running tools.
 - GitHub Copilot OAuth credentials remain caller-owned. Sigma does not persist
   tokens, does not automatically enable model policies after login, and does
   not change the existing GitHub Copilot request dispatch path.
+- Codex WebSocket proxy support is additive and environment-driven. It applies
+  only to the Codex Responses WebSocket transport; SSE/HTTP requests continue
+  to use their existing HTTP client paths, and unsupported proxy protocols
+  still fall back before streaming starts.
 - Kimi Coding is additive: the existing `kimi` metadata row remains available,
   and broader router or regional endpoint catalog expansion stays deferred.
 - Xiaomi token-plan support is additive and uses distinct provider IDs for the
@@ -146,6 +156,9 @@ callers can reject invalid model-emitted arguments before running tools.
 - Cross-provider handoff remains a diagnostic probe, not a public orchestration
   runtime. Full context handoff APIs and capability-loss reporting remain
   deferred.
+- Codex WebSocket-specific timeout knobs and debug-stat parity remain deferred;
+  the current preview transport uses request contexts, explicit session cleanup
+  helpers, standard HTTP(S) proxy environment variables, and SSE fallback.
 - Xiaomi Anthropic-compatible token-plan routes remain deferred until they have
   separate provider IDs, compatibility metadata, and deterministic replay
   fixtures.

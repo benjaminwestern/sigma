@@ -561,6 +561,48 @@ func TestCodexResponsesWebSocketFallsBackToSSEBeforeStart(t *testing.T) {
 	}
 }
 
+func TestCodexResponsesWebSocketUsesHTTPProxyConnect(t *testing.T) {
+	openai.CloseCodexResponsesWebSocketSessions()
+	t.Cleanup(openai.CloseCodexResponsesWebSocketSessions)
+	clearCodexProxyTestEnv(t)
+
+	connectHosts := make(chan string, 1)
+	proxy := newCodexWebSocketProxyTestServer(t, connectHosts, func(_ *http.Request, ws *codexWebSocketTestConn) {
+		body := ws.readJSON(t)
+		if got, want := body["type"], "response.create"; got != want {
+			t.Errorf("websocket event type = %v, want %q", got, want)
+		}
+		writeCodexWebSocketTextResponse(t, ws, "proxied_resp", "proxied_msg", "proxied_text", "proxied")
+	})
+	t.Cleanup(proxy.Close)
+	t.Setenv("HTTP_PROXY", proxy.URL)
+
+	providerID := sigma.ProviderID("codex-responses-ws-proxy-test")
+	model := codexResponsesTestModel(providerID)
+	client := codexResponsesTestClient(t, providerID, model, "http://codex-proxy-target.example/v1", codexTokenProvider("codex-oauth-token"))
+
+	final, err := client.Complete(
+		context.Background(),
+		model,
+		sigma.Request{Messages: []sigma.Message{sigma.UserText("hi")}},
+		sigma.WithTransport(sigma.TransportWebSocket),
+	)
+	if err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+	if got, want := final.Content[0].Text, "proxied"; got != want {
+		t.Fatalf("final text = %q, want %q", got, want)
+	}
+	select {
+	case got := <-connectHosts:
+		if want := "codex-proxy-target.example:80"; got != want {
+			t.Fatalf("CONNECT host = %q, want %q", got, want)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for proxy CONNECT")
+	}
+}
+
 func TestCodexResponsesWebSocketErrorsAfterStreamStart(t *testing.T) {
 	openai.CloseCodexResponsesWebSocketSessions()
 	t.Cleanup(openai.CloseCodexResponsesWebSocketSessions)
@@ -897,6 +939,10 @@ func (s *codexWebSocketTestServer) Close() {
 
 func handleCodexWebSocketTestConn(t *testing.T, conn net.Conn, handler func(*http.Request, *codexWebSocketTestConn)) {
 	reader := bufio.NewReader(conn)
+	handleCodexWebSocketTestConnReader(t, conn, reader, handler)
+}
+
+func handleCodexWebSocketTestConnReader(t *testing.T, conn net.Conn, reader *bufio.Reader, handler func(*http.Request, *codexWebSocketTestConn)) {
 	req, err := http.ReadRequest(reader)
 	if err != nil {
 		t.Errorf("ReadRequest returned error: %v", err)
@@ -914,6 +960,74 @@ func handleCodexWebSocketTestConn(t *testing.T, conn net.Conn, handler func(*htt
 	_, _ = fmt.Fprintf(conn, "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: %s\r\n\r\n", accept)
 	handler(req, &codexWebSocketTestConn{conn: conn, reader: reader})
 	_ = conn.Close()
+}
+
+type codexWebSocketProxyTestServer struct {
+	URL string
+	ln  net.Listener
+}
+
+func newCodexWebSocketProxyTestServer(t *testing.T, connectHosts chan<- string, handler func(*http.Request, *codexWebSocketTestConn)) *codexWebSocketProxyTestServer {
+	t.Helper()
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Listen returned error: %v", err)
+	}
+	server := &codexWebSocketProxyTestServer{
+		URL: "http://" + ln.Addr().String(),
+		ln:  ln,
+	}
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go handleCodexWebSocketProxyTestConn(t, conn, connectHosts, handler)
+		}
+	}()
+	return server
+}
+
+func (s *codexWebSocketProxyTestServer) Close() {
+	_ = s.ln.Close()
+}
+
+func handleCodexWebSocketProxyTestConn(t *testing.T, conn net.Conn, connectHosts chan<- string, handler func(*http.Request, *codexWebSocketTestConn)) {
+	reader := bufio.NewReader(conn)
+	req, err := http.ReadRequest(reader)
+	if err != nil {
+		t.Errorf("ReadRequest returned error: %v", err)
+		_ = conn.Close()
+		return
+	}
+	defer req.Body.Close()
+	if got, want := req.Method, http.MethodConnect; got != want {
+		t.Errorf("proxy method = %q, want %q", got, want)
+		_ = conn.Close()
+		return
+	}
+	connectHosts <- req.Host
+	_, _ = fmt.Fprint(conn, "HTTP/1.1 200 Connection Established\r\n\r\n")
+	handleCodexWebSocketTestConnReader(t, conn, reader, handler)
+}
+
+func clearCodexProxyTestEnv(t *testing.T) {
+	t.Helper()
+
+	for _, key := range []string{
+		"HTTP_PROXY",
+		"HTTPS_PROXY",
+		"NO_PROXY",
+		"ALL_PROXY",
+		"http_proxy",
+		"https_proxy",
+		"no_proxy",
+		"all_proxy",
+	} {
+		t.Setenv(key, "")
+	}
 }
 
 func (c *codexWebSocketTestConn) readJSON(t *testing.T) map[string]any {

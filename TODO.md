@@ -98,8 +98,9 @@ integrations remain future work until they have the same local evidence bar.
       payload requirements.
 - [x] Add Codex WebSocket transport, session caching, cleanup helpers, and SSE
       fallback while keeping the implementation stdlib-only.
-- [ ] Keep proxy-aware Codex WebSocket dialing deferred; proxy-constrained
-      environments should use SSE fallback.
+- [x] Add proxy-aware Codex WebSocket dialing for standard HTTP(S) proxy
+      environment variables and `NO_PROXY` exclusions while preserving SSE
+      fallback.
 - [ ] Keep Codex WebSocket-specific timeout knobs and debug-stat parity
       deferred; the current preview transport uses request contexts, explicit
       session cleanup helpers, and SSE fallback.

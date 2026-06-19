@@ -21,6 +21,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -468,18 +469,13 @@ func dialCodexWebSocket(ctx context.Context, rawURL string, headers http.Header)
 	if err != nil {
 		return nil, fmt.Errorf("openai codex responses: websocket URL: %w", err)
 	}
-	host := parsed.Host
-	if !strings.Contains(host, ":") {
-		if parsed.Scheme == "wss" {
-			host += ":443"
-		} else {
-			host += ":80"
-		}
+	if parsed.Scheme != "wss" && parsed.Scheme != "ws" {
+		return nil, fmt.Errorf("openai codex responses: unsupported websocket scheme %q", parsed.Scheme)
 	}
-	dialer := net.Dialer{}
-	conn, err := dialer.DialContext(ctx, "tcp", host)
+	host := codexWebSocketHostPort(parsed)
+	conn, err := dialCodexWebSocketConn(ctx, parsed, host)
 	if err != nil {
-		return nil, fmt.Errorf("openai codex responses: websocket dial: %w", err)
+		return nil, err
 	}
 	if parsed.Scheme == "wss" {
 		tlsConn := tls.Client(conn, &tls.Config{
@@ -491,9 +487,6 @@ func dialCodexWebSocket(ctx context.Context, rawURL string, headers http.Header)
 			return nil, fmt.Errorf("openai codex responses: websocket tls handshake: %w", err)
 		}
 		conn = tlsConn
-	} else if parsed.Scheme != "ws" {
-		_ = conn.Close()
-		return nil, fmt.Errorf("openai codex responses: unsupported websocket scheme %q", parsed.Scheme)
 	}
 	ws := &codexWebSocketConnection{conn: conn, reader: bufio.NewReader(conn)}
 	if err := ws.handshake(ctx, parsed, headers); err != nil {
@@ -501,6 +494,196 @@ func dialCodexWebSocket(ctx context.Context, rawURL string, headers http.Header)
 		return nil, err
 	}
 	return ws, nil
+}
+
+func dialCodexWebSocketConn(ctx context.Context, parsed *url.URL, host string) (net.Conn, error) {
+	proxyURL, err := codexWebSocketProxyURL(parsed)
+	if err != nil {
+		return nil, fmt.Errorf("openai codex responses: websocket proxy: %w", err)
+	}
+	if proxyURL != nil {
+		return dialCodexWebSocketProxy(ctx, proxyURL, host)
+	}
+	dialer := net.Dialer{}
+	conn, err := dialer.DialContext(ctx, "tcp", host)
+	if err != nil {
+		return nil, fmt.Errorf("openai codex responses: websocket dial: %w", err)
+	}
+	return conn, nil
+}
+
+func dialCodexWebSocketProxy(ctx context.Context, proxyURL *url.URL, targetHost string) (net.Conn, error) {
+	proxyHost := codexProxyHostPort(proxyURL)
+	dialer := net.Dialer{}
+	conn, err := dialer.DialContext(ctx, "tcp", proxyHost)
+	if err != nil {
+		return nil, fmt.Errorf("openai codex responses: websocket proxy dial: %w", err)
+	}
+	if proxyURL.Scheme == "https" {
+		tlsConn := tls.Client(conn, &tls.Config{
+			ServerName: proxyURL.Hostname(),
+			MinVersion: tls.VersionTLS12,
+		})
+		if err := tlsConn.HandshakeContext(ctx); err != nil {
+			_ = conn.Close()
+			return nil, fmt.Errorf("openai codex responses: websocket proxy tls handshake: %w", err)
+		}
+		conn = tlsConn
+	}
+	req := &http.Request{
+		Method: http.MethodConnect,
+		URL:    &url.URL{Scheme: "http", Host: targetHost},
+		Host:   targetHost,
+		Header: make(http.Header),
+	}
+	if proxyURL.User != nil {
+		password, _ := proxyURL.User.Password()
+		token := base64.StdEncoding.EncodeToString([]byte(proxyURL.User.Username() + ":" + password))
+		req.Header.Set("Proxy-Authorization", "Basic "+token)
+	}
+	if err := req.Write(conn); err != nil {
+		_ = conn.Close()
+		return nil, fmt.Errorf("openai codex responses: websocket proxy connect request: %w", err)
+	}
+	resp, err := http.ReadResponse(bufio.NewReader(conn), req)
+	if err != nil {
+		_ = conn.Close()
+		return nil, fmt.Errorf("openai codex responses: websocket proxy connect response: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		_ = conn.Close()
+		return nil, fmt.Errorf("openai codex responses: websocket proxy connect status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	return conn, nil
+}
+
+func codexWebSocketProxyURL(parsed *url.URL) (*url.URL, error) {
+	target := codexWebSocketProxyTarget(parsed)
+	if !codexShouldProxy(target) {
+		return nil, nil
+	}
+	proxy := codexProxyEnv(strings.ToUpper(target.Scheme)+"_PROXY", strings.ToLower(target.Scheme)+"_proxy")
+	if proxy == "" {
+		proxy = codexProxyEnv("ALL_PROXY", "all_proxy")
+	}
+	if proxy == "" {
+		return nil, nil
+	}
+	if !strings.Contains(proxy, "://") {
+		proxy = "http://" + proxy
+	}
+	proxyURL, err := url.Parse(proxy)
+	if err != nil || proxyURL.Scheme == "" || proxyURL.Host == "" {
+		if err == nil {
+			err = fmt.Errorf("missing scheme or host")
+		}
+		return nil, fmt.Errorf("invalid proxy URL %q: %w", proxy, err)
+	}
+	if proxyURL.Scheme != "http" && proxyURL.Scheme != "https" {
+		return nil, fmt.Errorf("unsupported proxy protocol %q", proxyURL.Scheme)
+	}
+	return proxyURL, nil
+}
+
+func codexWebSocketProxyTarget(parsed *url.URL) *url.URL {
+	target := *parsed
+	if target.Scheme == "wss" {
+		target.Scheme = "https"
+	} else {
+		target.Scheme = "http"
+	}
+	return &target
+}
+
+func codexShouldProxy(target *url.URL) bool {
+	noProxy := strings.ToLower(codexProxyEnv("NO_PROXY", "no_proxy"))
+	if noProxy == "" {
+		return true
+	}
+	if strings.TrimSpace(noProxy) == "*" {
+		return false
+	}
+	host := strings.ToLower(target.Hostname())
+	port := codexURLPort(target)
+	for _, token := range strings.FieldsFunc(noProxy, func(r rune) bool { return r == ',' || r == ' ' || r == '\t' || r == '\n' }) {
+		if codexNoProxyMatch(host, port, strings.TrimSpace(token)) {
+			return false
+		}
+	}
+	return true
+}
+
+func codexNoProxyMatch(host, port, token string) bool {
+	if token == "" {
+		return false
+	}
+	tokenHost, tokenPort := codexSplitNoProxyToken(token)
+	if tokenPort != "" && tokenPort != port {
+		return false
+	}
+	tokenHost = strings.TrimPrefix(tokenHost, "*")
+	if strings.HasPrefix(tokenHost, ".") {
+		return host == strings.TrimPrefix(tokenHost, ".") || strings.HasSuffix(host, tokenHost)
+	}
+	return host == tokenHost
+}
+
+func codexSplitNoProxyToken(token string) (string, string) {
+	token = strings.ToLower(token)
+	if strings.Count(token, ":") == 1 {
+		host, port, ok := strings.Cut(token, ":")
+		if ok && port != "" {
+			return host, port
+		}
+	}
+	return token, ""
+}
+
+func codexProxyEnv(keys ...string) string {
+	for _, key := range keys {
+		if value := strings.TrimSpace(os.Getenv(key)); value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func codexWebSocketHostPort(parsed *url.URL) string {
+	return net.JoinHostPort(parsed.Hostname(), codexWebSocketPort(parsed))
+}
+
+func codexWebSocketPort(parsed *url.URL) string {
+	if port := parsed.Port(); port != "" {
+		return port
+	}
+	if parsed.Scheme == "wss" {
+		return "443"
+	}
+	return "80"
+}
+
+func codexProxyHostPort(proxyURL *url.URL) string {
+	port := proxyURL.Port()
+	if port == "" {
+		if proxyURL.Scheme == "https" {
+			port = "443"
+		} else {
+			port = "80"
+		}
+	}
+	return net.JoinHostPort(proxyURL.Hostname(), port)
+}
+
+func codexURLPort(parsed *url.URL) string {
+	if port := parsed.Port(); port != "" {
+		return port
+	}
+	if parsed.Scheme == "https" || parsed.Scheme == "wss" {
+		return "443"
+	}
+	return "80"
 }
 
 func (c *codexWebSocketConnection) handshake(ctx context.Context, parsed *url.URL, headers http.Header) error {
