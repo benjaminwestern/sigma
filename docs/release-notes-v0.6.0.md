@@ -130,6 +130,9 @@ sanitization.
   direct NIM OpenAI-compatible Chat Completions rows and includes focused
   generated rows for `openai/gpt-oss-120b` and
   `nvidia/nemotron-3-ultra-550b-a55b`.
+- `cmd/sigma-generate-models -validate-nvidia-live` now fetches NVIDIA NIM
+  `/models` on demand and reports direct text catalog rows that need review
+  without changing the default offline generation path.
 - `cmd/sigma-surface-probe` now includes an opt-in `nvidia` route that uses
   `NVIDIA_API_KEY`, the direct NIM base URL, the NVIDIA provider wrapper, and
   `nvidia/nemotron-3-super-120b-a12b` as its default probe model when callers
@@ -279,11 +282,10 @@ sanitization.
 - Cloudflare Workers AI Responses, Anthropic-compatible, image, embedding, and
   live validation routes remain deferred until each surface has deterministic
   request, stream, error, and metadata evidence.
-- Broader NVIDIA NIM live validation beyond the focused surface-probe route,
-  embedding catalog expansion, additional direct NIM catalog rows, and any
-  route behavior beyond the shared OpenAI-compatible adapters remain deferred
-  until each surface has deterministic request, response, error, and metadata
-  evidence.
+- Broader NVIDIA NIM behavioral validation beyond the focused surface-probe
+  route, embedding catalog expansion, and any route behavior beyond the shared
+  OpenAI-compatible adapters remain deferred until each surface has
+  deterministic request, response, error, and metadata evidence.
 - Moonshot live-provider expansion beyond the focused direct Chat Completions
   wrapper and reviewed K2.7 metadata remains deferred until route-specific
   behavior needs deterministic evidence.

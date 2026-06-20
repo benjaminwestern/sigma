@@ -65,7 +65,9 @@ See [release notes](docs/release-notes-v0.6.0.md).
   streaming-usage request defaults, an opt-in live surface-probe route, and
   deterministic registration/request coverage. The generated text catalog now
   also includes direct NIM rows for `openai/gpt-oss-120b` and
-  `nvidia/nemotron-3-ultra-550b-a55b`.
+  `nvidia/nemotron-3-ultra-550b-a55b`, plus opt-in live `/models` validation
+  for reviewing direct NIM catalog availability while normal generation remains
+  offline.
 - Moonshot AI and Moonshot AI CN now have first-class OpenAI-compatible Chat
   Completions provider wrappers, generated Kimi K2.7 Code CN and HighSpeed
   metadata, and metadata-driven omission of disabled-thinking payloads for

@@ -11158,43 +11158,6 @@
       }
     },
     {
-      "id": "qwen/qwen3-coder-480b-a35b-instruct",
-      "name": "Qwen3 Coder 480B A35B Instruct",
-      "provider": "nvidia",
-      "api": "openai-completions",
-      "baseURL": "https://integrate.api.nvidia.com/v1",
-      "supportedInputs": [
-        "text"
-      ],
-      "supportsTools": true,
-      "supportsThinking": false,
-      "cost": {
-        "inputPerMillion": 0,
-        "outputPerMillion": 0,
-        "currency": "USD"
-      },
-      "contextWindow": 262144,
-      "maxOutputTokens": 66536,
-      "headers": {
-        "NVCF-POLL-SECONDS": "3600"
-      },
-      "authEnvNames": [
-        "NVIDIA_API_KEY"
-      ],
-      "defaultTransport": "sse",
-      "providerMetadata": {
-        "modelFamily": "qwen"
-      },
-      "openAICompletionsCompat": {
-        "supportsStore": "unsupported",
-        "supportsDeveloperRole": "unsupported",
-        "supportsReasoningEffort": "unsupported",
-        "supportsStreamingUsage": "supported",
-        "supportsStrictTools": "unsupported",
-        "maxTokensField": "max_tokens"
-      }
-    },
-    {
       "id": "qwen/qwen3.5-122b-a10b",
       "name": "Qwen3.5 122B-A10B",
       "provider": "nvidia",

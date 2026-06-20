@@ -226,9 +226,11 @@ metadata-only and backed by compatibility checks.
       CI.
 - [x] NVIDIA NIM — add focused generated text metadata for `openai/gpt-oss-120b`
       and `nvidia/nemotron-3-ultra-550b-a55b`.
+- [x] NVIDIA NIM — add opt-in live `/models` validation for reviewing direct NIM
+      catalog rows without making generation or CI network-dependent.
 - [ ] NVIDIA NIM — expand broader live-provider fixture coverage for redaction,
-      cancellation, embedding models, and additional direct NIM catalog rows if
-      the provider needs behavior beyond the shared OpenAI-compatible adapters.
+      cancellation, embedding models, and route behavior only if the provider
+      needs behavior beyond the shared OpenAI-compatible adapters.
 - [x] Z.ai and Z.ai Coding CN — promote to first-class provider rows with
       fixtures.
 - [ ] Z.ai and Z.ai Coding CN — add broader live-provider fixture coverage for

@@ -33,17 +33,26 @@ func main() {
 	var imageModelsPath string
 	var embeddingModelsPath string
 	var report bool
+	var validateNVIDIALive bool
 
 	flag.StringVar(&inputPath, "input", "internal/modeldata/catalog.json", "model metadata catalog JSON")
 	flag.StringVar(&modelsPath, "models", "models_generated.go", "generated text model Go file")
 	flag.StringVar(&imageModelsPath, "image-models", "image_models_generated.go", "generated image model Go file")
 	flag.StringVar(&embeddingModelsPath, "embedding-models", "embedding_models_generated.go", "generated embedding model Go file")
 	flag.BoolVar(&report, "report", false, "print a deterministic catalog summary")
+	flag.BoolVar(&validateNVIDIALive, "validate-nvidia-live", false, "fetch NVIDIA NIM /models and report direct text catalog drift")
 	flag.Parse()
 
 	catalog, err := modeldata.Load(inputPath)
 	if err != nil {
 		fatalf("load catalog: %v", err)
+	}
+	if validateNVIDIALive {
+		output, err := renderNVIDIALiveValidation(catalog, true, fetchNVIDIALiveModelIDs)
+		if err != nil {
+			fatalf("validate nvidia live catalog: %v", err)
+		}
+		fmt.Fprint(os.Stderr, output)
 	}
 	if err := writeGoFile(modelsPath, renderTextModels(catalog)); err != nil {
 		fatalf("write text models: %v", err)
