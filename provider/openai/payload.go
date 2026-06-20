@@ -743,6 +743,9 @@ func addDeepSeekReasoning(payload map[string]any, model sigma.Model, opts sigma.
 	}
 	effort := reasoningEffort(model, opts)
 	if effort == "" {
+		if !model.SupportsThinkingLevel(sigma.ThinkingLevelOff) {
+			return
+		}
 		payload["thinking"] = map[string]any{providerToolOptionTypeKey: "disabled"}
 		return
 	}

@@ -227,8 +227,11 @@ metadata-only and backed by compatibility checks.
       streaming, tools, usage, redaction, and cancellation if the providers need
       behavior beyond the shared OpenAI-compatible adapter.
 - [ ] Ant Ling — promote to a first-class provider row with fixtures.
-- [ ] Moonshot AI and Moonshot AI CN — promote to first-class provider rows
+- [x] Moonshot AI and Moonshot AI CN — promote to first-class provider rows
       with fixtures.
+- [ ] Moonshot AI and Moonshot AI CN — add broader live-provider fixture
+      coverage for streaming, tools, usage, redaction, and cancellation if the
+      providers need behavior beyond the shared OpenAI-compatible adapter.
 - [x] MiniMax and MiniMax CN — promote to first-class Anthropic-compatible
       provider rows with deterministic registration and endpoint-path coverage.
 - [ ] MiniMax and MiniMax CN — add broader live-provider fixture coverage for
@@ -293,6 +296,9 @@ upstream.
 - [x] Add the direct Moonshot AI Kimi K2.7 Code row with text/image input,
       reasoning, tools, current limits, pricing, and `MOONSHOT_API_KEY`
       discovery.
+- [x] Add direct Moonshot AI CN Kimi K2.7 Code plus direct Moonshot AI and
+      Moonshot AI CN Kimi K2.7 Code HighSpeed rows, including
+      disabled-thinking compatibility metadata.
 - [x] Add OpenCode Go Kimi K2.6 and Kimi K2.7 Code metadata with
       `reasoning_effort` requests so thinking-off/default requests omit
       rejected disabled `thinking` objects.

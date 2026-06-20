@@ -22,6 +22,7 @@ import (
 
 	"github.com/wintermi/sigma"
 	"github.com/wintermi/sigma/provider/fireworks"
+	"github.com/wintermi/sigma/provider/moonshot"
 	"github.com/wintermi/sigma/provider/openai"
 	"github.com/wintermi/sigma/provider/opencode"
 	"github.com/wintermi/sigma/provider/xai"
@@ -168,6 +169,24 @@ var routes = map[string]routeSpec{
 		Model:            discoveredFireworksAnthropicModel,
 		Cases:            anthropicCompatibleProbeCases,
 	},
+	"moonshot": {
+		Name:             "moonshot",
+		Provider:         sigma.ProviderMoonshotAI,
+		BaseURL:          moonshot.DefaultBaseURL,
+		APIKeyEnv:        "MOONSHOT_API_KEY",
+		RegisterProvider: registerMoonshotProvider,
+		Model:            discoveredMoonshotModel,
+		Cases:            openAICompatibleProbeCases,
+	},
+	"moonshot-cn": {
+		Name:             "moonshot-cn",
+		Provider:         sigma.ProviderMoonshotAICN,
+		BaseURL:          moonshot.DefaultCNBaseURL,
+		APIKeyEnv:        "MOONSHOT_API_KEY",
+		RegisterProvider: registerMoonshotProvider,
+		Model:            discoveredMoonshotModel,
+		Cases:            openAICompatibleProbeCases,
+	},
 	"xai": {
 		Name:             "xai",
 		Provider:         sigma.ProviderXAI,
@@ -251,7 +270,7 @@ func parseConfig() config {
 	var codexOAuth bool
 	var codexOAuthBrowser bool
 	var handoff bool
-	flag.StringVar(&routeList, "routes", "zen,go", "comma-separated routes: openai,openai-codex,zen,go,fireworks-openai,fireworks-anthropic,xai")
+	flag.StringVar(&routeList, "routes", "zen,go", "comma-separated routes: openai,openai-codex,zen,go,fireworks-openai,fireworks-anthropic,moonshot,moonshot-cn,xai")
 	flag.StringVar(&modelList, "models", "", "comma-separated model IDs to probe")
 	flag.BoolVar(&repair, "repair", false, "try targeted repair variants after a failing case")
 	flag.BoolVar(&includeUnavailable, "include-unavailable", false, "run known unavailable advertised models instead of skipping them")
@@ -723,6 +742,20 @@ func registerFireworksAnthropicProvider(registry *sigma.Registry, route routeSpe
 	return nil
 }
 
+func registerMoonshotProvider(registry *sigma.Registry, route routeSpec) error {
+	switch route.Provider {
+	case sigma.ProviderMoonshotAICN:
+		if err := moonshot.RegisterCN(registry, moonshot.WithBaseURL(route.BaseURL)); err != nil {
+			return fmt.Errorf("register moonshot cn provider: %w", err)
+		}
+	default:
+		if err := moonshot.Register(registry, moonshot.WithBaseURL(route.BaseURL)); err != nil {
+			return fmt.Errorf("register moonshot provider: %w", err)
+		}
+	}
+	return nil
+}
+
 func registerXAIProvider(registry *sigma.Registry, route routeSpec) error {
 	if err := xai.Register(registry, xai.WithBaseURL(route.BaseURL)); err != nil {
 		return fmt.Errorf("register xai provider: %w", err)
@@ -833,6 +866,41 @@ func discoveredXAIModel(route routeSpec, id string) sigma.Model {
 			"probeSurface":    "openai-completions",
 		},
 	}
+}
+
+func discoveredMoonshotModel(route routeSpec, id string) sigma.Model {
+	if model, ok := sigma.DefaultRegistry().Model(route.Provider, sigma.ModelID(id)); ok {
+		return model
+	}
+	model := sigma.Model{
+		ID:               sigma.ModelID(id),
+		Provider:         route.Provider,
+		API:              sigma.APIOpenAICompletions,
+		SupportedInputs:  []sigma.ContentBlockType{sigma.ContentBlockText, sigma.ContentBlockImage},
+		SupportsTools:    true,
+		SupportsThinking: true,
+		ContextWindow:    262144,
+		MaxOutputTokens:  262144,
+		OpenAICompletionsCompat: &sigma.OpenAICompletionsCompat{
+			ReasoningFormat:         sigma.OpenAICompletionsReasoningDeepSeek,
+			SupportsReasoningEffort: sigma.OpenAICompatUnsupported,
+			SupportsStreamingUsage:  sigma.OpenAICompatSupported,
+			SupportsStrictTools:     sigma.OpenAICompatUnsupported,
+			MaxTokensField:          sigma.OpenAICompletionsMaxTokens,
+		},
+		ProviderMetadata: map[string]any{
+			"baseURL":         route.BaseURL,
+			"apiKeyEnvVars":   []string{route.APIKeyEnv},
+			"modelFamily":     modelFamily(id),
+			"probeDiscovered": true,
+			"probeRoute":      route.Name,
+			"probeSurface":    "openai-completions",
+		},
+	}
+	if strings.Contains(id, "kimi-k2.7-code") {
+		model.UnsupportedThinkingLevels = []sigma.ThinkingLevel{sigma.ThinkingLevelOff}
+	}
+	return model
 }
 
 func discoveredFireworksOpenAIModel(route routeSpec, id string) sigma.Model {
@@ -1005,7 +1073,7 @@ func openAICompatibleProbeCases(route routeSpec, model sigma.Model) []probeCase 
 		toolCase("strict_tool_required_write", "required strict write-file tool", "required"),
 		toolCase("three_turn_file_update", "multi-turn file update", "auto"),
 	}
-	if route.Provider != sigma.ProviderFireworks && !isOpenCodeGoReasoningEffortKimi(model) {
+	if route.Provider != sigma.ProviderFireworks && !isOpenCodeGoReasoningEffortKimi(model) && !modelUnsupportedThinkingOff(model) {
 		return cases
 	}
 	filtered := cases[:0]
@@ -1036,9 +1104,20 @@ func skipOpenAICompatibleProbeCase(route routeSpec, model sigma.Model, name stri
 		default:
 			return false
 		}
+	case modelUnsupportedThinkingOff(model):
+		switch name {
+		case "thinking_string_none", "thinking_object_disabled", "thinking_bool_false", "enable_thinking_false":
+			return true
+		default:
+			return false
+		}
 	default:
 		return false
 	}
+}
+
+func modelUnsupportedThinkingOff(model sigma.Model) bool {
+	return !model.SupportsThinkingLevel(sigma.ThinkingLevelOff)
 }
 
 func openAICompletionsRequiredToolChoiceSupported(model sigma.Model) bool {

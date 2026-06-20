@@ -148,6 +148,49 @@ func TestXAIRouteBuildsExpectedModel(t *testing.T) {
 	assertMetadataStrings(t, model.ProviderMetadata, "apiKeyEnvVars", []string{"XAI_API_KEY"})
 }
 
+func TestMoonshotRoutesBuildExpectedModels(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		provider sigma.ProviderID
+		baseURL  string
+	}{
+		{name: "moonshot", provider: sigma.ProviderMoonshotAI, baseURL: "https://api.moonshot.ai/v1"},
+		{name: "moonshot-cn", provider: sigma.ProviderMoonshotAICN, baseURL: "https://api.moonshot.cn/v1"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			route := routes[tt.name]
+			if route.RegisterProvider == nil {
+				t.Fatalf("route %q missing provider registration", tt.name)
+			}
+			if got, want := route.Provider, tt.provider; got != want {
+				t.Fatalf("provider = %q, want %q", got, want)
+			}
+			if got, want := route.BaseURL, tt.baseURL; got != want {
+				t.Fatalf("base URL = %q, want %q", got, want)
+			}
+			if got, want := route.APIKeyEnv, "MOONSHOT_API_KEY"; got != want {
+				t.Fatalf("api key env = %q, want %q", got, want)
+			}
+
+			model := route.Model(route, "kimi-k2.7-code")
+			if model.Provider != tt.provider || model.API != sigma.APIOpenAICompletions {
+				t.Fatalf("model provider/API = %q/%q", model.Provider, model.API)
+			}
+			if model.OpenAICompletionsCompat == nil ||
+				model.OpenAICompletionsCompat.ReasoningFormat != sigma.OpenAICompletionsReasoningDeepSeek ||
+				model.OpenAICompletionsCompat.SupportsReasoningEffort != sigma.OpenAICompatUnsupported {
+				t.Fatalf("Moonshot probe compat = %#v, want DeepSeek format without reasoning effort", model.OpenAICompletionsCompat)
+			}
+		})
+	}
+}
+
 func TestModelsForRouteUsesSelectedModelsWithoutDiscovery(t *testing.T) {
 	t.Parallel()
 
@@ -242,6 +285,28 @@ func TestOpenCodeGoKimiProbeCasesMatchReasoningFormat(t *testing.T) {
 	}
 	if !hasRepairVariant(kimi26Cases, "reasoning_effort_high") {
 		t.Fatal("OpenCode Go Kimi K2.6 should probe reasoning_effort")
+	}
+}
+
+func TestMoonshotK27ProbeCasesSkipDisabledThinkingControls(t *testing.T) {
+	t.Parallel()
+
+	route := routes["moonshot"]
+	kimiCode := route.Model(route, "kimi-k2.7-code")
+	codeCases := openAICompatibleProbeCases(route, kimiCode)
+	for _, name := range []string{"thinking_string_none", "thinking_object_disabled", "thinking_bool_false", "enable_thinking_false"} {
+		if hasRepairVariant(codeCases, name) {
+			t.Fatalf("Moonshot Kimi K2.7 Code should not probe disabled thinking control %q", name)
+		}
+	}
+	if !hasRepairVariant(codeCases, "reasoning_effort_high") {
+		t.Fatal("Moonshot Kimi K2.7 Code should keep non-disabled reasoning probes")
+	}
+
+	kimi26 := route.Model(route, "kimi-k2.6")
+	kimi26Cases := openAICompatibleProbeCases(route, kimi26)
+	if !hasRepairVariant(kimi26Cases, "thinking_object_disabled") {
+		t.Fatal("Moonshot Kimi K2.6 should still probe disabled thinking controls")
 	}
 }
 

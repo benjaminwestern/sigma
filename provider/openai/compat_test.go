@@ -305,6 +305,63 @@ func TestOpenAICompletionsCompatDetectsMoonshotShape(t *testing.T) {
 	}
 }
 
+func TestOpenAICompletionsCompatOmitsUnsupportedMoonshotDisabledThinking(t *testing.T) {
+	t.Parallel()
+
+	kimiCode := sigma.Model{
+		ID:                        "kimi-k2.7-code",
+		Provider:                  sigma.ProviderMoonshotAI,
+		API:                       sigma.APIOpenAICompletions,
+		SupportsThinking:          true,
+		UnsupportedThinkingLevels: []sigma.ThinkingLevel{sigma.ThinkingLevelOff},
+	}
+	req := sigma.Request{Messages: []sigma.Message{sigma.UserText("hi")}}
+
+	payload, err := chatCompletionsPayload(kimiCode, req, sigma.Options{}, openAICompletionsCompat(kimiCode, "https://api.moonshot.ai/v1"))
+	if err != nil {
+		t.Fatalf("chatCompletionsPayload returned error: %v", err)
+	}
+	if _, ok := payload["thinking"]; ok {
+		t.Fatalf("thinking = %#v, want omitted", payload["thinking"])
+	}
+	if _, ok := payload["reasoning_effort"]; ok {
+		t.Fatalf("reasoning_effort = %#v, want omitted", payload["reasoning_effort"])
+	}
+
+	payload, err = chatCompletionsPayload(kimiCode, req, sigma.Options{ReasoningLevel: sigma.ThinkingLevelHigh}, openAICompletionsCompat(kimiCode, "https://api.moonshot.ai/v1"))
+	if err != nil {
+		t.Fatalf("enabled chatCompletionsPayload returned error: %v", err)
+	}
+	thinking := payload["thinking"].(map[string]any)
+	if got, want := thinking["type"], "enabled"; got != want {
+		t.Fatalf("thinking type = %v, want %v", got, want)
+	}
+	if _, ok := payload["reasoning_effort"]; ok {
+		t.Fatalf("reasoning_effort = %#v, want omitted", payload["reasoning_effort"])
+	}
+
+	kimi26 := kimiCode
+	kimi26.ID = "kimi-k2.6"
+	kimi26.UnsupportedThinkingLevels = nil
+	payload, err = chatCompletionsPayload(kimi26, req, sigma.Options{}, openAICompletionsCompat(kimi26, "https://api.moonshot.cn/v1"))
+	if err != nil {
+		t.Fatalf("k2.6 chatCompletionsPayload returned error: %v", err)
+	}
+	thinking = payload["thinking"].(map[string]any)
+	if got, want := thinking["type"], "disabled"; got != want {
+		t.Fatalf("k2.6 thinking type = %v, want %v", got, want)
+	}
+
+	_, err = chatCompletionsPayload(kimiCode, req, sigma.Options{ReasoningLevel: sigma.ThinkingLevelOff}, openAICompletionsCompat(kimiCode, "https://api.moonshot.ai/v1"))
+	if err == nil {
+		t.Fatal("explicit unsupported off reasoning returned nil error")
+	}
+	var sigmaErr *sigma.Error
+	if !errors.As(err, &sigmaErr) || sigmaErr.Code != sigma.ErrorInvalidOptions {
+		t.Fatalf("unsupported off error = %T %[1]v, want invalid options", err)
+	}
+}
+
 func TestOpenAICompletionsProviderOptionsOverrideOpenRouterRouting(t *testing.T) {
 	t.Parallel()
 

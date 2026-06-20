@@ -39,6 +39,8 @@ Default routes are `zen,go`. All other routes must be requested explicitly.
 | `go` | OpenCode Go routed surfaces | `OPENCODE_API_KEY` | Discovers Go models |
 | `fireworks-openai` | Fireworks OpenAI-compatible Chat Completions | `FIREWORKS_API_KEY` | Discovers Fireworks models |
 | `fireworks-anthropic` | Fireworks Anthropic-compatible Messages | `FIREWORKS_API_KEY` | Discovers Fireworks models |
+| `moonshot` | Moonshot AI OpenAI-compatible Chat Completions | `MOONSHOT_API_KEY` | Discovers Moonshot AI models |
+| `moonshot-cn` | Moonshot AI CN OpenAI-compatible Chat Completions | `MOONSHOT_API_KEY` | Discovers Moonshot AI CN models |
 | `xai` | xAI/Grok OpenAI-compatible Chat Completions | `XAI_API_KEY` | Discovers xAI models |
 
 ## Examples
@@ -89,6 +91,15 @@ Use `accounts/fireworks/models/...` IDs with `fireworks-anthropic`; model IDs
 that Fireworks also serves through Chat Completions can be probed with
 `fireworks-openai`. `accounts/fireworks/routers/...` IDs are for
 `fireworks-openai`.
+
+Probe direct Moonshot K2.7 routes:
+
+```bash
+MOONSHOT_API_KEY=... mise run go:run -- ./cmd/sigma-surface-probe \
+  -routes moonshot,moonshot-cn \
+  -models kimi-k2.7-code,kimi-k2.7-code-highspeed \
+  -repair
+```
 
 Probe xAI/Grok with a known model:
 

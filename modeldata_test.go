@@ -626,20 +626,45 @@ func assertGeneratedOpenAICompatibleProviderMetadata(t *testing.T, registry *Reg
 		}
 	}
 
-	moonshotCode, ok := registry.Model(ProviderMoonshotAI, "kimi-k2.7-code")
+	for _, tt := range []struct {
+		provider ProviderID
+		id       ModelID
+		baseURL  string
+	}{
+		{provider: ProviderMoonshotAI, id: "kimi-k2.7-code", baseURL: "https://api.moonshot.ai/v1"},
+		{provider: ProviderMoonshotAI, id: "kimi-k2.7-code-highspeed", baseURL: "https://api.moonshot.ai/v1"},
+		{provider: ProviderMoonshotAICN, id: "kimi-k2.7-code", baseURL: "https://api.moonshot.cn/v1"},
+		{provider: ProviderMoonshotAICN, id: "kimi-k2.7-code-highspeed", baseURL: "https://api.moonshot.cn/v1"},
+	} {
+		model, ok := registry.Model(tt.provider, tt.id)
+		if !ok {
+			t.Fatalf("fresh registry missing generated %s %s model", tt.provider, tt.id)
+		}
+		if !model.SupportsTools || !model.SupportsImages() || !model.SupportsReasoning() {
+			t.Fatalf("%s %s capabilities were not generated: %+v", tt.provider, tt.id, model)
+		}
+		if model.SupportsThinkingLevel(ThinkingLevelOff) ||
+			!model.SupportsThinkingLevel(ThinkingLevelHigh) {
+			t.Fatalf("%s %s thinking support = %+v / %+v, want high without off", tt.provider, tt.id, model.ThinkingLevelMap, model.UnsupportedThinkingLevels)
+		}
+		assertMetadataString(t, model.ProviderMetadata, "baseURL", tt.baseURL)
+		assertMetadataStrings(t, model.ProviderMetadata, MetadataAPIKeyEnvVars, []string{"MOONSHOT_API_KEY"})
+		if model.OpenAICompletionsCompat == nil ||
+			model.OpenAICompletionsCompat.ReasoningFormat != OpenAICompletionsReasoningDeepSeek ||
+			model.OpenAICompletionsCompat.SupportsReasoningEffort != OpenAICompatUnsupported ||
+			model.OpenAICompletionsCompat.SupportsStreamingUsage != OpenAICompatSupported ||
+			model.OpenAICompletionsCompat.SupportsStrictTools != OpenAICompatUnsupported ||
+			model.OpenAICompletionsCompat.MaxTokensField != OpenAICompletionsMaxTokens {
+			t.Fatalf("%s %s compat = %#v, want Moonshot OpenAI-compatible overrides", tt.provider, tt.id, model.OpenAICompletionsCompat)
+		}
+	}
+
+	moonshotK26, ok := registry.Model(ProviderMoonshotAI, "kimi-k2.6")
 	if !ok {
-		t.Fatal("fresh registry missing generated Moonshot AI Kimi K2.7 Code model")
+		t.Fatal("fresh registry missing generated Moonshot AI Kimi K2.6 model")
 	}
-	if !moonshotCode.SupportsTools || !moonshotCode.SupportsImages() || !moonshotCode.SupportsReasoning() {
-		t.Fatalf("Moonshot AI Kimi K2.7 Code capabilities were not generated: %+v", moonshotCode)
-	}
-	if moonshotCode.OpenAICompletionsCompat == nil ||
-		moonshotCode.OpenAICompletionsCompat.ReasoningFormat != OpenAICompletionsReasoningDeepSeek ||
-		moonshotCode.OpenAICompletionsCompat.SupportsReasoningEffort != OpenAICompatUnsupported ||
-		moonshotCode.OpenAICompletionsCompat.SupportsStreamingUsage != OpenAICompatSupported ||
-		moonshotCode.OpenAICompletionsCompat.SupportsStrictTools != OpenAICompatUnsupported ||
-		moonshotCode.OpenAICompletionsCompat.MaxTokensField != OpenAICompletionsMaxTokens {
-		t.Fatalf("Moonshot AI Kimi K2.7 Code compat = %#v, want Moonshot OpenAI-compatible overrides", moonshotCode.OpenAICompletionsCompat)
+	if !moonshotK26.SupportsThinkingLevel(ThinkingLevelOff) {
+		t.Fatalf("Moonshot AI Kimi K2.6 thinking support = %+v / %+v, want off supported", moonshotK26.ThinkingLevelMap, moonshotK26.UnsupportedThinkingLevels)
 	}
 
 	for _, id := range []ModelID{

@@ -10098,6 +10098,88 @@
       }
     },
     {
+      "id": "kimi-k2.7-code",
+      "name": "Kimi K2.7 Code",
+      "provider": "moonshotai-cn",
+      "api": "openai-completions",
+      "baseURL": "https://api.moonshot.cn/v1",
+      "supportedInputs": [
+        "text",
+        "image"
+      ],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "unsupportedThinkingLevels": [
+        "off"
+      ],
+      "cost": {
+        "inputPerMillion": 0.95,
+        "outputPerMillion": 4,
+        "currency": "USD",
+        "cacheReadInputPerMillion": 0.19
+      },
+      "contextWindow": 262144,
+      "maxOutputTokens": 262144,
+      "headers": {},
+      "authEnvNames": [
+        "MOONSHOT_API_KEY"
+      ],
+      "defaultTransport": "sse",
+      "providerMetadata": {
+        "modelFamily": "kimi"
+      },
+      "openAICompletionsCompat": {
+        "reasoningFormat": "deepseek",
+        "supportsStore": "unsupported",
+        "supportsDeveloperRole": "unsupported",
+        "supportsReasoningEffort": "unsupported",
+        "supportsStreamingUsage": "supported",
+        "supportsStrictTools": "unsupported",
+        "maxTokensField": "max_tokens"
+      }
+    },
+    {
+      "id": "kimi-k2.7-code-highspeed",
+      "name": "Kimi K2.7 Code HighSpeed",
+      "provider": "moonshotai-cn",
+      "api": "openai-completions",
+      "baseURL": "https://api.moonshot.cn/v1",
+      "supportedInputs": [
+        "text",
+        "image"
+      ],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "unsupportedThinkingLevels": [
+        "off"
+      ],
+      "cost": {
+        "inputPerMillion": 1.9,
+        "outputPerMillion": 8,
+        "currency": "USD",
+        "cacheReadInputPerMillion": 0.38
+      },
+      "contextWindow": 262144,
+      "maxOutputTokens": 262144,
+      "headers": {},
+      "authEnvNames": [
+        "MOONSHOT_API_KEY"
+      ],
+      "defaultTransport": "sse",
+      "providerMetadata": {
+        "modelFamily": "kimi"
+      },
+      "openAICompletionsCompat": {
+        "reasoningFormat": "deepseek",
+        "supportsStore": "unsupported",
+        "supportsDeveloperRole": "unsupported",
+        "supportsReasoningEffort": "unsupported",
+        "supportsStreamingUsage": "supported",
+        "supportsStrictTools": "unsupported",
+        "maxTokensField": "max_tokens"
+      }
+    },
+    {
       "id": "kimi-k2-0711-preview",
       "name": "Kimi K2 0711",
       "provider": "moonshotai",
@@ -10370,11 +10452,55 @@
       ],
       "supportsTools": true,
       "supportsThinking": true,
+      "unsupportedThinkingLevels": [
+        "off"
+      ],
       "cost": {
         "inputPerMillion": 0.95,
         "outputPerMillion": 4,
         "currency": "USD",
         "cacheReadInputPerMillion": 0.19
+      },
+      "contextWindow": 262144,
+      "maxOutputTokens": 262144,
+      "headers": {},
+      "authEnvNames": [
+        "MOONSHOT_API_KEY"
+      ],
+      "defaultTransport": "sse",
+      "providerMetadata": {
+        "modelFamily": "kimi"
+      },
+      "openAICompletionsCompat": {
+        "reasoningFormat": "deepseek",
+        "supportsStore": "unsupported",
+        "supportsDeveloperRole": "unsupported",
+        "supportsReasoningEffort": "unsupported",
+        "supportsStreamingUsage": "supported",
+        "supportsStrictTools": "unsupported",
+        "maxTokensField": "max_tokens"
+      }
+    },
+    {
+      "id": "kimi-k2.7-code-highspeed",
+      "name": "Kimi K2.7 Code HighSpeed",
+      "provider": "moonshotai",
+      "api": "openai-completions",
+      "baseURL": "https://api.moonshot.ai/v1",
+      "supportedInputs": [
+        "text",
+        "image"
+      ],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "unsupportedThinkingLevels": [
+        "off"
+      ],
+      "cost": {
+        "inputPerMillion": 1.9,
+        "outputPerMillion": 8,
+        "currency": "USD",
+        "cacheReadInputPerMillion": 0.38
       },
       "contextWindow": 262144,
       "maxOutputTokens": 262144,

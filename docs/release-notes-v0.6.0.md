@@ -31,8 +31,12 @@ provider helpers now let callers pass Cloudflare AI Gateway placeholder values
 and Bedrock region/static credential values without mutating process
 environment. Cloudflare Workers AI is also promoted as a direct
 OpenAI-compatible Chat Completions wrapper with account placeholder resolution
-and normal bearer-token auth for the direct Workers AI endpoint. Z.ai and Z.ai
-Coding CN are also promoted as focused OpenAI-compatible Chat Completions
+and normal bearer-token auth for the direct Workers AI endpoint. Moonshot AI
+and Moonshot AI CN are promoted as focused OpenAI-compatible Chat Completions
+wrappers with generated K2.7 Code CN and HighSpeed metadata plus
+metadata-driven handling for K2.7 routes that reject explicit disabled thinking
+payloads. Z.ai and Z.ai Coding CN are also promoted as focused
+OpenAI-compatible Chat Completions
 wrappers with generated GLM metadata, GLM-5.2 reasoning-effort mapping, and
 deterministic registration and request coverage. The surface probe command adds
 a credential-gated cross-provider handoff diagnostic for replaying small
@@ -107,6 +111,16 @@ sanitization.
   Workers AI base URL, `CLOUDFLARE_API_KEY` credential discovery,
   request-scoped `cloudflare.WithWorkersAIAccountID`, and
   `CLOUDFLARE_ACCOUNT_ID` environment fallback.
+- Moonshot AI can now be registered with `moonshot.Register` or
+  `moonshot.RegisterDefault`, and Moonshot AI CN can be registered with
+  `moonshot.RegisterCN` or `moonshot.RegisterDefaultCN`, using the shared
+  OpenAI-compatible Chat Completions adapter with direct base URL defaults and
+  `MOONSHOT_API_KEY` credential discovery.
+- Generated Moonshot metadata now includes Moonshot AI CN Kimi K2.7 Code and
+  Kimi K2.7 Code HighSpeed rows for both direct Moonshot routes. K2.7 Code
+  metadata marks explicit disabled thinking as unsupported, so default
+  requests omit the disabled-thinking payload while explicit reasoning levels
+  still enable thinking.
 - Z.ai can now be registered with `zai.Register` or `zai.RegisterDefault`, and
   Z.ai Coding CN can be registered with `zai.RegisterCodingCN` or
   `zai.RegisterDefaultCodingCN`, using the shared OpenAI-compatible Chat
@@ -188,6 +202,10 @@ sanitization.
 - Cloudflare Workers AI direct routing is additive and Chat Completions-only in
   this release. It uses normal bearer-token auth, while Cloudflare AI Gateway
   routes continue to use `cf-aig-authorization`.
+- Moonshot direct routing is additive and Chat Completions-only in this
+  release. The wrappers reuse the shared OpenAI-compatible adapter; broader
+  live-provider coverage remains deferred until route-specific behavior needs
+  independent fixtures.
 - Z.ai direct routing is additive and Chat Completions-only in this release. The
   Z.ai and Z.ai Coding CN wrappers reuse the shared OpenAI-compatible adapter;
   broader live-provider coverage remains deferred until route-specific behavior
@@ -230,6 +248,9 @@ sanitization.
 - Cloudflare Workers AI Responses, Anthropic-compatible, image, embedding, and
   live validation routes remain deferred until each surface has deterministic
   request, stream, error, and metadata evidence.
+- Moonshot live-provider expansion beyond the focused direct Chat Completions
+  wrapper and reviewed K2.7 metadata remains deferred until route-specific
+  behavior needs deterministic evidence.
 - Z.ai Anthropic-compatible, image, embedding, and broader live validation
   routes remain deferred until each surface has deterministic request, stream,
   error, and metadata evidence.
@@ -243,9 +264,14 @@ sanitization.
 
 ## Validation status
 
-Current v0.6.0 development state validated on 2026-06-19 with:
+Current v0.6.0 development state validated on 2026-06-20 with:
 
+- `mise run go:generate`.
 - `mise run go:fmt`.
+- `mise run go:fmt:check`.
 - `mise run go:test`.
+- `mise run go:vet`.
+- `mise run go:lint`.
+- `mise run go:race`.
 - `mise run ci`.
 - `git diff --check`.

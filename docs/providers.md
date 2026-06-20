@@ -242,6 +242,24 @@ The built-in Fireworks Anthropic-compatible routes are
 against Fireworks' `/messages` endpoint and carry compatibility metadata for
 image input, thinking levels, cache behavior, and tool use.
 
+### Moonshot AI
+
+```go
+registry := sigma.DefaultRegistry()
+_ = moonshot.Register(registry)
+_ = moonshot.RegisterCN(registry)
+client := sigma.NewClient(sigma.WithRegistry(registry))
+```
+
+Environment: `MOONSHOT_API_KEY`.
+
+The Moonshot wrappers use Sigma's shared OpenAI-compatible Chat Completions
+adapter with direct Moonshot AI and Moonshot AI CN base URL defaults. Built-in
+metadata includes direct Kimi K2 rows such as `kimi-k2.7-code` and
+`kimi-k2.7-code-highspeed`, including image input, tool use, DeepSeek-style
+thinking controls, streaming usage, and K2.7 compatibility metadata that omits
+explicit disabled-thinking payloads by default.
+
 ### Xiaomi MiMo
 
 ```go
