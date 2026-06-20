@@ -724,6 +724,39 @@ func assertGeneratedOpenAICompatibleProviderMetadata(t *testing.T, registry *Reg
 		t.Fatalf("Grok 4.3 capabilities were not generated: %+v", grok43)
 	}
 
+	nvidiaSuper, ok := registry.Model(ProviderNVIDIA, "nvidia/nemotron-3-super-120b-a12b")
+	if !ok {
+		t.Fatal("fresh registry missing generated NVIDIA Nemotron Super model")
+	}
+	if nvidiaSuper.OpenAICompletionsCompat == nil ||
+		nvidiaSuper.OpenAICompletionsCompat.SupportsStreamingUsage != OpenAICompatSupported ||
+		nvidiaSuper.OpenAICompletionsCompat.SupportsReasoningEffort != OpenAICompatUnsupported ||
+		nvidiaSuper.OpenAICompletionsCompat.MaxTokensField != OpenAICompletionsMaxTokens {
+		t.Fatalf("NVIDIA Nemotron Super compat = %#v, want streaming usage with max_tokens", nvidiaSuper.OpenAICompletionsCompat)
+	}
+
+	nvidiaUltra, ok := registry.Model(ProviderNVIDIA, "nvidia/nemotron-3-ultra-550b-a55b")
+	if !ok {
+		t.Fatal("fresh registry missing generated NVIDIA Nemotron Ultra model")
+	}
+	if !nvidiaUltra.SupportsTools || !nvidiaUltra.SupportsReasoning() || nvidiaUltra.ContextWindow != 1000000 || nvidiaUltra.MaxOutputTokens != 65536 {
+		t.Fatalf("NVIDIA Nemotron Ultra metadata = %+v, want tools, reasoning, and reviewed limits", nvidiaUltra)
+	}
+	if nvidiaUltra.InputCostPerMillion != 0.5 || nvidiaUltra.OutputCostPerMillion != 2.5 || nvidiaUltra.CacheReadInputCostPerMillion != 0.15 {
+		t.Fatalf("NVIDIA Nemotron Ultra costs = %f/%f/%f, want 0.5/2.5/0.15",
+			nvidiaUltra.InputCostPerMillion,
+			nvidiaUltra.OutputCostPerMillion,
+			nvidiaUltra.CacheReadInputCostPerMillion)
+	}
+
+	nvidiaGPTOSS, ok := registry.Model(ProviderNVIDIA, "openai/gpt-oss-120b")
+	if !ok {
+		t.Fatal("fresh registry missing generated NVIDIA GPT-OSS 120B model")
+	}
+	if !nvidiaGPTOSS.SupportsTools || !nvidiaGPTOSS.SupportsReasoning() || nvidiaGPTOSS.ContextWindow != 128000 || nvidiaGPTOSS.MaxOutputTokens != 8192 {
+		t.Fatalf("NVIDIA GPT-OSS 120B metadata = %+v, want tools, reasoning, and reviewed limits", nvidiaGPTOSS)
+	}
+
 	for _, tt := range []struct {
 		provider ProviderID
 		id       ModelID

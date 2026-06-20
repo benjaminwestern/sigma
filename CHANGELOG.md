@@ -61,8 +61,11 @@ See [release notes](docs/release-notes-v0.6.0.md).
   and deterministic registration/request coverage.
 - NVIDIA NIM now has first-class OpenAI-compatible Chat Completions and
   Embeddings provider wrappers, including base URL defaults, bearer auth,
-  generated text and embedding metadata, embedding input-type mapping, and
-  deterministic registration/request coverage.
+  generated text and embedding metadata, embedding input-type mapping,
+  streaming-usage request defaults, an opt-in live surface-probe route, and
+  deterministic registration/request coverage. The generated text catalog now
+  also includes direct NIM rows for `openai/gpt-oss-120b` and
+  `nvidia/nemotron-3-ultra-550b-a55b`.
 - Moonshot AI and Moonshot AI CN now have first-class OpenAI-compatible Chat
   Completions provider wrappers, generated Kimi K2.7 Code CN and HighSpeed
   metadata, and metadata-driven omission of disabled-thinking payloads for

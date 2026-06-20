@@ -221,9 +221,14 @@ metadata-only and backed by compatibility checks.
 - [x] Cloudflare Workers AI — promote to a first-class provider row with
       fixtures.
 - [x] NVIDIA NIM — promote to a first-class provider row with fixtures.
-- [ ] NVIDIA NIM — expand live-provider fixture coverage for streaming, tools,
-      usage, redaction, cancellation, and broader embedding models if the
-      provider needs behavior beyond the shared OpenAI-compatible adapters.
+- [x] NVIDIA NIM — add an opt-in live surface-probe route for streaming, tools,
+      usage, and request-shape diagnostics without making live calls part of
+      CI.
+- [x] NVIDIA NIM — add focused generated text metadata for `openai/gpt-oss-120b`
+      and `nvidia/nemotron-3-ultra-550b-a55b`.
+- [ ] NVIDIA NIM — expand broader live-provider fixture coverage for redaction,
+      cancellation, embedding models, and additional direct NIM catalog rows if
+      the provider needs behavior beyond the shared OpenAI-compatible adapters.
 - [x] Z.ai and Z.ai Coding CN — promote to first-class provider rows with
       fixtures.
 - [ ] Z.ai and Z.ai Coding CN — add broader live-provider fixture coverage for

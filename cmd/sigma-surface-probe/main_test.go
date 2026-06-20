@@ -191,6 +191,55 @@ func TestMoonshotRoutesBuildExpectedModels(t *testing.T) {
 	}
 }
 
+func TestNVIDIARouteBuildsExpectedModels(t *testing.T) {
+	t.Parallel()
+
+	route := routes["nvidia"]
+	if route.RegisterProvider == nil {
+		t.Fatal("nvidia route missing provider registration")
+	}
+	if got, want := route.Provider, sigma.ProviderNVIDIA; got != want {
+		t.Fatalf("provider = %q, want %q", got, want)
+	}
+	if got, want := route.BaseURL, "https://integrate.api.nvidia.com/v1"; got != want {
+		t.Fatalf("base URL = %q, want %q", got, want)
+	}
+	if got, want := route.APIKeyEnv, "NVIDIA_API_KEY"; got != want {
+		t.Fatalf("api key env = %q, want %q", got, want)
+	}
+
+	generated := route.Model(route, defaultNVIDIAProbeModel)
+	if generated.Provider != sigma.ProviderNVIDIA || generated.API != sigma.APIOpenAICompletions {
+		t.Fatalf("generated NVIDIA model provider/API = %q/%q", generated.Provider, generated.API)
+	}
+	if generated.OpenAICompletionsCompat == nil ||
+		generated.OpenAICompletionsCompat.SupportsReasoningEffort != sigma.OpenAICompatUnsupported ||
+		generated.OpenAICompletionsCompat.SupportsStreamingUsage != sigma.OpenAICompatSupported ||
+		generated.OpenAICompletionsCompat.SupportsStrictTools != sigma.OpenAICompatUnsupported ||
+		generated.OpenAICompletionsCompat.MaxTokensField != sigma.OpenAICompletionsMaxTokens {
+		t.Fatalf("generated NVIDIA compat = %#v, want NVIDIA OpenAI-compatible defaults", generated.OpenAICompletionsCompat)
+	}
+	assertMetadataString(t, generated.ProviderMetadata, "baseURL", "https://integrate.api.nvidia.com/v1")
+	assertMetadataStrings(t, generated.ProviderMetadata, "apiKeyEnvVars", []string{"NVIDIA_API_KEY"})
+
+	discovered := route.Model(route, "custom/nim")
+	if discovered.Provider != sigma.ProviderNVIDIA || discovered.API != sigma.APIOpenAICompletions {
+		t.Fatalf("discovered NVIDIA model provider/API = %q/%q", discovered.Provider, discovered.API)
+	}
+	if discovered.OpenAICompletionsCompat == nil ||
+		discovered.OpenAICompletionsCompat.SupportsStore != sigma.OpenAICompatUnsupported ||
+		discovered.OpenAICompletionsCompat.SupportsDeveloperRole != sigma.OpenAICompatUnsupported ||
+		discovered.OpenAICompletionsCompat.SupportsReasoningEffort != sigma.OpenAICompatUnsupported ||
+		discovered.OpenAICompletionsCompat.SupportsStreamingUsage != sigma.OpenAICompatSupported ||
+		discovered.OpenAICompletionsCompat.SupportsStrictTools != sigma.OpenAICompatUnsupported ||
+		discovered.OpenAICompletionsCompat.MaxTokensField != sigma.OpenAICompletionsMaxTokens {
+		t.Fatalf("discovered NVIDIA compat = %#v, want NVIDIA OpenAI-compatible defaults", discovered.OpenAICompletionsCompat)
+	}
+	assertMetadataString(t, discovered.ProviderMetadata, "probeRoute", "nvidia")
+	assertMetadataString(t, discovered.ProviderMetadata, "probeSurface", "openai-completions")
+	assertMetadataStrings(t, discovered.ProviderMetadata, "apiKeyEnvVars", []string{"NVIDIA_API_KEY"})
+}
+
 func TestModelsForRouteUsesSelectedModelsWithoutDiscovery(t *testing.T) {
 	t.Parallel()
 
@@ -218,6 +267,21 @@ func TestModelsForRouteDefaultsOpenAICodexWithoutDiscovery(t *testing.T) {
 	}
 	if !reflect.DeepEqual(models, []string{defaultOpenAICodexProbeModel}) {
 		t.Fatalf("models = %v, want default Codex model", models)
+	}
+}
+
+func TestModelsForRouteDefaultsNVIDIAWithoutDiscovery(t *testing.T) {
+	t.Parallel()
+
+	if got, want := defaultNVIDIAProbeModel, "nvidia/nemotron-3-super-120b-a12b"; got != want {
+		t.Fatalf("defaultNVIDIAProbeModel = %q, want %q", got, want)
+	}
+	models, err := modelsForRoute(context.Background(), routes["nvidia"], routeCredential{apiKey: "token"}, nil)
+	if err != nil {
+		t.Fatalf("modelsForRoute returned error: %v", err)
+	}
+	if !reflect.DeepEqual(models, []string{defaultNVIDIAProbeModel}) {
+		t.Fatalf("models = %v, want default NVIDIA model", models)
 	}
 }
 
@@ -507,6 +571,23 @@ func TestXAIRouteRegistrationBuildsClient(t *testing.T) {
 		t.Fatalf("RegisterProvider returned error: %v", err)
 	}
 	if err := registry.RegisterModel(route.Model(route, "grok-code-fast-1")); err != nil {
+		t.Fatalf("RegisterModel returned error: %v", err)
+	}
+	client := sigma.NewClient(sigma.WithRegistry(registry))
+	if client == nil {
+		t.Fatal("NewClient returned nil")
+	}
+}
+
+func TestNVIDIARouteRegistrationBuildsClient(t *testing.T) {
+	t.Parallel()
+
+	route := routes["nvidia"]
+	registry := sigma.NewRegistry()
+	if err := route.RegisterProvider(registry, route); err != nil {
+		t.Fatalf("RegisterProvider returned error: %v", err)
+	}
+	if err := registry.RegisterModel(route.Model(route, defaultNVIDIAProbeModel)); err != nil {
 		t.Fatalf("RegisterModel returned error: %v", err)
 	}
 	client := sigma.NewClient(sigma.WithRegistry(registry))

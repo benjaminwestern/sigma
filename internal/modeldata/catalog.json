@@ -10554,6 +10554,7 @@
         "supportsStore": "unsupported",
         "supportsDeveloperRole": "unsupported",
         "supportsReasoningEffort": "unsupported",
+        "supportsStreamingUsage": "supported",
         "supportsStrictTools": "unsupported",
         "maxTokensField": "max_tokens"
       }
@@ -10590,6 +10591,7 @@
         "supportsStore": "unsupported",
         "supportsDeveloperRole": "unsupported",
         "supportsReasoningEffort": "unsupported",
+        "supportsStreamingUsage": "supported",
         "supportsStrictTools": "unsupported",
         "maxTokensField": "max_tokens"
       }
@@ -10627,6 +10629,7 @@
         "supportsStore": "unsupported",
         "supportsDeveloperRole": "unsupported",
         "supportsReasoningEffort": "unsupported",
+        "supportsStreamingUsage": "supported",
         "supportsStrictTools": "unsupported",
         "maxTokensField": "max_tokens"
       }
@@ -10664,6 +10667,7 @@
         "supportsStore": "unsupported",
         "supportsDeveloperRole": "unsupported",
         "supportsReasoningEffort": "unsupported",
+        "supportsStreamingUsage": "supported",
         "supportsStrictTools": "unsupported",
         "maxTokensField": "max_tokens"
       }
@@ -10700,6 +10704,7 @@
         "supportsStore": "unsupported",
         "supportsDeveloperRole": "unsupported",
         "supportsReasoningEffort": "unsupported",
+        "supportsStreamingUsage": "supported",
         "supportsStrictTools": "unsupported",
         "maxTokensField": "max_tokens"
       }
@@ -10737,6 +10742,7 @@
         "supportsStore": "unsupported",
         "supportsDeveloperRole": "unsupported",
         "supportsReasoningEffort": "unsupported",
+        "supportsStreamingUsage": "supported",
         "supportsStrictTools": "unsupported",
         "maxTokensField": "max_tokens"
       }
@@ -10773,6 +10779,7 @@
         "supportsStore": "unsupported",
         "supportsDeveloperRole": "unsupported",
         "supportsReasoningEffort": "unsupported",
+        "supportsStreamingUsage": "supported",
         "supportsStrictTools": "unsupported",
         "maxTokensField": "max_tokens"
       }
@@ -10810,6 +10817,7 @@
         "supportsStore": "unsupported",
         "supportsDeveloperRole": "unsupported",
         "supportsReasoningEffort": "unsupported",
+        "supportsStreamingUsage": "supported",
         "supportsStrictTools": "unsupported",
         "maxTokensField": "max_tokens"
       }
@@ -10846,6 +10854,7 @@
         "supportsStore": "unsupported",
         "supportsDeveloperRole": "unsupported",
         "supportsReasoningEffort": "unsupported",
+        "supportsStreamingUsage": "supported",
         "supportsStrictTools": "unsupported",
         "maxTokensField": "max_tokens"
       }
@@ -10882,6 +10891,7 @@
         "supportsStore": "unsupported",
         "supportsDeveloperRole": "unsupported",
         "supportsReasoningEffort": "unsupported",
+        "supportsStreamingUsage": "supported",
         "supportsStrictTools": "unsupported",
         "maxTokensField": "max_tokens"
       }
@@ -10918,6 +10928,7 @@
         "supportsStore": "unsupported",
         "supportsDeveloperRole": "unsupported",
         "supportsReasoningEffort": "unsupported",
+        "supportsStreamingUsage": "supported",
         "supportsStrictTools": "unsupported",
         "maxTokensField": "max_tokens"
       }
@@ -10955,6 +10966,7 @@
         "supportsStore": "unsupported",
         "supportsDeveloperRole": "unsupported",
         "supportsReasoningEffort": "unsupported",
+        "supportsStreamingUsage": "supported",
         "supportsStrictTools": "unsupported",
         "maxTokensField": "max_tokens"
       }
@@ -10991,6 +11003,45 @@
         "supportsStore": "unsupported",
         "supportsDeveloperRole": "unsupported",
         "supportsReasoningEffort": "unsupported",
+        "supportsStreamingUsage": "supported",
+        "supportsStrictTools": "unsupported",
+        "maxTokensField": "max_tokens"
+      }
+    },
+    {
+      "id": "nvidia/nemotron-3-ultra-550b-a55b",
+      "name": "Nemotron 3 Ultra 550B A55B",
+      "provider": "nvidia",
+      "api": "openai-completions",
+      "baseURL": "https://integrate.api.nvidia.com/v1",
+      "supportedInputs": [
+        "text"
+      ],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 0.5,
+        "outputPerMillion": 2.5,
+        "cacheReadInputPerMillion": 0.15,
+        "currency": "USD"
+      },
+      "contextWindow": 1000000,
+      "maxOutputTokens": 65536,
+      "headers": {
+        "NVCF-POLL-SECONDS": "3600"
+      },
+      "authEnvNames": [
+        "NVIDIA_API_KEY"
+      ],
+      "defaultTransport": "sse",
+      "providerMetadata": {
+        "modelFamily": "nvidia"
+      },
+      "openAICompletionsCompat": {
+        "supportsStore": "unsupported",
+        "supportsDeveloperRole": "unsupported",
+        "supportsReasoningEffort": "unsupported",
+        "supportsStreamingUsage": "supported",
         "supportsStrictTools": "unsupported",
         "maxTokensField": "max_tokens"
       }
@@ -11027,6 +11078,44 @@
         "supportsStore": "unsupported",
         "supportsDeveloperRole": "unsupported",
         "supportsReasoningEffort": "unsupported",
+        "supportsStreamingUsage": "supported",
+        "supportsStrictTools": "unsupported",
+        "maxTokensField": "max_tokens"
+      }
+    },
+    {
+      "id": "openai/gpt-oss-120b",
+      "name": "GPT-OSS-120B",
+      "provider": "nvidia",
+      "api": "openai-completions",
+      "baseURL": "https://integrate.api.nvidia.com/v1",
+      "supportedInputs": [
+        "text"
+      ],
+      "supportsTools": true,
+      "supportsThinking": true,
+      "cost": {
+        "inputPerMillion": 0,
+        "outputPerMillion": 0,
+        "currency": "USD"
+      },
+      "contextWindow": 128000,
+      "maxOutputTokens": 8192,
+      "headers": {
+        "NVCF-POLL-SECONDS": "3600"
+      },
+      "authEnvNames": [
+        "NVIDIA_API_KEY"
+      ],
+      "defaultTransport": "sse",
+      "providerMetadata": {
+        "modelFamily": "gpt"
+      },
+      "openAICompletionsCompat": {
+        "supportsStore": "unsupported",
+        "supportsDeveloperRole": "unsupported",
+        "supportsReasoningEffort": "unsupported",
+        "supportsStreamingUsage": "supported",
         "supportsStrictTools": "unsupported",
         "maxTokensField": "max_tokens"
       }
@@ -11063,6 +11152,7 @@
         "supportsStore": "unsupported",
         "supportsDeveloperRole": "unsupported",
         "supportsReasoningEffort": "unsupported",
+        "supportsStreamingUsage": "supported",
         "supportsStrictTools": "unsupported",
         "maxTokensField": "max_tokens"
       }
@@ -11099,6 +11189,7 @@
         "supportsStore": "unsupported",
         "supportsDeveloperRole": "unsupported",
         "supportsReasoningEffort": "unsupported",
+        "supportsStreamingUsage": "supported",
         "supportsStrictTools": "unsupported",
         "maxTokensField": "max_tokens"
       }
@@ -11136,6 +11227,7 @@
         "supportsStore": "unsupported",
         "supportsDeveloperRole": "unsupported",
         "supportsReasoningEffort": "unsupported",
+        "supportsStreamingUsage": "supported",
         "supportsStrictTools": "unsupported",
         "maxTokensField": "max_tokens"
       }
@@ -11172,6 +11264,7 @@
         "supportsStore": "unsupported",
         "supportsDeveloperRole": "unsupported",
         "supportsReasoningEffort": "unsupported",
+        "supportsStreamingUsage": "supported",
         "supportsStrictTools": "unsupported",
         "maxTokensField": "max_tokens"
       }
@@ -11209,6 +11302,7 @@
         "supportsStore": "unsupported",
         "supportsDeveloperRole": "unsupported",
         "supportsReasoningEffort": "unsupported",
+        "supportsStreamingUsage": "supported",
         "supportsStrictTools": "unsupported",
         "maxTokensField": "max_tokens"
       }
@@ -11245,6 +11339,7 @@
         "supportsStore": "unsupported",
         "supportsDeveloperRole": "unsupported",
         "supportsReasoningEffort": "unsupported",
+        "supportsStreamingUsage": "supported",
         "supportsStrictTools": "unsupported",
         "maxTokensField": "max_tokens"
       }

@@ -106,6 +106,15 @@ func TestCompleteStreamsTextWithNVIDIADefaults(t *testing.T) {
 	assertHeader(t, request.Headers, "X-Provider", "provider")
 	assertHeader(t, request.Headers, "X-Custom", "custom")
 	assertHeader(t, request.Headers, "NVCF-POLL-SECONDS", "3600")
+
+	var payload map[string]any
+	if err := json.Unmarshal(request.Body, &payload); err != nil {
+		t.Fatalf("Unmarshal payload returned error: %v", err)
+	}
+	streamOptions, ok := payload["stream_options"].(map[string]any)
+	if !ok || streamOptions["include_usage"] != true {
+		t.Fatalf("stream_options = %#v, want include_usage true; payload = %s", payload["stream_options"], request.Body)
+	}
 }
 
 func TestEmbedMapsInputTypeAndPreservesExplicitProviderMetadata(t *testing.T) {

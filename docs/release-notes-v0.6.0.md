@@ -34,7 +34,10 @@ OpenAI-compatible Chat Completions wrapper with account placeholder resolution
 and normal bearer-token auth for the direct Workers AI endpoint. NVIDIA NIM is
 also promoted as a focused OpenAI-compatible text and embedding wrapper with
 generated metadata, direct NIM base URL defaults, request header metadata, and
-NVIDIA-specific embedding input-type mapping. Moonshot AI and Moonshot AI CN
+NVIDIA-specific embedding input-type mapping; its text metadata now also
+requests streamed usage when supported, includes focused GPT-OSS 120B and
+Nemotron 3 Ultra direct NIM rows, and can be exercised through the opt-in
+surface probe. Moonshot AI and Moonshot AI CN
 are promoted as focused OpenAI-compatible Chat Completions wrappers with
 generated K2.7 Code CN and HighSpeed metadata plus
 metadata-driven handling for K2.7 routes that reject explicit disabled thinking
@@ -123,6 +126,14 @@ sanitization.
   `input_type: "query"` and `sigma.EmbeddingInputTypeDocument` to
   `input_type: "passage"` unless callers set
   `EmbeddingRequest.ProviderMetadata["input_type"]` explicitly.
+- NVIDIA NIM text metadata now marks streaming usage as supported for the
+  direct NIM OpenAI-compatible Chat Completions rows and includes focused
+  generated rows for `openai/gpt-oss-120b` and
+  `nvidia/nemotron-3-ultra-550b-a55b`.
+- `cmd/sigma-surface-probe` now includes an opt-in `nvidia` route that uses
+  `NVIDIA_API_KEY`, the direct NIM base URL, the NVIDIA provider wrapper, and
+  `nvidia/nemotron-3-super-120b-a12b` as its default probe model when callers
+  do not pass `-models`.
 - Moonshot AI can now be registered with `moonshot.Register` or
   `moonshot.RegisterDefault`, and Moonshot AI CN can be registered with
   `moonshot.RegisterCN` or `moonshot.RegisterDefaultCN`, using the shared
@@ -217,7 +228,11 @@ sanitization.
 - NVIDIA NIM direct routing is additive and uses Sigma's existing
   OpenAI-compatible text and embedding adapters through a provider-specific
   wrapper. Endpoint overrides remain explicit through provider options or model
-  metadata; Sigma does not read `NVIDIA_BASE_URL`.
+  metadata; Sigma does not read `NVIDIA_BASE_URL`. NVIDIA-specific
+  OpenAI-compatible defaults now request streamed usage and omit unsupported
+  `store`, developer-role, reasoning-effort, and strict-tool request fields for
+  generated rows and custom NVIDIA endpoints detected by provider ID or NIM
+  host.
 - Moonshot direct routing is additive and Chat Completions-only in this
   release. The wrappers reuse the shared OpenAI-compatible adapter; broader
   live-provider coverage remains deferred until route-specific behavior needs
@@ -264,7 +279,8 @@ sanitization.
 - Cloudflare Workers AI Responses, Anthropic-compatible, image, embedding, and
   live validation routes remain deferred until each surface has deterministic
   request, stream, error, and metadata evidence.
-- Broader NVIDIA NIM live validation, embedding catalog expansion, and any
+- Broader NVIDIA NIM live validation beyond the focused surface-probe route,
+  embedding catalog expansion, additional direct NIM catalog rows, and any
   route behavior beyond the shared OpenAI-compatible adapters remain deferred
   until each surface has deterministic request, response, error, and metadata
   evidence.

@@ -305,6 +305,83 @@ func TestOpenAICompletionsCompatDetectsMoonshotShape(t *testing.T) {
 	}
 }
 
+func TestOpenAICompletionsCompatDetectsNVIDIAEndpoint(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		provider sigma.ProviderID
+		baseURL  string
+	}{
+		{name: "provider", provider: sigma.ProviderNVIDIA, baseURL: "https://custom.example/v1"},
+		{name: "host", provider: sigma.ProviderCustom, baseURL: "https://integrate.api.nvidia.com/v1"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			model := sigma.Model{
+				ID:               "nvidia-custom",
+				Provider:         tt.provider,
+				API:              sigma.APIOpenAICompletions,
+				SupportsThinking: true,
+				SupportsTools:    true,
+			}
+			req := sigma.Request{
+				SystemPrompt: "policy",
+				Messages: []sigma.Message{{
+					Role:    sigma.RoleDeveloper,
+					Content: []sigma.ContentBlock{sigma.Text("style")},
+				}},
+				Tools: []sigma.Tool{{
+					Name:             "lookup",
+					InputSchema:      sigma.Schema{"type": "object"},
+					ProviderMetadata: map[string]any{"strict": true},
+				}},
+			}
+			opts := sigma.Options{
+				MaxTokens:      compatIntPtr(99),
+				ReasoningLevel: sigma.ThinkingLevelHigh,
+				ProviderOptions: map[sigma.ProviderID]map[string]any{
+					tt.provider: {"extra_body": map[string]any{"store": true}},
+				},
+			}
+
+			payload, err := chatCompletionsPayload(model, req, opts, openAICompletionsCompat(model, tt.baseURL))
+			if err != nil {
+				t.Fatalf("chatCompletionsPayload returned error: %v", err)
+			}
+
+			if _, ok := payload["max_completion_tokens"]; ok {
+				t.Fatalf("payload used max_completion_tokens: %#v", payload)
+			}
+			if got, want := payload["max_tokens"], 99; got != want {
+				t.Fatalf("max_tokens = %v, want %v", got, want)
+			}
+			streamOptions, ok := payload["stream_options"].(map[string]any)
+			if !ok || streamOptions["include_usage"] != true {
+				t.Fatalf("stream_options = %#v, want include_usage true", payload["stream_options"])
+			}
+			if _, ok := payload["store"]; ok {
+				t.Fatalf("store = %#v, want omitted", payload["store"])
+			}
+			messages := payload["messages"].([]map[string]any)
+			if got, want := messages[1]["role"], "system"; got != want {
+				t.Fatalf("developer role = %v, want %v", got, want)
+			}
+			tools := payload["tools"].([]map[string]any)
+			function := tools[0]["function"].(map[string]any)
+			if _, ok := function["strict"]; ok {
+				t.Fatalf("strict = %#v, want omitted", function["strict"])
+			}
+			if _, ok := payload["reasoning_effort"]; ok {
+				t.Fatalf("reasoning_effort = %#v, want omitted", payload["reasoning_effort"])
+			}
+		})
+	}
+}
+
 func TestOpenAICompletionsCompatOmitsUnsupportedMoonshotDisabledThinking(t *testing.T) {
 	t.Parallel()
 

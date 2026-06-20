@@ -23,6 +23,7 @@ import (
 	"github.com/wintermi/sigma"
 	"github.com/wintermi/sigma/provider/fireworks"
 	"github.com/wintermi/sigma/provider/moonshot"
+	"github.com/wintermi/sigma/provider/nvidia"
 	"github.com/wintermi/sigma/provider/openai"
 	"github.com/wintermi/sigma/provider/opencode"
 	"github.com/wintermi/sigma/provider/xai"
@@ -187,6 +188,15 @@ var routes = map[string]routeSpec{
 		Model:            discoveredMoonshotModel,
 		Cases:            openAICompatibleProbeCases,
 	},
+	"nvidia": {
+		Name:             "nvidia",
+		Provider:         sigma.ProviderNVIDIA,
+		BaseURL:          nvidia.DefaultBaseURL,
+		APIKeyEnv:        "NVIDIA_API_KEY",
+		RegisterProvider: registerNVIDIAProvider,
+		Model:            discoveredNVIDIAModel,
+		Cases:            openAICompatibleProbeCases,
+	},
 	"xai": {
 		Name:             "xai",
 		Provider:         sigma.ProviderXAI,
@@ -201,6 +211,7 @@ var routes = map[string]routeSpec{
 const (
 	jsonTypeKey                  = "type"
 	defaultOpenAICodexProbeModel = "gpt-5.5"
+	defaultNVIDIAProbeModel      = "nvidia/nemotron-3-super-120b-a12b"
 )
 
 func main() {
@@ -270,7 +281,7 @@ func parseConfig() config {
 	var codexOAuth bool
 	var codexOAuthBrowser bool
 	var handoff bool
-	flag.StringVar(&routeList, "routes", "zen,go", "comma-separated routes: openai,openai-codex,zen,go,fireworks-openai,fireworks-anthropic,moonshot,moonshot-cn,xai")
+	flag.StringVar(&routeList, "routes", "zen,go", "comma-separated routes: openai,openai-codex,zen,go,fireworks-openai,fireworks-anthropic,moonshot,moonshot-cn,nvidia,xai")
 	flag.StringVar(&modelList, "models", "", "comma-separated model IDs to probe")
 	flag.BoolVar(&repair, "repair", false, "try targeted repair variants after a failing case")
 	flag.BoolVar(&includeUnavailable, "include-unavailable", false, "run known unavailable advertised models instead of skipping them")
@@ -384,6 +395,9 @@ func modelsForRoute(ctx context.Context, route routeSpec, credential routeCreden
 	}
 	if route.Name == "openai-codex" {
 		return []string{defaultOpenAICodexProbeModel}, nil
+	}
+	if route.Name == "nvidia" {
+		return []string{defaultNVIDIAProbeModel}, nil
 	}
 	return discoverModels(ctx, route, credential.apiKey)
 }
@@ -756,6 +770,13 @@ func registerMoonshotProvider(registry *sigma.Registry, route routeSpec) error {
 	return nil
 }
 
+func registerNVIDIAProvider(registry *sigma.Registry, route routeSpec) error {
+	if err := nvidia.Register(registry, nvidia.WithBaseURL(route.BaseURL)); err != nil {
+		return fmt.Errorf("register nvidia provider: %w", err)
+	}
+	return nil
+}
+
 func registerXAIProvider(registry *sigma.Registry, route routeSpec) error {
 	if err := xai.Register(registry, xai.WithBaseURL(route.BaseURL)); err != nil {
 		return fmt.Errorf("register xai provider: %w", err)
@@ -901,6 +922,37 @@ func discoveredMoonshotModel(route routeSpec, id string) sigma.Model {
 		model.UnsupportedThinkingLevels = []sigma.ThinkingLevel{sigma.ThinkingLevelOff}
 	}
 	return model
+}
+
+func discoveredNVIDIAModel(route routeSpec, id string) sigma.Model {
+	if model, ok := sigma.DefaultRegistry().Model(route.Provider, sigma.ModelID(id)); ok {
+		return model
+	}
+	return sigma.Model{
+		ID:               sigma.ModelID(id),
+		Provider:         route.Provider,
+		API:              sigma.APIOpenAICompletions,
+		SupportedInputs:  []sigma.ContentBlockType{sigma.ContentBlockText, sigma.ContentBlockImage},
+		SupportsTools:    true,
+		SupportsThinking: true,
+		OpenAICompletionsCompat: &sigma.OpenAICompletionsCompat{
+			SupportsStore:           sigma.OpenAICompatUnsupported,
+			SupportsDeveloperRole:   sigma.OpenAICompatUnsupported,
+			SupportsReasoningEffort: sigma.OpenAICompatUnsupported,
+			SupportsStreamingUsage:  sigma.OpenAICompatSupported,
+			SupportsStrictTools:     sigma.OpenAICompatUnsupported,
+			MaxTokensField:          sigma.OpenAICompletionsMaxTokens,
+		},
+		ProviderMetadata: map[string]any{
+			"baseURL":         route.BaseURL,
+			"apiKeyEnvVars":   []string{route.APIKeyEnv},
+			"headers":         map[string]string{"NVCF-POLL-SECONDS": "3600"},
+			"modelFamily":     modelFamily(id),
+			"probeDiscovered": true,
+			"probeRoute":      route.Name,
+			"probeSurface":    "openai-completions",
+		},
+	}
 }
 
 func discoveredFireworksOpenAIModel(route routeSpec, id string) sigma.Model {

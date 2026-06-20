@@ -41,6 +41,7 @@ Default routes are `zen,go`. All other routes must be requested explicitly.
 | `fireworks-anthropic` | Fireworks Anthropic-compatible Messages | `FIREWORKS_API_KEY` | Discovers Fireworks models |
 | `moonshot` | Moonshot AI OpenAI-compatible Chat Completions | `MOONSHOT_API_KEY` | Discovers Moonshot AI models |
 | `moonshot-cn` | Moonshot AI CN OpenAI-compatible Chat Completions | `MOONSHOT_API_KEY` | Discovers Moonshot AI CN models |
+| `nvidia` | NVIDIA NIM OpenAI-compatible Chat Completions | `NVIDIA_API_KEY` | Uses `nvidia/nemotron-3-super-120b-a12b` unless `-models` is set |
 | `xai` | xAI/Grok OpenAI-compatible Chat Completions | `XAI_API_KEY` | Discovers xAI models |
 
 ## Examples
@@ -107,6 +108,14 @@ Probe xAI/Grok with a known model:
 XAI_API_KEY=... mise run go:run -- ./cmd/sigma-surface-probe \
   -routes xai \
   -models grok-4.3 \
+  -repair
+```
+
+Probe NVIDIA NIM with the default model:
+
+```bash
+NVIDIA_API_KEY=... mise run go:run -- ./cmd/sigma-surface-probe \
+  -routes nvidia \
   -repair
 ```
 

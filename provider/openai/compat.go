@@ -119,6 +119,10 @@ func detectedCompletionsCompat(model sigma.Model, baseURL string) completionsCom
 		compat.supportsReasoningEffort = false
 		compat.supportsStreamingUsage = true
 		compat.maxTokensField = sigma.OpenAICompletionsMaxTokens
+	case provider == sigma.ProviderNVIDIA || host == "integrate.api.nvidia.com":
+		compat.supportsReasoningEffort = false
+		compat.supportsStreamingUsage = true
+		compat.maxTokensField = sigma.OpenAICompletionsMaxTokens
 	case provider == sigma.ProviderOpenCode || provider == sigma.ProviderOpenCodeGo || strings.Contains(host, "opencode.ai"):
 		compat.reasoningFormat = sigma.OpenAICompletionsReasoningEffort
 		compat.supportsStreamingUsage = true
