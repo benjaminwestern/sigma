@@ -12,8 +12,10 @@ generation, including long prompt-cache write splits, raw provider usage
 payloads for diagnostics, standalone provider/model identity on usage records,
 and a clear split between provider-reported cost and Sigma's model-metadata
 cost estimate. Mistral Conversations now also maps cache-enabled session IDs to
-prompt-cache keys and reports provider cached prompt tokens as cache reads. It
-also adds caller-owned GitHub Copilot OAuth helpers for
+prompt-cache keys, reports provider cached prompt tokens as cache reads, and
+accepts URL-backed image references for image-capable chat inputs and
+image-bearing tool results. It also adds caller-owned GitHub Copilot OAuth
+helpers for
 device-code login, token refresh, request-time credential resolution, and
 explicit model-policy enablement. Codex Responses WebSocket transport now also
 honors standard HTTP(S) proxy environment variables with `NO_PROXY` exclusions
@@ -86,6 +88,10 @@ routed model metadata, and Google legacy tool-schema sanitization.
   to `prompt_cache_key` and `x-affinity`, and streamed provider cached prompt
   token fields now populate `Usage.CacheReadInputTokens` while preserving raw
   usage payloads for diagnostics.
+- Mistral Conversations now accepts URL-backed `sigma.ImageURL` blocks in user
+  messages and tool-result messages when the target model declares image input
+  support, using the provider's `image_url` content shape without changing the
+  existing base64 image path.
 - GitHub Copilot now has stdlib-only device-code OAuth login through
   `githubcopilot.LoginGitHubCopilotDeviceCode`, Copilot token refresh through
   `githubcopilot.RefreshGitHubCopilotToken`, and an in-memory token provider
@@ -240,6 +246,10 @@ routed model metadata, and Google legacy tool-schema sanitization.
   short, long, and persistent retention enable the Mistral cache key; explicit
   `CacheRetentionNone` suppresses automatic `prompt_cache_key` and `x-affinity`
   values.
+- Mistral URL image support is additive and uses the existing
+  `sigma.ImageURL` content block. Base64 image blocks keep their existing data
+  URL encoding, and unsupported image sources continue to return explicit
+  request-conversion errors.
 - GitHub Copilot OAuth credentials remain caller-owned. Sigma does not persist
   tokens, does not automatically enable model policies after login, and does
   not change the existing GitHub Copilot request dispatch path.
@@ -353,7 +363,7 @@ routed model metadata, and Google legacy tool-schema sanitization.
 - Provider-neutral document/PDF content blocks, source ranking, citation
   rendering, and provider-specific citation UI policy remain deferred and
   caller-owned.
-- Mistral URL/file image references, built-in connector tools, append/restart
+- Mistral file image references, built-in connector tools, append/restart
   lifecycle operations, and broad catalog expansion remain deferred.
 - Full JSON Schema runtime support, including `$ref`, `pattern`, formats,
   `not`, conditionals, and implicit argument coercion, remains deferred.

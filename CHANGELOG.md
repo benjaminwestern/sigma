@@ -51,6 +51,9 @@ See [release notes](docs/release-notes-v0.6.0.md).
   to both `prompt_cache_key` and `x-affinity`, and streamed Mistral cached
   prompt tokens now populate `Usage.CacheReadInputTokens` instead of ordinary
   input tokens.
+- Mistral Conversations now accepts URL-backed `sigma.ImageURL` chat inputs and
+  image-bearing tool results for image-capable models, while preserving
+  existing base64 image payload behavior.
 - `EnvironmentAuthResolver` now exposes non-secret environment credential
   discovery helpers for ordered candidate variable names and configured
   variable names, with broader built-in API-key defaults for OpenAI-compatible

@@ -616,6 +616,18 @@ func TestConversationImagePayloads(t *testing.T) {
 			golden: "provider/mistral/conversations/image_payload.json",
 		},
 		{
+			name: "user URL image input",
+			req: sigma.Request{
+				Messages: []sigma.Message{
+					sigma.UserContent(
+						sigma.Text("Describe this image."),
+						sigma.ImageURL("image/png", "https://example.test/image.png"),
+					),
+				},
+			},
+			golden: "provider/mistral/conversations/image_url_payload.json",
+		},
+		{
 			name: "image only tool result",
 			req: sigma.Request{
 				Messages: []sigma.Message{
@@ -635,6 +647,27 @@ func TestConversationImagePayloads(t *testing.T) {
 				},
 			},
 			golden: "provider/mistral/conversations/tool_result_image_payload.json",
+		},
+		{
+			name: "URL image only tool result",
+			req: sigma.Request{
+				Messages: []sigma.Message{
+					sigma.UserText("Inspect the screenshot."),
+					{
+						Role: sigma.RoleAssistant,
+						Content: []sigma.ContentBlock{
+							sigma.ToolCallBlock("call_screenshot", "screenshot", map[string]any{"target": "screen"}),
+						},
+					},
+					{
+						Role:       sigma.RoleTool,
+						ToolCallID: "call_screenshot",
+						ToolName:   "screenshot",
+						Content:    []sigma.ContentBlock{sigma.ImageURL("image/png", "https://example.test/screenshot.png")},
+					},
+				},
+			},
+			golden: "provider/mistral/conversations/tool_result_url_image_payload.json",
 		},
 		{
 			name: "text plus image tool result",
@@ -659,6 +692,30 @@ func TestConversationImagePayloads(t *testing.T) {
 				},
 			},
 			golden: "provider/mistral/conversations/tool_result_text_image_payload.json",
+		},
+		{
+			name: "text plus URL image tool result",
+			req: sigma.Request{
+				Messages: []sigma.Message{
+					sigma.UserText("Inspect the screenshot."),
+					{
+						Role: sigma.RoleAssistant,
+						Content: []sigma.ContentBlock{
+							sigma.ToolCallBlock("call_screenshot", "screenshot", map[string]any{"target": "screen"}),
+						},
+					},
+					{
+						Role:       sigma.RoleTool,
+						ToolCallID: "call_screenshot",
+						ToolName:   "screenshot",
+						Content: []sigma.ContentBlock{
+							sigma.Text("Screenshot captured."),
+							sigma.ImageURL("image/png", "https://example.test/screenshot.png"),
+						},
+					},
+				},
+			},
+			golden: "provider/mistral/conversations/tool_result_text_url_image_payload.json",
 		},
 	}
 

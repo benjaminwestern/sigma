@@ -449,8 +449,10 @@ should still come through the catalog refresh workflow.
       results for direct Pixtral models with deterministic payload fixtures.
 - [x] Add Mistral Conversations prompt-cache keys and cached-token usage
       accounting for cache-enabled session requests.
-- [ ] Add Mistral URL/file image references only after the Conversations
-      request shape is verified and covered by deterministic payload fixtures.
+- [x] Add Mistral URL image references for image-capable Conversations models
+      with deterministic user-input and tool-result payload fixtures.
+- [ ] Add Mistral file image references only after Sigma defines an explicit
+      chat-level file-loading policy.
 - [ ] Add Mistral built-in connector tools such as web search, code interpreter,
       image generation, and document libraries after deciding how they map to
       Sigma provider-defined tools.

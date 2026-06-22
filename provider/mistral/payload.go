@@ -480,23 +480,38 @@ func conversationImage(model sigma.Model, block sigma.ContentBlock) (map[string]
 	if !model.SupportsImages() {
 		return nil, unsupportedError(model, "target model does not declare image input support")
 	}
-	if block.ImageSource != "base64" {
-		return nil, fmt.Errorf("mistral conversations: unsupported image source %q", block.ImageSource)
-	}
-	if block.Data == "" {
-		return nil, fmt.Errorf("mistral conversations: image data is required")
-	}
-	if _, err := base64.StdEncoding.DecodeString(block.Data); err != nil {
-		return nil, fmt.Errorf("mistral conversations: image data must be base64: %w", err)
-	}
-	mimeType := block.MIMEType
-	if mimeType == "" {
-		mimeType = "application/octet-stream"
+	imageURL, err := conversationImageURL(block)
+	if err != nil {
+		return nil, err
 	}
 	return map[string]any{
 		payloadKeyType: "image_url",
-		"imageUrl":     "data:" + mimeType + ";base64," + block.Data,
+		"imageUrl":     imageURL,
 	}, nil
+}
+
+func conversationImageURL(block sigma.ContentBlock) (string, error) {
+	switch block.ImageSource {
+	case "base64":
+		if block.Data == "" {
+			return "", fmt.Errorf("mistral conversations: image data is required")
+		}
+		if _, err := base64.StdEncoding.DecodeString(block.Data); err != nil {
+			return "", fmt.Errorf("mistral conversations: image data must be base64: %w", err)
+		}
+		mimeType := block.MIMEType
+		if mimeType == "" {
+			mimeType = "application/octet-stream"
+		}
+		return "data:" + mimeType + ";base64," + block.Data, nil
+	case "url":
+		if block.URL == "" {
+			return "", fmt.Errorf("mistral conversations: image URL is required")
+		}
+		return block.URL, nil
+	default:
+		return "", fmt.Errorf("mistral conversations: unsupported image source %q", block.ImageSource)
+	}
 }
 
 func textContent(blocks []sigma.ContentBlock) string {
