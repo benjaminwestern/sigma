@@ -1138,6 +1138,135 @@ func TestStreamingParsesOpenAICompatibleMetadataAndFallbackToolID(t *testing.T) 
 	}
 }
 
+func TestStreamingPreservesReasoningDetailsForToolReplay(t *testing.T) {
+	t.Parallel()
+
+	reasoningDetails := []any{
+		map[string]any{
+			"type": "reasoning.encrypted",
+			"id":   "call_1",
+			"data": "encrypted-signature",
+		},
+	}
+	detailsJSON, err := json.Marshal(reasoningDetails)
+	if err != nil {
+		t.Fatalf("Marshal reasoning details returned error: %v", err)
+	}
+
+	requests := make(chan capturedRequest, 2)
+	var requestCount int
+	var requestMu sync.Mutex
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestMu.Lock()
+		requestCount++
+		count := requestCount
+		requestMu.Unlock()
+		captureRequest(t, requests, r)
+		w.Header().Set("Content-Type", "text/event-stream")
+		switch count {
+		case 1:
+			_, _ = io.WriteString(w, `data: {"id":"chatcmpl_reasoning","model":"gpt-test","choices":[{"index":0,"delta":{"reasoning_details":`+string(detailsJSON)+`},"finish_reason":null}]}`+"\n\n")
+			_, _ = io.WriteString(w, `data: {"id":"chatcmpl_reasoning","model":"gpt-test","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"read","arguments":"{\"path\":\"README.md\"}"}}]},"finish_reason":null}]}`+"\n\n")
+			_, _ = io.WriteString(w, `data: {"id":"chatcmpl_reasoning","model":"gpt-test","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}`+"\n\n")
+			_, _ = io.WriteString(w, "data: [DONE]\n\n")
+		default:
+			_, _ = io.WriteString(w, `data: {"id":"chatcmpl_replay","model":"gpt-test","choices":[{"index":0,"delta":{"content":"ok"},"finish_reason":"stop"}]}`+"\n\n")
+			_, _ = io.WriteString(w, "data: [DONE]\n\n")
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("openai-reasoning-details-test")
+	model := openAITestModel(providerID)
+	client := openAITestClient(t, providerID, model, server.URL)
+
+	stream := client.Stream(context.Background(), model, sigma.Request{
+		Messages: []sigma.Message{sigma.UserText("read the file")},
+		Tools: []sigma.Tool{{
+			Name:        "read",
+			Description: "Read a file",
+			InputSchema: sigma.Schema{
+				"type": "object",
+				"properties": map[string]any{
+					"path": map[string]any{"type": "string"},
+				},
+			},
+		}},
+	})
+	_ = collectEvents(t, stream)
+	if err := stream.Err(); err != nil {
+		t.Fatalf("stream error = %v", err)
+	}
+	final, ok := stream.Final()
+	if !ok {
+		t.Fatal("stream final was not recorded")
+	}
+	if len(final.Content) != 1 || final.Content[0].Type != sigma.ContentBlockToolCall {
+		t.Fatalf("final content = %#v, want one tool call", final.Content)
+	}
+	details, ok := final.Content[0].ProviderMetadata["reasoning_details"].([]any)
+	if !ok {
+		t.Fatalf("reasoning_details metadata type = %T, want []any", final.Content[0].ProviderMetadata["reasoning_details"])
+	}
+	if !reflect.DeepEqual(details, reasoningDetails) {
+		t.Fatalf("reasoning_details = %#v, want %#v", details, reasoningDetails)
+	}
+	assistant := sigma.Message{
+		Role:       sigma.RoleAssistant,
+		Content:    final.Content,
+		Provider:   providerID,
+		API:        sigma.APIOpenAICompletions,
+		Model:      model.ID,
+		StopReason: final.StopReason,
+	}
+
+	_, err = client.Complete(context.Background(), model, sigma.Request{
+		Messages: []sigma.Message{
+			sigma.UserText("read the file"),
+			assistant,
+			{
+				Role:       sigma.RoleTool,
+				ToolCallID: "call_1",
+				ToolName:   "read",
+				Content:    []sigma.ContentBlock{sigma.Text("ok")},
+			},
+			sigma.UserText("continue"),
+		},
+	})
+	if err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+
+	_ = receiveRequest(t, requests)
+	replayRequest := receiveRequest(t, requests)
+	var payload struct {
+		Messages []map[string]any `json:"messages"`
+	}
+	if err := json.Unmarshal(replayRequest.Body, &payload); err != nil {
+		t.Fatalf("Unmarshal request body returned error: %v", err)
+	}
+	var replayAssistant map[string]any
+	for _, message := range payload.Messages {
+		if message["role"] == "assistant" {
+			replayAssistant = message
+			break
+		}
+	}
+	if replayAssistant == nil {
+		t.Fatal("replay payload did not include assistant message")
+	}
+	replayedDetails, ok := replayAssistant["reasoning_details"].([]any)
+	if !ok {
+		t.Fatalf("replayed reasoning_details type = %T, want []any", replayAssistant["reasoning_details"])
+	}
+	if !reflect.DeepEqual(replayedDetails, reasoningDetails) {
+		t.Fatalf("replayed reasoning_details = %#v, want %#v", replayedDetails, reasoningDetails)
+	}
+	if _, ok := replayAssistant["tool_calls"].([]any); !ok {
+		t.Fatalf("assistant tool_calls type = %T, want []any", replayAssistant["tool_calls"])
+	}
+}
+
 func TestStreamingParsesChoiceUsage(t *testing.T) {
 	t.Parallel()
 

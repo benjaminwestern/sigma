@@ -189,6 +189,9 @@ work until their API boundaries are explicit.
 - [x] Add provider-neutral source/citation result APIs over existing
       OpenAI-compatible, Anthropic, and Google metadata while keeping
       provider-specific rendering and document/PDF content blocks deferred.
+- [x] Preserve OpenAI-compatible Chat Completions `reasoning_details` metadata
+      on tool-call blocks for replay while keeping broader provider-neutral
+      reasoning-detail rendering deferred.
 - [ ] Add broader provider-neutral sampling controls such as top-p, top-k,
       seed, and penalty fields only after settling cross-provider semantics.
 - [x] Add opt-in live provider metadata/replay and pairwise handoff probes

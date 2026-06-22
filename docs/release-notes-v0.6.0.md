@@ -66,10 +66,13 @@ calls into CI. Assistant results now also expose provider-neutral source and
 citation accessors for the source metadata Sigma already captures from grounded
 and citation-bearing responses. Local tool-call validation also now evaluates
 composed JSON Schema branches so callers can reject invalid model-emitted
-arguments before running tools. The deterministic provider test suite now also
-locks Google stream `thoughtSignature` attachment, OpenAI-compatible Chat
-Completions thinking-block replay behavior, OpenAI-compatible stream error
-finish handling, and the new promoted thin provider rows, plus
+arguments before running tools. OpenAI-compatible Chat Completions streams now
+also preserve provider reasoning-detail metadata on streamed tool calls so it
+can be replayed with assistant tool-call history. The deterministic provider
+test suite now also locks Google stream `thoughtSignature` attachment,
+OpenAI-compatible Chat Completions thinking-block replay behavior,
+OpenAI-compatible stream error finish handling, and the new promoted thin
+provider rows, plus
 request-conversion guardrails for replay IDs, Chat Completions payload shape,
 routed model metadata, and Google legacy tool-schema sanitization.
 
@@ -219,6 +222,9 @@ routed model metadata, and Google legacy tool-schema sanitization.
   chunks, empty signature deltas, signature updates on existing blocks, and
   OpenAI-compatible Chat Completions replay of prior thinking blocks as
   assistant text when `reasoning_content` is not required.
+- OpenAI-compatible Chat Completions streams now preserve provider
+  `reasoning_details` metadata on tool-call blocks and replay it with
+  assistant tool-call history.
 - OpenAI-compatible Chat Completions streams now surface provider
   `finish_reason` values of `network_error` and `model_context_window_exceeded`
   as errors instead of successful unknown stops, including context-overflow

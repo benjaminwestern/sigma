@@ -287,7 +287,7 @@ func chatMessage(message sigma.Message, retention sigma.CacheRetention, compat c
 		return converted, nil
 	case sigma.RoleAssistant:
 		converted := map[string]any{"role": "assistant"}
-		text, reasoningContent, toolCalls, err := assistantContent(message.Content, compat)
+		text, reasoningContent, reasoningDetails, toolCalls, err := assistantContent(message.Content, compat)
 		if err != nil {
 			return nil, err
 		}
@@ -296,6 +296,9 @@ func chatMessage(message sigma.Message, retention sigma.CacheRetention, compat c
 		}
 		if compat.requiresReasoningContentOnAssistantMessages {
 			converted["reasoning_content"] = reasoningContent
+		}
+		if len(reasoningDetails) > 0 {
+			converted["reasoning_details"] = reasoningDetails
 		}
 		if len(toolCalls) > 0 {
 			converted["tool_calls"] = toolCalls
@@ -420,9 +423,10 @@ func imageURL(block sigma.ContentBlock) (string, error) {
 	}
 }
 
-func assistantContent(blocks []sigma.ContentBlock, compat completionsCompat) (string, string, []map[string]any, error) {
+func assistantContent(blocks []sigma.ContentBlock, compat completionsCompat) (string, string, []any, []map[string]any, error) {
 	var text strings.Builder
 	var reasoningContent strings.Builder
+	var reasoningDetails []any
 	var toolCalls []map[string]any
 	for _, block := range blocks {
 		switch block.Type {
@@ -440,8 +444,9 @@ func assistantContent(blocks []sigma.ContentBlock, compat completionsCompat) (st
 		case sigma.ContentBlockToolCall:
 			arguments, err := toolArgumentsString(block.ToolArguments)
 			if err != nil {
-				return "", "", nil, err
+				return "", "", nil, nil, err
 			}
+			reasoningDetails = appendReasoningDetails(reasoningDetails, block.ProviderMetadata)
 			toolCalls = append(toolCalls, map[string]any{
 				"id":                      chatToolCallID(block.ToolCallID),
 				providerToolOptionTypeKey: "function",
@@ -451,10 +456,26 @@ func assistantContent(blocks []sigma.ContentBlock, compat completionsCompat) (st
 				},
 			})
 		default:
-			return "", "", nil, fmt.Errorf("openai completions: unsupported assistant content block %q", block.Type)
+			return "", "", nil, nil, fmt.Errorf("openai completions: unsupported assistant content block %q", block.Type)
 		}
 	}
-	return text.String(), reasoningContent.String(), toolCalls, nil
+	return text.String(), reasoningContent.String(), reasoningDetails, toolCalls, nil
+}
+
+func appendReasoningDetails(details []any, metadata map[string]any) []any {
+	value, ok := metadata["reasoning_details"]
+	if !ok {
+		return details
+	}
+	switch typed := value.(type) {
+	case []any:
+		return append(details, typed...)
+	case []map[string]any:
+		for _, item := range typed {
+			details = append(details, item)
+		}
+	}
+	return details
 }
 
 func chatToolCallID(raw string) string {

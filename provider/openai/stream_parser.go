@@ -42,6 +42,7 @@ type streamDelta struct {
 	ReasoningContent *string               `json:"reasoning_content"`
 	Reasoning        *string               `json:"reasoning"`
 	ReasoningText    *string               `json:"reasoning_text"`
+	ReasoningDetails json.RawMessage       `json:"reasoning_details"`
 	Thinking         *string               `json:"thinking"`
 	ToolCalls        []streamToolCallDelta `json:"tool_calls"`
 	Annotations      []streamAnnotation    `json:"annotations"`
@@ -99,20 +100,21 @@ type streamURLCitation struct {
 }
 
 type completionStreamParser struct {
-	writer        sigma.StreamWriter
-	model         sigma.Model
-	final         sigma.AssistantMessage
-	started       bool
-	text          *streamblocks.Text
-	thinking      *streamblocks.Thinking
-	toolCalls     map[int]*streamblocks.ToolCall
-	nextBlock     int
-	usage         *sigma.Usage
-	finishReason  sigma.StopReason
-	responseID    string
-	providerModel string
-	metadata      map[string]any
-	sources       []map[string]any
+	writer           sigma.StreamWriter
+	model            sigma.Model
+	final            sigma.AssistantMessage
+	started          bool
+	text             *streamblocks.Text
+	thinking         *streamblocks.Thinking
+	toolCalls        map[int]*streamblocks.ToolCall
+	nextBlock        int
+	usage            *sigma.Usage
+	finishReason     sigma.StopReason
+	responseID       string
+	providerModel    string
+	metadata         map[string]any
+	sources          []map[string]any
+	reasoningDetails []any
 }
 
 func parseCompletionsStream(ctx context.Context, r io.Reader, writer sigma.StreamWriter, model sigma.Model) (sigma.AssistantMessage, error) {
@@ -236,6 +238,13 @@ func (p *completionStreamParser) handleDelta(ctx context.Context, delta streamDe
 			return err
 		}
 	}
+	if len(delta.ReasoningDetails) > 0 && !bytes.Equal(bytes.TrimSpace(delta.ReasoningDetails), []byte("null")) {
+		details, err := parseReasoningDetails(delta.ReasoningDetails)
+		if err != nil {
+			return err
+		}
+		p.reasoningDetails = append(p.reasoningDetails, details...)
+	}
 	if len(delta.Content) > 0 {
 		text, ok, err := streamContentText(delta.Content)
 		if err != nil {
@@ -336,6 +345,13 @@ func (p *completionStreamParser) emitToolCall(ctx context.Context, providerIndex
 	if state.ID() == "" && delta.ID == "" && delta.Function.Name != "" {
 		state.SetID(fmt.Sprintf("call_%d", providerIndex))
 	}
+	if len(p.reasoningDetails) > 0 {
+		if state.ProviderMetadata == nil {
+			state.ProviderMetadata = make(map[string]any)
+		}
+		state.ProviderMetadata["reasoning_details"] = append([]any(nil), p.reasoningDetails...)
+		p.reasoningDetails = nil
+	}
 	state.SetID(delta.ID)
 	state.SetName(delta.Function.Name)
 	state.AppendArguments(delta.Function.Arguments)
@@ -384,7 +400,10 @@ func (p *completionStreamParser) finalize(ctx context.Context) sigma.AssistantMe
 	}
 	for _, state := range p.sortedToolCalls() {
 		call := state.ToolCall()
-		contentByIndex[state.ContentIndex] = sigma.ToolCallBlock(call.ID, call.Name, call.Arguments)
+		block := sigma.ToolCallBlock(call.ID, call.Name, call.Arguments)
+		block.ProviderSignature = call.ProviderSignature
+		block.ProviderMetadata = call.ProviderMetadata
+		contentByIndex[state.ContentIndex] = block
 		if !state.Closed {
 			_ = p.writer.Emit(ctx, sigma.Event{
 				Kind:         sigma.EventKindToolCallEnd,
@@ -538,6 +557,14 @@ func (p *completionStreamParser) responseMetadata() map[string]any {
 		metadata["sources"] = sources
 	}
 	return metadata
+}
+
+func parseReasoningDetails(raw json.RawMessage) ([]any, error) {
+	var details []any
+	if err := json.Unmarshal(raw, &details); err != nil {
+		return nil, fmt.Errorf("openai completions: decode reasoning_details: %w", err)
+	}
+	return details, nil
 }
 
 func streamContentText(raw json.RawMessage) (string, bool, error) {
