@@ -37,7 +37,7 @@ func chatCompletionsPayload(model sigma.Model, req sigma.Request, opts sigma.Opt
 	if err != nil {
 		return nil, err
 	}
-	if err := validateReasoningLevel(model, opts); err != nil {
+	if err := validateReasoningLevel(model, opts, compat); err != nil {
 		return nil, err
 	}
 	if err := validateChatToolChoice(model, opts, compat); err != nil {
@@ -120,8 +120,11 @@ func openAIToolChoiceRequired(value any) bool {
 	}
 }
 
-func validateReasoningLevel(model sigma.Model, opts sigma.Options) error {
+func validateReasoningLevel(model sigma.Model, opts sigma.Options, compat completionsCompat) error {
 	if opts.ReasoningLevel == "" {
+		return nil
+	}
+	if compat.reasoningFormat == sigma.OpenAICompletionsReasoningAntLing {
 		return nil
 	}
 	if model.SupportsThinkingLevel(opts.ReasoningLevel) {
@@ -137,7 +140,8 @@ func validateReasoningLevel(model sigma.Model, opts sigma.Options) error {
 }
 
 func addChatPromptCache(payload map[string]any, opts sigma.Options, compat completionsCompat) {
-	if compat.cacheControlFormat == sigma.OpenAICompletionsCacheControlAnthropic {
+	if compat.cacheControlFormat == sigma.OpenAICompletionsCacheControlAnthropic ||
+		compat.cacheControlFormat == sigma.OpenAICompletionsCacheControlUnsupported {
 		return
 	}
 	addOpenAIPromptCache(payload, opts)
@@ -183,7 +187,8 @@ func addChatOpenAIOptions(payload map[string]any, opts sigma.Options, compat com
 	if opts.OpenAIOptions.ServiceTier != "" {
 		payload["service_tier"] = opts.OpenAIOptions.ServiceTier
 	}
-	if opts.OpenAIOptions.PromptCacheRetention != "" {
+	if opts.OpenAIOptions.PromptCacheRetention != "" &&
+		compat.cacheControlFormat != sigma.OpenAICompletionsCacheControlUnsupported {
 		payload["prompt_cache_retention"] = opts.OpenAIOptions.PromptCacheRetention
 	}
 }
@@ -729,10 +734,11 @@ func addZAIReasoning(payload map[string]any, model sigma.Model, opts sigma.Optio
 }
 
 func addAntLingReasoning(payload map[string]any, model sigma.Model, opts sigma.Options) {
-	if !model.SupportsReasoning() {
+	level := requestedReasoningLevel(opts)
+	if level == "" || level == sigma.ThinkingLevelOff || len(model.ThinkingLevelMap) == 0 {
 		return
 	}
-	if effort := reasoningEffort(model, opts); effort != "" {
+	if effort, ok := model.ThinkingLevelMap[level]; ok && effort != "" {
 		payload["reasoning"] = map[string]any{"effort": effort}
 	}
 }

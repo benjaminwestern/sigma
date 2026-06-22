@@ -44,23 +44,25 @@ metadata-driven handling for K2.7 routes that reject explicit disabled thinking
 payloads. Z.ai and Z.ai Coding CN are also promoted as focused
 OpenAI-compatible Chat Completions
 wrappers with generated GLM metadata, GLM-5.2 reasoning-effort mapping, and
-deterministic registration and request coverage. DeepSeek, Groq, Cerebras, and
-Together are promoted as focused OpenAI-compatible Chat Completions wrappers
-that reuse the existing generated metadata and shared adapter with
-deterministic registration, request, error, and cancellation coverage. The
-surface probe command adds a credential-gated cross-provider handoff diagnostic
-for replaying small tool-call contexts across selected live routes without
-moving live provider calls into CI. Assistant results now also expose
-provider-neutral source and citation accessors for the source metadata Sigma
-already captures from grounded and citation-bearing responses. Local tool-call
-validation also now evaluates composed JSON Schema branches so callers can
-reject invalid model-emitted arguments before running tools. The deterministic
-provider test suite now also locks Google stream `thoughtSignature` attachment,
-OpenAI-compatible Chat Completions thinking-block replay behavior,
-OpenAI-compatible stream error finish handling, and the new promoted thin
-provider rows, plus request-conversion guardrails for replay IDs, Chat
-Completions payload shape, routed model metadata, and Google legacy tool-schema
-sanitization.
+deterministic registration and request coverage. Ant Ling is promoted as a
+focused OpenAI-compatible Chat Completions wrapper with generated Ling/Ring
+metadata reuse, Ant Ling reasoning-object compatibility, and deterministic
+registration and request coverage. DeepSeek, Groq, Cerebras, and Together are
+promoted as focused OpenAI-compatible Chat Completions wrappers that reuse the
+existing generated metadata and shared adapter with deterministic registration,
+request, error, and cancellation coverage. The surface probe command adds a
+credential-gated cross-provider handoff diagnostic for replaying small
+tool-call contexts across selected live routes without moving live provider
+calls into CI. Assistant results now also expose provider-neutral source and
+citation accessors for the source metadata Sigma already captures from grounded
+and citation-bearing responses. Local tool-call validation also now evaluates
+composed JSON Schema branches so callers can reject invalid model-emitted
+arguments before running tools. The deterministic provider test suite now also
+locks Google stream `thoughtSignature` attachment, OpenAI-compatible Chat
+Completions thinking-block replay behavior, OpenAI-compatible stream error
+finish handling, and the new promoted thin provider rows, plus
+request-conversion guardrails for replay IDs, Chat Completions payload shape,
+routed model metadata, and Google legacy tool-schema sanitization.
 
 ## Added
 
@@ -160,6 +162,15 @@ sanitization.
   GLM-family metadata, `tool_stream` support, and provider-specific reasoning
   effort mapping that can enable thinking while omitting `reasoning_effort` for
   minimal reasoning.
+- Ant Ling can now be registered with `antling.Register` or
+  `antling.RegisterDefault`, using the shared OpenAI-compatible Chat
+  Completions adapter with direct base URL defaults, `ANT_LING_API_KEY`
+  credential discovery, generated Ling/Ring metadata, and deterministic
+  registration/request coverage.
+- Ant Ling OpenAI-compatible requests now use the generated compatibility
+  metadata or detected Ant Ling host shape to send `max_tokens`, omit
+  unsupported prompt-cache fields, and map supported Ring reasoning levels to
+  `reasoning: {"effort": ...}` without sending `reasoning_effort`.
 - DeepSeek, Groq, Cerebras, and Together can now be registered with their
   provider-local `Register` or `RegisterDefault` helpers, using the shared
   OpenAI-compatible Chat Completions adapter with direct base URL defaults,
@@ -254,6 +265,10 @@ sanitization.
   Z.ai and Z.ai Coding CN wrappers reuse the shared OpenAI-compatible adapter;
   broader live-provider coverage remains deferred until route-specific behavior
   needs independent fixtures.
+- Ant Ling direct routing is additive and Chat Completions-only in this
+  release. The wrapper reuses the shared OpenAI-compatible adapter and existing
+  generated metadata; broader live-provider coverage remains deferred until
+  route-specific behavior needs independent fixtures.
 - DeepSeek, Groq, Cerebras, and Together direct routing is additive and Chat
   Completions-only in this release. The wrappers reuse the shared
   OpenAI-compatible adapter and existing generated metadata; Sigma does not add

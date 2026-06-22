@@ -12,6 +12,10 @@ See [release notes](docs/release-notes-v0.6.0.md).
 
 ### Added
 
+- Ant Ling now has a first-class OpenAI-compatible Chat Completions provider
+  wrapper, including base URL defaults, bearer auth, generated Ling/Ring
+  metadata reuse, Ant Ling reasoning-object compatibility, and deterministic
+  registration/request coverage.
 - Z.ai and Z.ai Coding CN now have first-class OpenAI-compatible Chat
   Completions provider wrappers, including base URL defaults, bearer auth, API-key
   discovery, and deterministic registration/request coverage.

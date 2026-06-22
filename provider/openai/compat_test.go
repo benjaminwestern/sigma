@@ -650,6 +650,55 @@ func TestOpenAICompletionsCompatDetectsXAIReasoningUnsupported(t *testing.T) {
 	goldentest.AssertNoJSONPath(t, payload, "reasoning_effort")
 }
 
+func TestOpenAICompletionsCompatDetectsAntLingEndpoint(t *testing.T) {
+	t.Parallel()
+
+	model := sigma.Model{
+		ID:               "Ring-2.6-1T",
+		Provider:         sigma.ProviderCustom,
+		API:              sigma.APIOpenAICompletions,
+		SupportsThinking: true,
+		ThinkingLevelMap: map[sigma.ThinkingLevel]string{
+			sigma.ThinkingLevelHigh: "high",
+		},
+	}
+	payload, err := chatCompletionsPayload(
+		model,
+		sigma.Request{Messages: []sigma.Message{sigma.UserText("think")}},
+		sigma.Options{
+			MaxTokens:      compatIntPtr(99),
+			ReasoningLevel: sigma.ThinkingLevelHigh,
+			CacheRetention: sigma.CacheRetentionLong,
+			SessionID:      "ant-ling-session",
+			OpenAIOptions: &sigma.OpenAIOptions{
+				PromptCacheRetention: "24h",
+			},
+			ProviderOptions: map[sigma.ProviderID]map[string]any{
+				sigma.ProviderCustom: {"extra_body": map[string]any{"store": true}},
+			},
+		},
+		openAICompletionsCompat(model, "https://api.ant-ling.com/v1"),
+	)
+	if err != nil {
+		t.Fatalf("chatCompletionsPayload returned error: %v", err)
+	}
+	if got, want := payload["max_tokens"], 99; got != want {
+		t.Fatalf("max_tokens = %v, want %v", got, want)
+	}
+	reasoning, ok := payload["reasoning"].(map[string]any)
+	if !ok {
+		t.Fatalf("reasoning = %#v, want object", payload["reasoning"])
+	}
+	if got, want := reasoning["effort"], "high"; got != want {
+		t.Fatalf("reasoning effort = %v, want %v", got, want)
+	}
+	goldentest.AssertNoJSONPath(t, payload, "max_completion_tokens")
+	goldentest.AssertNoJSONPath(t, payload, "reasoning_effort")
+	goldentest.AssertNoJSONPath(t, payload, "store")
+	goldentest.AssertNoJSONPath(t, payload, "prompt_cache_key")
+	goldentest.AssertNoJSONPath(t, payload, "prompt_cache_retention")
+}
+
 func TestOpenAICompletionsCompatDetectsOpenCodeEndpoint(t *testing.T) {
 	t.Parallel()
 

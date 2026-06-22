@@ -239,7 +239,7 @@ metadata-only and backed by compatibility checks.
 - [ ] Z.ai and Z.ai Coding CN — add broader live-provider fixture coverage for
       streaming, tools, usage, redaction, and cancellation if the providers need
       behavior beyond the shared OpenAI-compatible adapter.
-- [ ] Ant Ling — promote to a first-class provider row with fixtures.
+- [x] Ant Ling — promote to a first-class provider row with fixtures.
 - [x] Moonshot AI and Moonshot AI CN — promote to first-class provider rows
       with fixtures.
 - [ ] Moonshot AI and Moonshot AI CN — add broader live-provider fixture

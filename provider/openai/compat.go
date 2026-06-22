@@ -137,6 +137,10 @@ func detectedCompletionsCompat(model sigma.Model, baseURL string) completionsCom
 		compat.supportsStrictTools = true
 		compat.supportsRequiredToolChoice = true
 		compat.maxTokensField = sigma.OpenAICompletionsMaxCompletionTokens
+	case provider == sigma.ProviderAntLing || host == "api.ant-ling.com":
+		compat.reasoningFormat = sigma.OpenAICompletionsReasoningAntLing
+		compat.supportsReasoningEffort = false
+		compat.maxTokensField = sigma.OpenAICompletionsMaxTokens
 	case providerText == "z.ai" || providerText == "zai" || strings.Contains(host, "z.ai"):
 	case providerText == "cloudflare" || strings.Contains(host, "workers-ai") || strings.Contains(host, "cloudflare.com"):
 	case strings.Contains(host, "ai-gateway.vercel.sh") || strings.Contains(host, "gateway.ai.vercel.com"):
