@@ -84,7 +84,10 @@ OpenAI-compatible Chat Completions thinking-block replay behavior,
 OpenAI-compatible stream error finish handling, OpenAI Responses terminal
 stream handling, and the new promoted thin provider rows, plus
 request-conversion guardrails for replay IDs, Chat Completions payload shape,
-routed model metadata, and Google legacy tool-schema sanitization.
+routed model metadata, and Google legacy tool-schema sanitization. The model
+metadata generator can now also compare the checked-in catalog with a validated
+candidate catalog and print a deterministic added/removed/changed report
+without writing generated files.
 
 ## Added
 
@@ -175,6 +178,10 @@ routed model metadata, and Google legacy tool-schema sanitization.
 - `cmd/sigma-generate-models -validate-nvidia-live` now fetches NVIDIA NIM
   `/models` on demand and reports direct text catalog rows that need review
   without changing the default offline generation path.
+- `cmd/sigma-generate-models -diff-catalog` now compares the checked-in
+  catalog with a validated candidate catalog and prints deterministic added,
+  removed, changed, and unchanged counts for text, image, and embedding rows
+  without writing generated files.
 - `cmd/sigma-surface-probe` now includes an opt-in `nvidia` route that uses
   `NVIDIA_API_KEY`, the direct NIM base URL, the NVIDIA provider wrapper, and
   `nvidia/nemotron-3-super-120b-a12b` as its default probe model when callers

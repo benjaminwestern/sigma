@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"go/format"
 	"os"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -32,6 +33,7 @@ func main() {
 	var modelsPath string
 	var imageModelsPath string
 	var embeddingModelsPath string
+	var diffCatalogPath string
 	var report bool
 	var validateNVIDIALive bool
 
@@ -39,6 +41,7 @@ func main() {
 	flag.StringVar(&modelsPath, "models", "models_generated.go", "generated text model Go file")
 	flag.StringVar(&imageModelsPath, "image-models", "image_models_generated.go", "generated image model Go file")
 	flag.StringVar(&embeddingModelsPath, "embedding-models", "embedding_models_generated.go", "generated embedding model Go file")
+	flag.StringVar(&diffCatalogPath, "diff-catalog", "", "validated candidate catalog JSON to compare without generating files")
 	flag.BoolVar(&report, "report", false, "print a deterministic catalog summary")
 	flag.BoolVar(&validateNVIDIALive, "validate-nvidia-live", false, "fetch NVIDIA NIM /models and report direct text catalog drift")
 	flag.Parse()
@@ -46,6 +49,14 @@ func main() {
 	catalog, err := modeldata.Load(inputPath)
 	if err != nil {
 		fatalf("load catalog: %v", err)
+	}
+	if diffCatalogPath != "" {
+		candidate, err := modeldata.Load(diffCatalogPath)
+		if err != nil {
+			fatalf("load diff catalog: %v", err)
+		}
+		fmt.Print(renderCatalogDiff(catalog, candidate))
+		return
 	}
 	if validateNVIDIALive {
 		output, err := renderNVIDIALiveValidation(catalog, true, fetchNVIDIALiveModelIDs)
@@ -140,6 +151,19 @@ type catalogReportBucket struct {
 	Count    int
 }
 
+type catalogDiffRow struct {
+	Key    string
+	Fields []string
+}
+
+type catalogDiffSection struct {
+	Title     string
+	Added     []string
+	Removed   []string
+	Changed   []catalogDiffRow
+	Unchanged int
+}
+
 func renderCatalogReport(catalog modeldata.Catalog) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Catalog snapshot: %s\n", catalog.SnapshotDate)
@@ -148,6 +172,188 @@ func renderCatalogReport(catalog modeldata.Catalog) string {
 	writeCatalogReportSection(&b, "Image models", imageCatalogBuckets(catalog.ImageModels))
 	writeCatalogReportSection(&b, "Embedding models", embeddingCatalogBuckets(catalog.EmbeddingModels))
 	return b.String()
+}
+
+func renderCatalogDiff(base, candidate modeldata.Catalog) string {
+	sections := []catalogDiffSection{
+		diffCatalogRows(
+			"Text models",
+			base.TextModels,
+			candidate.TextModels,
+			textCatalogDiffKey,
+			textCatalogChangedFields,
+		),
+		diffCatalogRows(
+			"Image models",
+			base.ImageModels,
+			candidate.ImageModels,
+			imageCatalogDiffKey,
+			imageCatalogChangedFields,
+		),
+		diffCatalogRows(
+			"Embedding models",
+			base.EmbeddingModels,
+			candidate.EmbeddingModels,
+			embeddingCatalogDiffKey,
+			embeddingCatalogChangedFields,
+		),
+	}
+
+	var b strings.Builder
+	fmt.Fprintf(&b, "Catalog diff: %s -> %s\n", base.SnapshotDate, candidate.SnapshotDate)
+	for _, section := range sections {
+		writeCatalogDiffSection(&b, section)
+	}
+	return b.String()
+}
+
+func diffCatalogRows[T any](
+	title string,
+	baseRows []T,
+	candidateRows []T,
+	key func(T) string,
+	changedFields func(T, T) []string,
+) catalogDiffSection {
+	baseByKey := make(map[string]T, len(baseRows))
+	candidateByKey := make(map[string]T, len(candidateRows))
+	for _, row := range baseRows {
+		baseByKey[key(row)] = row
+	}
+	for _, row := range candidateRows {
+		candidateByKey[key(row)] = row
+	}
+
+	section := catalogDiffSection{Title: title}
+	for _, rowKey := range sortedMapKeys(candidateByKey) {
+		candidateRow := candidateByKey[rowKey]
+		baseRow, ok := baseByKey[rowKey]
+		if !ok {
+			section.Added = append(section.Added, rowKey)
+			continue
+		}
+		fields := changedFields(baseRow, candidateRow)
+		if len(fields) == 0 {
+			section.Unchanged++
+			continue
+		}
+		section.Changed = append(section.Changed, catalogDiffRow{Key: rowKey, Fields: fields})
+	}
+	for _, rowKey := range sortedMapKeys(baseByKey) {
+		if _, ok := candidateByKey[rowKey]; !ok {
+			section.Removed = append(section.Removed, rowKey)
+		}
+	}
+	return section
+}
+
+func writeCatalogDiffSection(b *strings.Builder, section catalogDiffSection) {
+	fmt.Fprintf(
+		b,
+		"%s: added %d, removed %d, changed %d, unchanged %d\n",
+		section.Title,
+		len(section.Added),
+		len(section.Removed),
+		len(section.Changed),
+		section.Unchanged,
+	)
+	writeCatalogDiffKeyList(b, "Added", "+", section.Added)
+	writeCatalogDiffKeyList(b, "Removed", "-", section.Removed)
+	if len(section.Changed) == 0 {
+		return
+	}
+	b.WriteString("  Changed:\n")
+	for _, row := range section.Changed {
+		fmt.Fprintf(b, "    ~ %s: %s\n", row.Key, strings.Join(row.Fields, ", "))
+	}
+}
+
+func writeCatalogDiffKeyList(b *strings.Builder, title, marker string, keys []string) {
+	if len(keys) == 0 {
+		return
+	}
+	fmt.Fprintf(b, "  %s:\n", title)
+	for _, key := range keys {
+		fmt.Fprintf(b, "    %s %s\n", marker, key)
+	}
+}
+
+func textCatalogDiffKey(model modeldata.TextModel) string {
+	return catalogDiffKey(model.Provider, model.API, model.ID)
+}
+
+func imageCatalogDiffKey(model modeldata.ImageModel) string {
+	return catalogDiffKey(model.Provider, model.API, model.ID)
+}
+
+func embeddingCatalogDiffKey(model modeldata.EmbeddingModel) string {
+	return catalogDiffKey(model.Provider, model.API, model.ID)
+}
+
+func catalogDiffKey(provider, api, id string) string {
+	return provider + " / " + api + " / " + id
+}
+
+func textCatalogChangedFields(base, candidate modeldata.TextModel) []string {
+	var fields []string
+	appendChangedField(&fields, "name", base.Name, candidate.Name)
+	appendChangedField(&fields, "baseURL", base.BaseURL, candidate.BaseURL)
+	appendChangedField(&fields, "supportedInputs", base.SupportedInputs, candidate.SupportedInputs)
+	appendChangedField(&fields, "supportsTools", base.SupportsTools, candidate.SupportsTools)
+	appendChangedField(&fields, "supportsThinking", base.SupportsThinking, candidate.SupportsThinking)
+	appendChangedField(&fields, "thinkingLevels", base.ThinkingLevels, candidate.ThinkingLevels)
+	appendChangedField(&fields, "thinkingLevelMap", base.ThinkingLevelMap, candidate.ThinkingLevelMap)
+	appendChangedField(&fields, "unsupportedThinkingLevels", base.UnsupportedThinkingLevels, candidate.UnsupportedThinkingLevels)
+	appendChangedField(&fields, "cost", base.Cost, candidate.Cost)
+	appendChangedField(&fields, "contextWindow", base.ContextWindow, candidate.ContextWindow)
+	appendChangedField(&fields, "maxOutputTokens", base.MaxOutputTokens, candidate.MaxOutputTokens)
+	appendChangedField(&fields, "headers", base.Headers, candidate.Headers)
+	appendChangedField(&fields, "authEnvNames", base.AuthEnvNames, candidate.AuthEnvNames)
+	appendChangedField(&fields, "defaultTransport", base.DefaultTransport, candidate.DefaultTransport)
+	appendChangedField(&fields, "openAICompletionsCompat", base.OpenAICompletionsCompat, candidate.OpenAICompletionsCompat)
+	appendChangedField(&fields, "anthropicMessagesCompat", base.AnthropicMessagesCompat, candidate.AnthropicMessagesCompat)
+	appendChangedField(&fields, "azureOpenAIResponses", base.AzureOpenAIResponses, candidate.AzureOpenAIResponses)
+	appendChangedField(&fields, "openAICodexResponses", base.OpenAICodexResponses, candidate.OpenAICodexResponses)
+	appendChangedField(&fields, "providerMetadata", base.ProviderMetadata, candidate.ProviderMetadata)
+	return fields
+}
+
+func imageCatalogChangedFields(base, candidate modeldata.ImageModel) []string {
+	var fields []string
+	appendChangedField(&fields, "name", base.Name, candidate.Name)
+	appendChangedField(&fields, "baseURL", base.BaseURL, candidate.BaseURL)
+	appendChangedField(&fields, "maxWidth", base.MaxWidth, candidate.MaxWidth)
+	appendChangedField(&fields, "maxHeight", base.MaxHeight, candidate.MaxHeight)
+	appendChangedField(&fields, "supportedSizes", base.SupportedSizes, candidate.SupportedSizes)
+	appendChangedField(&fields, "supportedFormats", base.SupportedFormats, candidate.SupportedFormats)
+	appendChangedField(&fields, "cost", base.Cost, candidate.Cost)
+	appendChangedField(&fields, "headers", base.Headers, candidate.Headers)
+	appendChangedField(&fields, "authEnvNames", base.AuthEnvNames, candidate.AuthEnvNames)
+	appendChangedField(&fields, "providerMetadata", base.ProviderMetadata, candidate.ProviderMetadata)
+	return fields
+}
+
+func embeddingCatalogChangedFields(base, candidate modeldata.EmbeddingModel) []string {
+	var fields []string
+	appendChangedField(&fields, "name", base.Name, candidate.Name)
+	appendChangedField(&fields, "baseURL", base.BaseURL, candidate.BaseURL)
+	appendChangedField(&fields, "defaultDimensions", base.DefaultDimensions, candidate.DefaultDimensions)
+	appendChangedField(&fields, "minDimensions", base.MinDimensions, candidate.MinDimensions)
+	appendChangedField(&fields, "maxDimensions", base.MaxDimensions, candidate.MaxDimensions)
+	appendChangedField(&fields, "maxInputTokens", base.MaxInputTokens, candidate.MaxInputTokens)
+	appendChangedField(&fields, "maxBatchInputs", base.MaxBatchInputs, candidate.MaxBatchInputs)
+	appendChangedField(&fields, "maxBatchBytes", base.MaxBatchBytes, candidate.MaxBatchBytes)
+	appendChangedField(&fields, "inputCostPerMillion", base.InputCostPerMillion, candidate.InputCostPerMillion)
+	appendChangedField(&fields, "currency", base.Currency, candidate.Currency)
+	appendChangedField(&fields, "headers", base.Headers, candidate.Headers)
+	appendChangedField(&fields, "authEnvNames", base.AuthEnvNames, candidate.AuthEnvNames)
+	appendChangedField(&fields, "providerMetadata", base.ProviderMetadata, candidate.ProviderMetadata)
+	return fields
+}
+
+func appendChangedField(fields *[]string, name string, base, candidate any) {
+	if !reflect.DeepEqual(base, candidate) {
+		*fields = append(*fields, name)
+	}
 }
 
 func writeTextCatalogReport(b *strings.Builder, models []modeldata.TextModel) {

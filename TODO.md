@@ -345,9 +345,9 @@ upstream.
       `models.dev` for broad text model discovery, provider APIs for surfaces
       not covered there, and hand-curated overrides for known endpoint behavior
       mismatches.
-- [ ] Extend the local summary into a candidate refresh diff report that lists
-      added, removed, changed, skipped, and overridden models by provider so
-      catalog review is tractable.
+- [x] Extend the local summary into a candidate catalog diff report that lists
+      added, removed, changed, and unchanged text, image, and embedding rows so
+      catalog review is tractable before generated files are written.
 - [ ] Expand broad OpenRouter text metadata only through the catalog refresh
       workflow, with deterministic diffs and reviewable routing/cost changes
       instead of ad hoc catalog imports.
