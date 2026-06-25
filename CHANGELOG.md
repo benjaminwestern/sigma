@@ -147,6 +147,9 @@ See [release notes](docs/release-notes-v0.6.0.md).
   `finish_reason` values of `network_error` and `model_context_window_exceeded`
   as errors instead of successful unknown stops, preserving context-overflow
   classification for the latter.
+- OpenAI-compatible Chat Completions streams now use the first non-empty
+  reasoning alias from each delta and require a terminal `finish_reason` before
+  treating stream EOF as a successful completion.
 
 ## [0.5.0] - 2026-06-13
 

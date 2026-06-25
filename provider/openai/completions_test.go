@@ -969,6 +969,82 @@ func TestChatCompletionsStreamingParsesReasoningText(t *testing.T) {
 	}
 }
 
+func TestChatCompletionsStreamingUsesFirstReasoningAlias(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, `data: {"choices":[{"index":0,"delta":{"reasoning_content":"Check ","reasoning":"Check ","reasoning_text":"Check ","thinking":"Check "},"finish_reason":null}]}`+"\n\n")
+		_, _ = io.WriteString(w, `data: {"choices":[{"index":0,"delta":{"content":"Done"},"finish_reason":"stop"}]}`+"\n\n")
+		_, _ = io.WriteString(w, "data: [DONE]\n\n")
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("openai-reasoning-alias-test")
+	model := openAITestModel(providerID)
+	client := openAITestClient(t, providerID, model, server.URL)
+
+	stream := client.Stream(context.Background(), model, sigma.Request{Messages: []sigma.Message{sigma.UserText("hi")}})
+	events := collectEvents(t, stream)
+	if err := stream.Err(); err != nil {
+		t.Fatalf("stream error = %v", err)
+	}
+	final, ok := stream.Final()
+	if !ok {
+		t.Fatal("stream final was not recorded")
+	}
+	if got, want := final.Content[0].ThinkingText, "Check "; got != want {
+		t.Fatalf("thinking = %q, want %q", got, want)
+	}
+
+	var thinkingDeltas int
+	for _, event := range events {
+		if event.Kind == sigma.EventKindThinkingDelta {
+			thinkingDeltas++
+		}
+	}
+	if got, want := thinkingDeltas, 1; got != want {
+		t.Fatalf("thinking delta count = %d, want %d", got, want)
+	}
+}
+
+func TestChatCompletionsStreamingRequiresFinishReason(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, `data: {"choices":[{"index":0,"delta":{"content":"partial"},"finish_reason":null}],"usage":{"prompt_tokens":10,"completion_tokens":3,"total_tokens":13}}`+"\n\n")
+		_, _ = io.WriteString(w, "data: [DONE]\n\n")
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("openai-missing-finish-reason-test")
+	model := openAITestModel(providerID)
+	client := openAITestClient(t, providerID, model, server.URL)
+
+	final, err := sigma.Collect(context.Background(), client.Stream(context.Background(), model, sigma.Request{
+		Messages: []sigma.Message{sigma.UserText("hi")},
+	}))
+	if err == nil {
+		t.Fatal("Collect returned nil error")
+	}
+	if !strings.Contains(err.Error(), "stream ended without finish_reason") {
+		t.Fatalf("Collect error = %v, want missing finish_reason", err)
+	}
+	if got, want := final.StopReason, sigma.StopReasonError; got != want {
+		t.Fatalf("stop reason = %q, want %q", got, want)
+	}
+	if got, want := final.Content[0].Text, "partial"; got != want {
+		t.Fatalf("partial text = %q, want %q", got, want)
+	}
+	if final.Usage == nil {
+		t.Fatal("usage = nil, want provider usage preserved")
+	}
+	if got, want := final.Usage.TotalTokens, 13; got != want {
+		t.Fatalf("total tokens = %d, want %d", got, want)
+	}
+}
+
 func TestChatCompletionsRejectsProviderDefinedTools(t *testing.T) {
 	t.Parallel()
 

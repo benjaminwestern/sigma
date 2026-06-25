@@ -128,6 +128,9 @@ integrations remain future work until they have the same local evidence bar.
       disabled types instead of the legacy `enable_thinking` toggle.
 - [x] Add GLM-5.2 Z.ai reasoning-effort metadata and surface
       OpenAI-compatible provider finish reasons that indicate upstream errors.
+- [x] Harden OpenAI-compatible Chat Completions streams to avoid duplicate
+      reasoning alias deltas and reject successful EOF before a terminal
+      `finish_reason`.
 - [x] Send explicit `max_tokens` for OpenCode Zen and OpenCode Go Chat
       Completions through compatibility detection.
 - [ ] Add opt-in structured-output capability probes for OpenAI-compatible

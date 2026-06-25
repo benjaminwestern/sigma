@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"sort"
@@ -115,6 +116,7 @@ type completionStreamParser struct {
 	metadata         map[string]any
 	sources          []map[string]any
 	reasoningDetails []any
+	sawFinishReason  bool
 }
 
 func parseCompletionsStream(ctx context.Context, r io.Reader, writer sigma.StreamWriter, model sigma.Model) (sigma.AssistantMessage, error) {
@@ -135,6 +137,9 @@ func parseCompletionsStream(ctx context.Context, r io.Reader, writer sigma.Strea
 	})
 	if err != nil {
 		return parser.finalize(ctx), err
+	}
+	if !parser.sawFinishReason {
+		return parser.finalize(ctx), errors.New("openai completions: stream ended without finish_reason")
 	}
 	return parser.finalize(ctx), nil
 }
@@ -184,6 +189,7 @@ func (p *completionStreamParser) handleEvent(ctx context.Context, event sse.Even
 			if err := providerFinishReasonError(p.model, *choice.FinishReason); err != nil {
 				return err
 			}
+			p.sawFinishReason = true
 			p.finishReason = stopReason(*choice.FinishReason)
 		}
 		if len(choice.Logprobs) > 0 && !bytes.Equal(bytes.TrimSpace(choice.Logprobs), []byte("null")) {
@@ -218,23 +224,8 @@ func openAIStreamProviderError(model sigma.Model, api sigma.API, err *streamErro
 }
 
 func (p *completionStreamParser) handleDelta(ctx context.Context, delta streamDelta) error {
-	if delta.ReasoningContent != nil {
-		if err := p.emitThinking(ctx, *delta.ReasoningContent); err != nil {
-			return err
-		}
-	}
-	if delta.Reasoning != nil {
-		if err := p.emitThinking(ctx, *delta.Reasoning); err != nil {
-			return err
-		}
-	}
-	if delta.ReasoningText != nil {
-		if err := p.emitThinking(ctx, *delta.ReasoningText); err != nil {
-			return err
-		}
-	}
-	if delta.Thinking != nil {
-		if err := p.emitThinking(ctx, *delta.Thinking); err != nil {
+	if reasoning, ok := firstReasoningDelta(delta); ok {
+		if err := p.emitThinking(ctx, reasoning); err != nil {
 			return err
 		}
 	}
@@ -278,6 +269,20 @@ func (p *completionStreamParser) handleDelta(ctx context.Context, delta streamDe
 		}
 	}
 	return nil
+}
+
+func firstReasoningDelta(delta streamDelta) (string, bool) {
+	for _, value := range []*string{
+		delta.ReasoningContent,
+		delta.Reasoning,
+		delta.ReasoningText,
+		delta.Thinking,
+	} {
+		if value != nil && *value != "" {
+			return *value, true
+		}
+	}
+	return "", false
 }
 
 func (p *completionStreamParser) emitStart(ctx context.Context) error {

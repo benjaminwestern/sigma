@@ -82,12 +82,12 @@ can be replayed with assistant tool-call history. The deterministic provider
 test suite now also locks Google stream `thoughtSignature` attachment,
 OpenAI-compatible Chat Completions thinking-block replay behavior,
 OpenAI-compatible stream error finish handling, OpenAI Responses terminal
-stream handling, and the new promoted thin provider rows, plus
-request-conversion guardrails for replay IDs, Chat Completions payload shape,
-routed model metadata, and Google legacy tool-schema sanitization. The model
-metadata generator can now also compare the checked-in catalog with a validated
-candidate catalog and print a deterministic added/removed/changed report
-without writing generated files.
+stream handling, duplicate reasoning-alias suppression, and the new promoted
+thin provider rows, plus request-conversion guardrails for replay IDs, Chat
+Completions payload shape, routed model metadata, and Google legacy
+tool-schema sanitization. The model metadata generator can now also compare
+the checked-in catalog with a validated candidate catalog and print a
+deterministic added/removed/changed report without writing generated files.
 
 ## Added
 
@@ -262,6 +262,13 @@ without writing generated files.
   `finish_reason` values of `network_error` and `model_context_window_exceeded`
   as errors instead of successful unknown stops, including context-overflow
   classification for `model_context_window_exceeded`.
+- OpenAI-compatible Chat Completions streams now use only the first non-empty
+  reasoning alias from each delta, avoiding duplicated thinking text when a
+  provider emits multiple equivalent reasoning fields in one chunk.
+- OpenAI-compatible Chat Completions streams now require a terminal
+  `finish_reason` before EOF is treated as a successful completion, preserving
+  partial content and usage on the error final message when a stream ends
+  early.
 - OpenAI Responses streams now require `response.completed`,
   `response.incomplete`, or `response.failed` before EOF is treated as a
   terminal provider response. Premature EOF now returns an error with partial
@@ -282,6 +289,10 @@ without writing generated files.
 - Usage remains optional: `AssistantMessage.Usage == nil` and terminal
   `Event.Usage == nil` still mean no usage was supplied, while a non-nil
   zero-valued usage means the provider explicitly reported zero values.
+- OpenAI-compatible Chat Completions streams now treat EOF before a terminal
+  `finish_reason` as an error for every compatible route. This avoids silently
+  accepting truncated streams while preserving partial content and usage for
+  diagnostics.
 - Existing `sigma.Cost` component fields and `TotalCost` remain Sigma's
   estimated cost from model metadata. Provider-reported cost is additive and is
   only populated when an upstream payload contains a clear numeric cost field.

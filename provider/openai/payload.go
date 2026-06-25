@@ -698,7 +698,8 @@ func addReasoning(payload map[string]any, model sigma.Model, opts sigma.Options,
 	}
 
 	effort := reasoningEffort(model, opts)
-	switch compat.reasoningFormat { //nolint:exhaustive
+	//nolint:exhaustive
+	switch compat.reasoningFormat {
 	case sigma.OpenAICompletionsReasoningEffort:
 		if effort == "" {
 			return

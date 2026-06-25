@@ -341,7 +341,8 @@ func multipartImagesPayload(model sigma.ImageModel, req sigma.ImageRequest, opts
 	if err := writeCommonImageFields(writer, model, req, opts, stream); err != nil {
 		return nil, "", err
 	}
-	switch operation { //nolint:exhaustive
+	//nolint:exhaustive
+	switch operation {
 	case sigma.ImageOperationEdit:
 		if err := writeEditImageFields(writer, req); err != nil {
 			return nil, "", err
