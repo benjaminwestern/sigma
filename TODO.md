@@ -586,5 +586,28 @@ should still come through the catalog refresh workflow.
 - [ ] Add agent runtime integration on top of the provider-neutral primitives
       `sigma` exposes (orchestration is deferred to later integration cards).
 - [ ] Implement cross-provider context handoff beyond diagnostic surface probes.
-- [ ] Implement capability-loss reporting so unsupported handoff behavior remains
-      explicit rather than silently degrading.
+      Expose public helpers to adapt conversation messages (assistant provenance,
+      thinking, tool calls/results including images) for a target model. Reuse and
+      promote internal transform logic for thinking-to-tagged-text conversion
+      (when target lacks reasoning support or API families differ), image
+      downgrade or explicit rejection for non-vision targets, developer role
+      normalization, tool name repair, and unanswered call cleanup.
+- [ ] Produce explicit capability-loss reports from handoff transforms (counts
+      or details of converted thinking blocks, elided/rejected images, other
+      degradations) so callers can surface changes rather than experiencing
+      silent behavior shift. Support both whole-request and incremental message
+      list adaptation.
+- [ ] Cover handoff surfaces with deterministic sigmatest-based behavioural
+      tests (text+thinking+tools+image cases to non-supporting targets, error
+      paths, provenance preservation) meeting the evidence bar in RELEASING.md.
+- [ ] Implement durable credential storage for OAuth and stored API-key flows.
+      Provide a CredentialStore interface (read, modify-with-fn for serialized
+      atomic updates during refresh, delete) plus in-memory default. Integrate so
+      caller-supplied stores participate in EnvironmentAuthResolver paths and
+      provider OAuth login/refresh (Anthropic, GitHub Copilot, OpenAI Codex)
+      without changing existing caller-owned default behaviour.
+- [ ] Support runtime/dynamic model discovery and refresh for custom or
+      provider-registered sources (local inference servers, routers with live
+      catalogs) so Client.Models and registry contents are not limited to the
+      static generated catalog; preserve curated metadata as the reliable
+      offline baseline and reviewable default.

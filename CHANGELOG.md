@@ -158,6 +158,21 @@ See [release notes](docs/release-notes-v0.6.0.md).
   reasoning alias from each delta and require a terminal `finish_reason` before
   treating stream EOF as a successful completion.
 
+### Reviewed
+
+- Reviewed Sigma's primary surfaces (client/registry dispatch, Request shapes,
+  streaming events with block lifecycle and partial tool calls, Usage/Cost with
+  provider identity and long-cache splits, auth and OAuth helpers, persistence,
+  internal message transforms, embeddings/retrieval, image generation, model
+  metadata, and provider adapters) for matching capabilities. Identified
+  user-visible gaps (durable credential storage with atomic modify semantics,
+  runtime/dynamic model list refresh for custom sources, and public
+  cross-provider handoff with message adaptation + explicit capability loss
+  reporting) that align with items already tracked in TODO.md. The highest
+  priority for subsequent work is public cross-provider handoff support.
+  Updates are recorded in the v0.6.0 release notes deferred section and TODO.md;
+  no implementation changes land in this release.
+
 ## [0.5.0] - 2026-06-13
 
 See [release notes](docs/release-notes-v0.5.0.md).

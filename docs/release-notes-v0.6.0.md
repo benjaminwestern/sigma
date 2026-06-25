@@ -406,6 +406,18 @@ catalog and generated files untouched until the diff is reviewed.
 
 ## Deferred work
 
+During v0.6.0 development a review of Sigma's core surfaces (client and registry
+lookup, Request/Message/ContentBlock/AssistantMessage shapes, Stream event
+protocol with granular block start/delta/end and partial tool calls, Usage/Cost
+accounting including long-cache and thinking tokens, auth resolvers and
+OAuthTokenProvider, internal request/message transforms, provider adapters,
+persistence, embeddings+retrieval, images, sigmatest, and generated metadata)
+identified additional user-visible capability gaps that align with existing
+deferred items. The highest-priority item for future work is public
+cross-provider handoff support. See the expanded bullets below and [TODO.md](../TODO.md)
+for the current list. All candidate work remains subject to the deterministic
+evidence, fixture, and cancellation bar described in [RELEASING.md](../RELEASING.md).
+
 - OAuth token persistence remains deferred and caller-owned. Deferred work
   continues to be tracked in [TODO.md](../TODO.md).
 - Ambient cloud credential probing, OAuth token stores, AWS profiles, SSO, web
@@ -414,9 +426,12 @@ catalog and generated files untouched until the diff is reviewed.
 - Billing reconciliation, subscription analytics, and UI presentation of usage
   totals remain caller-owned. Sigma normalizes and preserves provider data but
   does not claim invoice-grade billing accuracy.
-- Cross-provider handoff remains a diagnostic probe, not a public orchestration
-  runtime. Full context handoff APIs and capability-loss reporting remain
-  deferred.
+- Cross-provider handoff remains a diagnostic probe (via the opt-in surface
+  probe command), not a public orchestration runtime. Public helpers for
+  adapting conversation contexts across providers (thinking block conversion to
+  tagged text, image capability handling, tool repair, etc.) and explicit
+  capability-loss reporting remain deferred. See the expanded description and
+  test requirements in [TODO.md](../TODO.md).
 - Non-Codex WebSocket transport support remains deferred until route-specific
   wire protocols have deterministic fixtures. The Codex preview transport now
   has request contexts, explicit session cleanup helpers, standard HTTP(S)
