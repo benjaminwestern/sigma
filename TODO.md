@@ -197,6 +197,9 @@ work until their API boundaries are explicit.
 - [x] Add provider-neutral source/citation result APIs over existing
       OpenAI-compatible, Anthropic, and Google metadata while keeping
       provider-specific rendering and document/PDF content blocks deferred.
+- [x] Add a provider-neutral text response ID accessor over existing
+      provider response metadata without changing serialized assistant message
+      shape.
 - [x] Preserve OpenAI-compatible Chat Completions `reasoning_details` metadata
       on tool-call blocks for replay while keeping broader provider-neutral
       reasoning-detail rendering deferred.

@@ -70,6 +70,58 @@ func TestAssistantMessageSourcesExtractsCopiedProviderMetadata(t *testing.T) {
 	}
 }
 
+func TestAssistantMessageResponseIDReadsProviderMetadata(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		metadata map[string]any
+		want     string
+	}{
+		{
+			name:     "id",
+			metadata: map[string]any{"id": "resp_123"},
+			want:     "resp_123",
+		},
+		{
+			name:     "response_id fallback",
+			metadata: map[string]any{"response_id": "resp_snake"},
+			want:     "resp_snake",
+		},
+		{
+			name:     "responseId fallback",
+			metadata: map[string]any{"responseId": "resp_camel"},
+			want:     "resp_camel",
+		},
+		{
+			name:     "first non-empty",
+			metadata: map[string]any{"id": "", "response_id": "resp_fallback"},
+			want:     "resp_fallback",
+		},
+		{
+			name:     "non-string ignored",
+			metadata: map[string]any{"id": 123, "response_id": ""},
+			want:     "",
+		},
+		{
+			name:     "missing",
+			metadata: nil,
+			want:     "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			message := sigma.AssistantMessage{ProviderMetadata: tt.metadata}
+			if got := message.ResponseID(); got != tt.want {
+				t.Fatalf("ResponseID() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestContentBlockCitationsExtractsJSONDecodedMetadata(t *testing.T) {
 	t.Parallel()
 

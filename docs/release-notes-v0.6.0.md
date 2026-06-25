@@ -74,7 +74,8 @@ credential-gated cross-provider handoff diagnostic for replaying small
 tool-call contexts across selected live routes without moving live provider
 calls into CI. Assistant results now also expose provider-neutral source and
 citation accessors for the source metadata Sigma already captures from grounded
-and citation-bearing responses. Local tool-call validation also now evaluates
+and citation-bearing responses, plus a text response ID accessor over captured
+provider response metadata. Local tool-call validation also now evaluates
 composed JSON Schema branches so callers can reject invalid model-emitted
 arguments before running tools. OpenAI-compatible Chat Completions streams now
 also preserve provider reasoning-detail metadata on streamed tool calls so it
@@ -256,6 +257,9 @@ catalog and generated files untouched until the diff is reviewed.
   `sigma.AssistantMessage.Citations` now expose normalized source and citation
   entries from provider metadata, including URLs, URIs, titles, offsets, cited
   text, and copied provider metadata for provider-specific details.
+- `sigma.AssistantMessage.ResponseID` now exposes captured text-generation
+  provider response IDs from existing assistant metadata without requiring
+  callers to inspect provider metadata maps directly.
 - `sigma.ValidateToolCall` now evaluates `anyOf`, `oneOf`, and `allOf` in tool
   input schemas, including nested property, array item, and additional property
   schemas, while preserving decoded-copy results and redacted validation errors.
@@ -389,6 +393,9 @@ catalog and generated files untouched until the diff is reviewed.
 - Source and citation accessors are additive views over existing provider
   metadata. They do not change persisted request shape, replay behavior,
   provider dispatch, or the raw `ProviderMetadata` maps.
+- `AssistantMessage.ResponseID` is an additive accessor over existing provider
+  metadata. It does not add a serialized text result field or change provider
+  request, stream, replay, or persistence behavior.
 - Tool schema composition validation is additive and stricter for previously
   unchecked composed branches. It does not add primitive coercion or change the
   `ValidateToolCall` API.

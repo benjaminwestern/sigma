@@ -119,6 +119,9 @@ See [release notes](docs/release-notes-v0.6.0.md).
   citation accessors, letting callers read normalized URLs, URIs, titles,
   offsets, cited text, and copied provider metadata without scraping opaque
   provider metadata maps directly.
+- Assistant messages now expose a provider-neutral `ResponseID` accessor over
+  existing text-generation response metadata, letting callers read provider
+  response IDs without scraping opaque provider metadata maps directly.
 - `sigma.ValidateToolCall` now strictly evaluates `anyOf`, `oneOf`, and `allOf`
   in tool input schemas, including nested property, array item, and additional
   property schemas, so invalid composed tool arguments are rejected before tool

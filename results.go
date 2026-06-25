@@ -37,6 +37,12 @@ func (m AssistantMessage) Sources() []ResultSource {
 	return resultSources(m.ProviderMetadata["sources"])
 }
 
+// ResponseID returns the provider response identifier reported on the
+// assistant message, when one is available.
+func (m AssistantMessage) ResponseID() string {
+	return stringMetadataValue(m.ProviderMetadata, "id", "response_id", "responseId")
+}
+
 // Citations returns normalized citations attached to this content block.
 func (b ContentBlock) Citations() []ResultCitation {
 	return resultCitations(b.ProviderMetadata["citations"])
