@@ -21,7 +21,10 @@ explicit model-policy enablement. Codex Responses WebSocket transport now also
 honors standard HTTP(S) proxy environment variables with `NO_PROXY` exclusions
 while keeping the existing SSE fallback, and now exposes a Codex-specific
 connect timeout plus session-cache debug stats for connection reuse, cached
-context deltas, and fallback diagnostics. Kimi and Kimi Coding are promoted as
+context deltas, and fallback diagnostics. Root session-resource cleanup helpers
+now also let callers release cached provider resources without knowing the
+provider-specific cleanup function, with Codex WebSocket sessions registered
+automatically. Kimi and Kimi Coding are promoted as
 focused Anthropic-compatible provider slices with generated metadata,
 credential discovery, request headers, adaptive thinking metadata, and
 session-affinity support. Xiaomi is promoted as a focused OpenAI-compatible
@@ -134,6 +137,11 @@ catalog and generated files untouched until the diff is reviewed.
   per-session debug stats for created/reused WebSocket connections, full and
   delta context requests, previous response IDs, WebSocket failures, and SSE
   fallback activation.
+- `sigma.CleanupSessionResources` and `sigma.RegisterSessionResourceCleanup`
+  now provide provider-neutral session resource cleanup. Codex Responses
+  WebSocket sessions register automatically, so callers can release one session
+  or all cached provider sessions from the root package while existing
+  provider-specific cleanup helpers continue to work.
 - Kimi can now be registered with `kimi.Register` or
   `kimi.RegisterDefault`, and Kimi Coding can be registered with
   `kimi.RegisterCoding` or `kimi.RegisterCodingDefault`, using the shared

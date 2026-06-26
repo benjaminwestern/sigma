@@ -45,6 +45,10 @@ See [release notes](docs/release-notes-v0.6.0.md).
   timeout plus session-cache debug stats for created/reused connections,
   full/delta context requests, previous response IDs, WebSocket failures, and
   SSE fallback activation.
+- `sigma.CleanupSessionResources` and `sigma.RegisterSessionResourceCleanup`
+  now provide a provider-neutral way to release cached session resources, with
+  OpenAI Codex Responses WebSocket sessions registered automatically while the
+  provider-specific cleanup helpers remain available.
 - Anthropic Messages usage now preserves long prompt-cache write tokens
   separately and prices those writes at the provider's long-cache input
   multiplier while keeping total cache-write tokens unchanged.

@@ -91,6 +91,17 @@ var codexWebSocketSessions = struct {
 	stats:         make(map[string]*CodexResponsesWebSocketStatsSnapshot),
 }
 
+func init() {
+	sigma.RegisterSessionResourceCleanup(func(sessionID string) error {
+		if sessionID == "" {
+			CloseCodexResponsesWebSocketSessions()
+			return nil
+		}
+		CloseCodexResponsesWebSocketSession(sessionID)
+		return nil
+	})
+}
+
 // CloseCodexResponsesWebSocketSession closes and forgets a cached Codex
 // WebSocket session and clears its SSE fallback marker.
 func CloseCodexResponsesWebSocketSession(sessionID string) {

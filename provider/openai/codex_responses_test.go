@@ -598,6 +598,89 @@ func TestCodexResponsesWebSocketSessionCacheSendsInputDelta(t *testing.T) {
 	}
 }
 
+func TestCodexResponsesWebSocketSessionResourcesCleanup(t *testing.T) {
+	openai.CloseCodexResponsesWebSocketSessions()
+	openai.ResetCodexResponsesWebSocketStatsAll()
+	t.Cleanup(openai.CloseCodexResponsesWebSocketSessions)
+	t.Cleanup(openai.ResetCodexResponsesWebSocketStatsAll)
+
+	requests := make(chan map[string]any, 5)
+	server := newCodexWebSocketTestServer(t, func(_ *http.Request, ws *codexWebSocketTestConn) {
+		count := 0
+		for {
+			request, err := ws.readJSONError()
+			if err != nil {
+				return
+			}
+			requests <- request
+			count++
+			responseID := fmt.Sprintf("resp_%d", count)
+			writeCodexWebSocketTextResponse(t, ws, responseID, "msg_"+responseID, "txt_"+responseID, responseID)
+		}
+	})
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("codex-responses-session-cleanup-test")
+	model := codexResponsesTestModel(providerID)
+	client := codexResponsesTestClient(t, providerID, model, server.URL, codexTokenProvider("codex-oauth-token"))
+
+	completeCodexWebSocket(t, client, model, "session-1", "first")
+	_ = receiveMap(t, requests)
+	completeCodexWebSocket(t, client, model, "session-1", "second")
+	_ = receiveMap(t, requests)
+	assertCodexWebSocketConnectionsCreated(t, "session-1", 1)
+
+	if err := sigma.CleanupSessionResources("session-1"); err != nil {
+		t.Fatalf("CleanupSessionResources returned error: %v", err)
+	}
+	completeCodexWebSocket(t, client, model, "session-1", "third")
+	_ = receiveMap(t, requests)
+	assertCodexWebSocketConnectionsCreated(t, "session-1", 2)
+
+	completeCodexWebSocket(t, client, model, "session-2", "fourth")
+	_ = receiveMap(t, requests)
+	assertCodexWebSocketConnectionsCreated(t, "session-2", 1)
+
+	if err := sigma.CleanupSessionResources(""); err != nil {
+		t.Fatalf("CleanupSessionResources all returned error: %v", err)
+	}
+	completeCodexWebSocket(t, client, model, "session-2", "fifth")
+	_ = receiveMap(t, requests)
+	assertCodexWebSocketConnectionsCreated(t, "session-2", 2)
+
+	openai.CloseCodexResponsesWebSocketSession("session-2")
+	completeCodexWebSocket(t, client, model, "session-2", "sixth")
+	_ = receiveMap(t, requests)
+	assertCodexWebSocketConnectionsCreated(t, "session-2", 3)
+}
+
+func completeCodexWebSocket(t *testing.T, client *sigma.Client, model sigma.Model, sessionID string, text string) {
+	t.Helper()
+
+	_, err := client.Complete(
+		context.Background(),
+		model,
+		sigma.Request{Messages: []sigma.Message{sigma.UserText(text)}},
+		sigma.WithTransport(sigma.TransportWebSocket),
+		sigma.WithSessionID(sessionID),
+	)
+	if err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+}
+
+func assertCodexWebSocketConnectionsCreated(t *testing.T, sessionID string, want int) {
+	t.Helper()
+
+	stats, ok := openai.CodexResponsesWebSocketStats(sessionID)
+	if !ok {
+		t.Fatalf("CodexResponsesWebSocketStats(%q) returned ok=false", sessionID)
+	}
+	if got := stats.ConnectionsCreated; got != want {
+		t.Fatalf("connections created for %q = %d, want %d", sessionID, got, want)
+	}
+}
+
 func TestCodexResponsesWebSocketFallsBackToSSEBeforeStart(t *testing.T) {
 	openai.CloseCodexResponsesWebSocketSessions()
 	t.Cleanup(openai.CloseCodexResponsesWebSocketSessions)
@@ -1176,7 +1259,7 @@ func clearCodexProxyTestEnv(t *testing.T) {
 func (c *codexWebSocketTestConn) readJSON(t *testing.T) map[string]any {
 	t.Helper()
 
-	data, err := readCodexWebSocketClientText(c.reader)
+	data, err := c.readJSONText()
 	if err != nil {
 		t.Fatalf("read websocket text returned error: %v", err)
 	}
@@ -1185,6 +1268,22 @@ func (c *codexWebSocketTestConn) readJSON(t *testing.T) map[string]any {
 		t.Fatalf("Unmarshal websocket body returned error: %v", err)
 	}
 	return body
+}
+
+func (c *codexWebSocketTestConn) readJSONError() (map[string]any, error) {
+	data, err := c.readJSONText()
+	if err != nil {
+		return nil, err
+	}
+	var body map[string]any
+	if err := json.Unmarshal([]byte(data), &body); err != nil {
+		return nil, err
+	}
+	return body, nil
+}
+
+func (c *codexWebSocketTestConn) readJSONText() (string, error) {
+	return readCodexWebSocketClientText(c.reader)
 }
 
 func (c *codexWebSocketTestConn) writeJSON(t *testing.T, value map[string]any) {

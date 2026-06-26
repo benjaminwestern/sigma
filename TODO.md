@@ -111,6 +111,9 @@ integrations remain future work until they have the same local evidence bar.
 - [x] Add Codex WebSocket-specific connect timeout and session-cache debug
       stats while keeping the preview transport on request contexts, explicit
       session cleanup helpers, and SSE fallback.
+- [x] Add provider-neutral session resource cleanup so callers can release
+      cached Codex WebSocket sessions through root `sigma` helpers while keeping
+      provider-specific cleanup helpers available.
 - [x] Add OpenAI Codex device-code OAuth login and refresh helpers while keeping
       token persistence caller-owned.
 - [x] Add OpenAI Codex browser callback OAuth login while keeping token
