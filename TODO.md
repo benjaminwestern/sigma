@@ -206,6 +206,9 @@ work until their API boundaries are explicit.
 - [x] Add a provider-neutral text response ID accessor over existing
       provider response metadata without changing serialized assistant message
       shape.
+- [x] Add a provider-neutral routed response model accessor over existing
+      provider response metadata without changing serialized assistant message
+      shape.
 - [x] Preserve OpenAI-compatible Chat Completions `reasoning_details` metadata
       on tool-call blocks for replay while keeping broader provider-neutral
       reasoning-detail rendering deferred.

@@ -84,10 +84,11 @@ incremental conversation context for a target model with explicit
 capability-loss reporting, while keeping orchestration and provider execution
 caller-owned. Assistant results now also expose provider-neutral source and
 citation accessors for the source metadata Sigma already captures from grounded
-and citation-bearing responses, plus a text response ID accessor over captured
-provider response metadata. Local tool-call validation also now evaluates
-composed JSON Schema branches so callers can reject invalid model-emitted
-arguments before running tools. OpenAI-compatible Chat Completions streams now
+and citation-bearing responses, plus text response ID and routed response model
+accessors over captured provider response metadata. Local tool-call validation
+also now evaluates composed JSON Schema branches so callers can reject invalid
+model-emitted arguments before running tools. OpenAI-compatible Chat
+Completions streams now
 also preserve provider reasoning-detail metadata on streamed tool calls so it
 can be replayed with assistant tool-call history. The deterministic provider
 test suite now also locks Google stream `thoughtSignature` attachment,
@@ -303,6 +304,9 @@ while Sigma's built-in image metadata remains curated and offline by default.
 - `sigma.AssistantMessage.ResponseID` now exposes captured text-generation
   provider response IDs from existing assistant metadata without requiring
   callers to inspect provider metadata maps directly.
+- `sigma.AssistantMessage.ResponseModel` now exposes captured routed
+  provider model IDs from existing assistant metadata without requiring callers
+  to inspect provider metadata maps directly.
 - `sigma.ValidateToolCall` now evaluates `anyOf`, `oneOf`, and `allOf` in tool
   input schemas, including nested property, array item, and additional property
   schemas, while preserving decoded-copy results and redacted validation errors.
@@ -439,6 +443,9 @@ while Sigma's built-in image metadata remains curated and offline by default.
 - `AssistantMessage.ResponseID` is an additive accessor over existing provider
   metadata. It does not add a serialized text result field or change provider
   request, stream, replay, or persistence behavior.
+- `AssistantMessage.ResponseModel` is an additive accessor over existing
+  provider metadata. It does not add a serialized text result field or change
+  provider request, stream, replay, routing, or persistence behavior.
 - Public handoff helpers are additive and opt-in. They transform copied
   requests or message slices before callers submit them; they do not change
   `Client.Complete`, `Client.Stream`, provider dispatch, persisted message
@@ -523,6 +530,9 @@ cancellation bar described in [RELEASING.md](../RELEASING.md).
 - Broad OpenRouter text catalog expansion remains deferred until it can flow
   through the reviewed catalog refresh workflow with deterministic routing,
   pricing, and provider/API diffs.
+- Provider-neutral routing policy, routed-model fallback selection, and
+  automatic model substitution remain deferred; Sigma now exposes captured
+  routed model metadata but does not act on it automatically.
 - Runtime image model refresh, embedding model refresh, built-in live provider
   catalog refresh, and credential-backed discovery remain deferred until each
   surface has explicit ownership and validation semantics.

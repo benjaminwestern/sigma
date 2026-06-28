@@ -146,6 +146,9 @@ See [release notes](docs/release-notes-v0.6.0.md).
 - Assistant messages now expose a provider-neutral `ResponseID` accessor over
   existing text-generation response metadata, letting callers read provider
   response IDs without scraping opaque provider metadata maps directly.
+- Assistant messages now expose a provider-neutral `ResponseModel` accessor
+  over existing text-generation response metadata, letting callers read routed
+  provider model IDs without scraping opaque provider metadata maps directly.
 - `sigma.ValidateToolCall` now strictly evaluates `anyOf`, `oneOf`, and `allOf`
   in tool input schemas, including nested property, array item, and additional
   property schemas, so invalid composed tool arguments are rejected before tool

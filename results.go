@@ -43,6 +43,13 @@ func (m AssistantMessage) ResponseID() string {
 	return stringMetadataValue(m.ProviderMetadata, "id", "response_id", "responseId")
 }
 
+// ResponseModel returns the concrete provider-routed response model reported
+// on the assistant message, when it differs from the requested model and is
+// available.
+func (m AssistantMessage) ResponseModel() ModelID {
+	return ModelID(stringMetadataValue(m.ProviderMetadata, "model"))
+}
+
 // Citations returns normalized citations attached to this content block.
 func (b ContentBlock) Citations() []ResultCitation {
 	return resultCitations(b.ProviderMetadata["citations"])

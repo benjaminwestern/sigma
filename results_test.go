@@ -122,6 +122,48 @@ func TestAssistantMessageResponseIDReadsProviderMetadata(t *testing.T) {
 	}
 }
 
+func TestAssistantMessageResponseModelReadsProviderMetadata(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		metadata map[string]any
+		want     sigma.ModelID
+	}{
+		{
+			name:     "routed model",
+			metadata: map[string]any{"model": "provider/routed-model"},
+			want:     sigma.ModelID("provider/routed-model"),
+		},
+		{
+			name:     "empty ignored",
+			metadata: map[string]any{"model": ""},
+			want:     "",
+		},
+		{
+			name:     "non-string ignored",
+			metadata: map[string]any{"model": 123},
+			want:     "",
+		},
+		{
+			name:     "missing",
+			metadata: nil,
+			want:     "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			message := sigma.AssistantMessage{ProviderMetadata: tt.metadata}
+			if got := message.ResponseModel(); got != tt.want {
+				t.Fatalf("ResponseModel() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestContentBlockCitationsExtractsJSONDecodedMetadata(t *testing.T) {
 	t.Parallel()
 
