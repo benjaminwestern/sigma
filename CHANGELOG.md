@@ -131,6 +131,11 @@ See [release notes](docs/release-notes-v0.6.0.md).
   `Client.RefreshImageModels` refresh app-owned dynamic image model listings
   while preserving Sigma's curated built-in image catalog as the offline
   default.
+- Registries can now accept provider-scoped runtime embedding model sources
+  through `RegisterEmbeddingModelSource`, and
+  `Registry.RefreshEmbeddingModels` / `Client.RefreshEmbeddingModels` refresh
+  app-owned dynamic embedding model listings while preserving Sigma's curated
+  built-in embedding catalog as the offline default.
 - Moonshot AI and Moonshot AI CN now have first-class OpenAI-compatible Chat
   Completions provider wrappers, generated Kimi K2.7 Code CN and HighSpeed
   metadata, and metadata-driven omission of disabled-thinking payloads for

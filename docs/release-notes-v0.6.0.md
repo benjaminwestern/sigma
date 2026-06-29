@@ -107,11 +107,10 @@ deterministic added/removed/changed report without writing generated files. It
 can also write a validated review-only candidate catalog from an explicit
 `models.dev` snapshot path or opt-in network source, leaving the checked-in
 catalog and generated files untouched until the diff is reviewed.
-Registries can now also refresh app-owned dynamic text model sources at
-runtime, so local servers and routers with live catalogs can update
-`Client.Models` without changing Sigma's curated built-in catalog. Image model
-sources now have the same app-owned refresh path for dynamic image catalogs,
-while Sigma's built-in image metadata remains curated and offline by default.
+Registries can now also refresh app-owned dynamic text, image, and embedding
+model sources at runtime, so local servers and routers with live catalogs can
+update client model listings without changing Sigma's curated built-in
+catalogs.
 
 ## Added
 
@@ -236,6 +235,11 @@ while Sigma's built-in image metadata remains curated and offline by default.
   applications attach provider-scoped runtime image model sources to a
   registry, and `Registry.RefreshImageModels` / `Client.RefreshImageModels`
   refresh those app-owned listings atomically after local validation.
+- `sigma.EmbeddingModelSource` and `sigma.EmbeddingModelSourceFunc` now let
+  applications attach provider-scoped runtime embedding model sources to a
+  registry, and `Registry.RefreshEmbeddingModels` /
+  `Client.RefreshEmbeddingModels` refresh those app-owned listings atomically
+  after local validation.
 - `cmd/sigma-surface-probe` now includes an opt-in `nvidia` route that uses
   `NVIDIA_API_KEY`, the direct NIM base URL, the NVIDIA provider wrapper, and
   `nvidia/nemotron-3-super-120b-a12b` as its default probe model when callers

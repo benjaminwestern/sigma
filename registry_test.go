@@ -69,6 +69,12 @@ type testImageModelSource struct {
 	err    error
 }
 
+type testEmbeddingModelSource struct {
+	mu     sync.Mutex
+	models []sigma.EmbeddingModel
+	err    error
+}
+
 func (s *testTextModelSource) TextModels(context.Context) ([]sigma.Model, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -105,6 +111,25 @@ func (s *testImageModelSource) Set(models ...sigma.ImageModel) {
 	defer s.mu.Unlock()
 
 	s.models = append([]sigma.ImageModel(nil), models...)
+}
+
+func (s *testEmbeddingModelSource) EmbeddingModels(context.Context) ([]sigma.EmbeddingModel, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.err != nil {
+		return nil, s.err
+	}
+	models := make([]sigma.EmbeddingModel, len(s.models))
+	copy(models, s.models)
+	return models, nil
+}
+
+func (s *testEmbeddingModelSource) Set(models ...sigma.EmbeddingModel) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.models = append([]sigma.EmbeddingModel(nil), models...)
 }
 
 func TestRegistryRegistersProvidersAndModelsInOrder(t *testing.T) {
@@ -821,6 +846,335 @@ func TestClientRefreshImageModelsUpdatesConfiguredRegistry(t *testing.T) {
 	}
 	if got, want := models[0].ID, sigma.ModelID("fresh"); got != want {
 		t.Fatalf("client image model id = %q, want %q", got, want)
+	}
+}
+
+func TestRegistryEmbeddingModelSourceDuplicateHandlingRequiresOverride(t *testing.T) {
+	t.Parallel()
+
+	registry := sigma.NewRegistry()
+	provider := sigma.ProviderID("dynamic-embeddings")
+	source := &testEmbeddingModelSource{}
+	if err := registry.RegisterEmbeddingModelSource(provider, source); err != nil {
+		t.Fatalf("RegisterEmbeddingModelSource returned error: %v", err)
+	}
+	if err := registry.RegisterEmbeddingModelSource(provider, source); err == nil {
+		t.Fatal("duplicate embedding model source registration returned nil error")
+	}
+	if err := registry.RegisterEmbeddingModelSource(provider, source, sigma.WithOverride()); err != nil {
+		t.Fatalf("override embedding model source registration returned error: %v", err)
+	}
+}
+
+func TestRegistryRefreshEmbeddingModelsReplacesOnlySourceOwnedModels(t *testing.T) {
+	t.Parallel()
+
+	registry := sigma.NewRegistry()
+	provider := sigma.ProviderID("dynamic-embeddings")
+	if err := registry.RegisterEmbeddingProvider(provider, testEmbeddingProvider{api: sigma.EmbeddingAPIOpenAIEmbeddings}); err != nil {
+		t.Fatalf("RegisterEmbeddingProvider returned error: %v", err)
+	}
+	if err := registry.RegisterEmbeddingModel(sigma.EmbeddingModel{
+		ID:       "manual",
+		Provider: provider,
+		API:      sigma.EmbeddingAPIOpenAIEmbeddings,
+		Name:     "Manual",
+	}); err != nil {
+		t.Fatalf("RegisterEmbeddingModel(manual) returned error: %v", err)
+	}
+	source := &testEmbeddingModelSource{}
+	source.Set(
+		sigma.EmbeddingModel{ID: "source-old", Provider: provider, API: sigma.EmbeddingAPIOpenAIEmbeddings},
+		sigma.EmbeddingModel{ID: "source-keep", Provider: provider, API: sigma.EmbeddingAPIOpenAIEmbeddings},
+	)
+	if err := registry.RegisterEmbeddingModelSource(provider, source); err != nil {
+		t.Fatalf("RegisterEmbeddingModelSource returned error: %v", err)
+	}
+	if err := registry.RefreshEmbeddingModels(context.Background(), provider); err != nil {
+		t.Fatalf("first RefreshEmbeddingModels returned error: %v", err)
+	}
+
+	source.Set(
+		sigma.EmbeddingModel{ID: "source-new", Provider: provider, API: sigma.EmbeddingAPIOpenAIEmbeddings},
+		sigma.EmbeddingModel{ID: "source-keep", Provider: provider, API: sigma.EmbeddingAPIOpenAIEmbeddings, Name: "updated"},
+	)
+	if err := registry.RefreshEmbeddingModels(context.Background(), provider); err != nil {
+		t.Fatalf("second RefreshEmbeddingModels returned error: %v", err)
+	}
+
+	models := registry.ListEmbeddingModels()
+	got := make([]sigma.ModelID, 0, len(models))
+	for _, model := range models {
+		got = append(got, model.ID)
+	}
+	want := []sigma.ModelID{"manual", "source-new", "source-keep"}
+	if len(got) != len(want) {
+		t.Fatalf("embedding model ids = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("embedding model ids = %v, want %v", got, want)
+		}
+	}
+	if _, ok := registry.EmbeddingModel(provider, "source-old"); ok {
+		t.Fatal("stale source-owned embedding model remained registered")
+	}
+	updated, ok := registry.EmbeddingModel(provider, "source-keep")
+	if !ok {
+		t.Fatal("updated source embedding model was not registered")
+	}
+	if got, want := updated.Name, "updated"; got != want {
+		t.Fatalf("updated source embedding model name = %q, want %q", got, want)
+	}
+}
+
+func TestRegistryRefreshEmbeddingModelsPreservesCallerOwnedConflicts(t *testing.T) {
+	t.Parallel()
+
+	registry := sigma.NewRegistry()
+	provider := sigma.ProviderID("dynamic-embeddings")
+	if err := registry.RegisterEmbeddingProvider(provider, testEmbeddingProvider{api: sigma.EmbeddingAPIOpenAIEmbeddings}); err != nil {
+		t.Fatalf("RegisterEmbeddingProvider returned error: %v", err)
+	}
+	manual := sigma.EmbeddingModel{ID: "manual", Provider: provider, API: sigma.EmbeddingAPIOpenAIEmbeddings, Name: "manual"}
+	if err := registry.RegisterEmbeddingModel(manual); err != nil {
+		t.Fatalf("RegisterEmbeddingModel(manual) returned error: %v", err)
+	}
+	source := &testEmbeddingModelSource{}
+	source.Set(sigma.EmbeddingModel{ID: "manual", Provider: provider, API: sigma.EmbeddingAPIOpenAIEmbeddings, Name: "source"})
+	if err := registry.RegisterEmbeddingModelSource(provider, source); err != nil {
+		t.Fatalf("RegisterEmbeddingModelSource returned error: %v", err)
+	}
+
+	if err := registry.RefreshEmbeddingModels(context.Background(), provider); err == nil {
+		t.Fatal("RefreshEmbeddingModels with caller-owned id conflict returned nil error")
+	}
+	got, ok := registry.EmbeddingModel(provider, "manual")
+	if !ok {
+		t.Fatal("caller-owned embedding model was removed after refresh conflict")
+	}
+	if got.Name != "manual" {
+		t.Fatalf("caller-owned embedding model name = %q, want manual", got.Name)
+	}
+}
+
+func TestRegistryRegisterEmbeddingModelOverrideTakesSourceOwnership(t *testing.T) {
+	t.Parallel()
+
+	registry := sigma.NewRegistry()
+	provider := sigma.ProviderID("dynamic-embeddings")
+	if err := registry.RegisterEmbeddingProvider(provider, testEmbeddingProvider{api: sigma.EmbeddingAPIOpenAIEmbeddings}); err != nil {
+		t.Fatalf("RegisterEmbeddingProvider returned error: %v", err)
+	}
+	source := &testEmbeddingModelSource{}
+	source.Set(sigma.EmbeddingModel{ID: "source", Provider: provider, API: sigma.EmbeddingAPIOpenAIEmbeddings, Name: "source"})
+	if err := registry.RegisterEmbeddingModelSource(provider, source); err != nil {
+		t.Fatalf("RegisterEmbeddingModelSource returned error: %v", err)
+	}
+	if err := registry.RefreshEmbeddingModels(context.Background(), provider); err != nil {
+		t.Fatalf("RefreshEmbeddingModels returned error: %v", err)
+	}
+
+	if err := registry.RegisterEmbeddingModel(sigma.EmbeddingModel{
+		ID:       "source",
+		Provider: provider,
+		API:      sigma.EmbeddingAPIOpenAIEmbeddings,
+		Name:     "manual",
+	}, sigma.WithOverride()); err != nil {
+		t.Fatalf("RegisterEmbeddingModel override returned error: %v", err)
+	}
+	if err := registry.RefreshEmbeddingModels(context.Background(), provider); err == nil {
+		t.Fatal("RefreshEmbeddingModels after caller override returned nil conflict")
+	}
+	got, ok := registry.EmbeddingModel(provider, "source")
+	if !ok {
+		t.Fatal("caller-overridden source embedding model was removed")
+	}
+	if got.Name != "manual" {
+		t.Fatalf("embedding model name = %q, want manual", got.Name)
+	}
+}
+
+func TestRegistryRefreshEmbeddingModelsValidatesBeforeApplying(t *testing.T) {
+	t.Parallel()
+
+	registry := sigma.NewRegistry()
+	provider := sigma.ProviderID("dynamic-embeddings")
+	if err := registry.RegisterEmbeddingProvider(provider, testEmbeddingProvider{api: sigma.EmbeddingAPIOpenAIEmbeddings}); err != nil {
+		t.Fatalf("RegisterEmbeddingProvider returned error: %v", err)
+	}
+	source := &testEmbeddingModelSource{}
+	source.Set(sigma.EmbeddingModel{ID: "good", Provider: provider, API: sigma.EmbeddingAPIOpenAIEmbeddings})
+	if err := registry.RegisterEmbeddingModelSource(provider, source); err != nil {
+		t.Fatalf("RegisterEmbeddingModelSource returned error: %v", err)
+	}
+	if err := registry.RefreshEmbeddingModels(context.Background(), provider); err != nil {
+		t.Fatalf("initial RefreshEmbeddingModels returned error: %v", err)
+	}
+
+	source.Set(
+		sigma.EmbeddingModel{ID: "bad-api", Provider: provider, API: sigma.EmbeddingAPIGoogleEmbeddings},
+		sigma.EmbeddingModel{ID: "new", Provider: provider, API: sigma.EmbeddingAPIOpenAIEmbeddings},
+	)
+	if err := registry.RefreshEmbeddingModels(context.Background(), provider); err == nil {
+		t.Fatal("RefreshEmbeddingModels with invalid embedding model returned nil error")
+	}
+	if _, ok := registry.EmbeddingModel(provider, "good"); !ok {
+		t.Fatal("existing source embedding model was removed after failed refresh")
+	}
+	if _, ok := registry.EmbeddingModel(provider, "new"); ok {
+		t.Fatal("new embedding model from failed refresh was registered")
+	}
+}
+
+func TestRegistryRefreshEmbeddingModelsRejectsDuplicateAndWrongProviderModels(t *testing.T) {
+	t.Parallel()
+
+	for _, tt := range []struct {
+		name   string
+		models []sigma.EmbeddingModel
+	}{
+		{
+			name: "duplicate embedding model",
+			models: []sigma.EmbeddingModel{
+				{ID: "same", Provider: sigma.ProviderID("dynamic-embeddings"), API: sigma.EmbeddingAPIOpenAIEmbeddings},
+				{ID: "same", Provider: sigma.ProviderID("dynamic-embeddings"), API: sigma.EmbeddingAPIOpenAIEmbeddings},
+			},
+		},
+		{
+			name: "wrong provider",
+			models: []sigma.EmbeddingModel{
+				{ID: "other", Provider: sigma.ProviderID("other"), API: sigma.EmbeddingAPIOpenAIEmbeddings},
+			},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			registry := sigma.NewRegistry()
+			provider := sigma.ProviderID("dynamic-embeddings")
+			if err := registry.RegisterEmbeddingProvider(provider, testEmbeddingProvider{api: sigma.EmbeddingAPIOpenAIEmbeddings}); err != nil {
+				t.Fatalf("RegisterEmbeddingProvider returned error: %v", err)
+			}
+			source := &testEmbeddingModelSource{}
+			source.Set(tt.models...)
+			if err := registry.RegisterEmbeddingModelSource(provider, source); err != nil {
+				t.Fatalf("RegisterEmbeddingModelSource returned error: %v", err)
+			}
+			if err := registry.RefreshEmbeddingModels(context.Background(), provider); err == nil {
+				t.Fatal("RefreshEmbeddingModels returned nil error")
+			}
+			if got := len(registry.ListEmbeddingModels()); got != 0 {
+				t.Fatalf("embedding model count = %d, want 0", got)
+			}
+		})
+	}
+}
+
+func TestRegistryRefreshEmbeddingModelsSupportsMetadataOnlySources(t *testing.T) {
+	t.Parallel()
+
+	registry := sigma.NewRegistry()
+	provider := sigma.ProviderID("metadata-only-embeddings")
+	source := &testEmbeddingModelSource{}
+	source.Set(sigma.EmbeddingModel{ID: "listed", Provider: provider, API: sigma.EmbeddingAPIOpenAIEmbeddings})
+	if err := registry.RegisterEmbeddingModelSource(provider, source, sigma.WithMetadataOnly()); err != nil {
+		t.Fatalf("RegisterEmbeddingModelSource returned error: %v", err)
+	}
+	if err := registry.RefreshEmbeddingModels(context.Background(), provider); err != nil {
+		t.Fatalf("RefreshEmbeddingModels returned error: %v", err)
+	}
+	if _, ok := registry.EmbeddingModel(provider, "listed"); !ok {
+		t.Fatal("metadata-only source embedding model was not registered")
+	}
+}
+
+func TestRegistryRefreshEmbeddingModelsJoinsErrorsAndAppliesSuccessfulSources(t *testing.T) {
+	t.Parallel()
+
+	registry := sigma.NewRegistry()
+	goodProvider := sigma.ProviderID("good-embeddings")
+	badProvider := sigma.ProviderID("bad-embeddings")
+	if err := registry.RegisterEmbeddingProvider(goodProvider, testEmbeddingProvider{api: sigma.EmbeddingAPIOpenAIEmbeddings}); err != nil {
+		t.Fatalf("RegisterEmbeddingProvider(good) returned error: %v", err)
+	}
+	if err := registry.RegisterEmbeddingProvider(badProvider, testEmbeddingProvider{api: sigma.EmbeddingAPIOpenAIEmbeddings}); err != nil {
+		t.Fatalf("RegisterEmbeddingProvider(bad) returned error: %v", err)
+	}
+	good := &testEmbeddingModelSource{}
+	good.Set(sigma.EmbeddingModel{ID: "fresh", Provider: goodProvider, API: sigma.EmbeddingAPIOpenAIEmbeddings})
+	bad := &testEmbeddingModelSource{err: context.Canceled}
+	if err := registry.RegisterEmbeddingModelSource(goodProvider, good); err != nil {
+		t.Fatalf("RegisterEmbeddingModelSource(good) returned error: %v", err)
+	}
+	if err := registry.RegisterEmbeddingModelSource(badProvider, bad); err != nil {
+		t.Fatalf("RegisterEmbeddingModelSource(bad) returned error: %v", err)
+	}
+
+	if err := registry.RefreshEmbeddingModels(context.Background()); err == nil {
+		t.Fatal("RefreshEmbeddingModels returned nil error")
+	}
+	if _, ok := registry.EmbeddingModel(goodProvider, "fresh"); !ok {
+		t.Fatal("successful embedding source was not applied when another source failed")
+	}
+}
+
+func TestRegistryRefreshEmbeddingModelsCancellationLeavesExistingModels(t *testing.T) {
+	t.Parallel()
+
+	registry := sigma.NewRegistry()
+	provider := sigma.ProviderID("dynamic-embeddings")
+	if err := registry.RegisterEmbeddingProvider(provider, testEmbeddingProvider{api: sigma.EmbeddingAPIOpenAIEmbeddings}); err != nil {
+		t.Fatalf("RegisterEmbeddingProvider returned error: %v", err)
+	}
+	source := &testEmbeddingModelSource{}
+	source.Set(sigma.EmbeddingModel{ID: "good", Provider: provider, API: sigma.EmbeddingAPIOpenAIEmbeddings})
+	if err := registry.RegisterEmbeddingModelSource(provider, source); err != nil {
+		t.Fatalf("RegisterEmbeddingModelSource returned error: %v", err)
+	}
+	if err := registry.RefreshEmbeddingModels(context.Background(), provider); err != nil {
+		t.Fatalf("initial RefreshEmbeddingModels returned error: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := registry.RegisterEmbeddingModelSource(provider, sigma.EmbeddingModelSourceFunc(func(ctx context.Context) ([]sigma.EmbeddingModel, error) {
+		return nil, ctx.Err()
+	}), sigma.WithOverride()); err != nil {
+		t.Fatalf("override RegisterEmbeddingModelSource returned error: %v", err)
+	}
+	if err := registry.RefreshEmbeddingModels(ctx, provider); err == nil {
+		t.Fatal("RefreshEmbeddingModels with canceled context returned nil error")
+	}
+	if _, ok := registry.EmbeddingModel(provider, "good"); !ok {
+		t.Fatal("existing source embedding model was removed after canceled refresh")
+	}
+}
+
+func TestClientRefreshEmbeddingModelsUpdatesConfiguredRegistry(t *testing.T) {
+	t.Parallel()
+
+	registry := sigma.NewRegistry()
+	provider := sigma.ProviderID("dynamic-embeddings")
+	if err := registry.RegisterEmbeddingProvider(provider, testEmbeddingProvider{api: sigma.EmbeddingAPIOpenAIEmbeddings}); err != nil {
+		t.Fatalf("RegisterEmbeddingProvider returned error: %v", err)
+	}
+	source := &testEmbeddingModelSource{}
+	source.Set(sigma.EmbeddingModel{ID: "fresh", Provider: provider, API: sigma.EmbeddingAPIOpenAIEmbeddings})
+	if err := registry.RegisterEmbeddingModelSource(provider, source); err != nil {
+		t.Fatalf("RegisterEmbeddingModelSource returned error: %v", err)
+	}
+
+	client := sigma.NewClient(sigma.WithRegistry(registry))
+	if err := client.RefreshEmbeddingModels(context.Background(), provider); err != nil {
+		t.Fatalf("client RefreshEmbeddingModels returned error: %v", err)
+	}
+	models := client.EmbeddingModels()
+	if got, want := len(models), 1; got != want {
+		t.Fatalf("client embedding model count = %d, want %d", got, want)
+	}
+	if got, want := models[0].ID, sigma.ModelID("fresh"); got != want {
+		t.Fatalf("client embedding model id = %q, want %q", got, want)
 	}
 }
 

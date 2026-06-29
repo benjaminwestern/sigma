@@ -32,11 +32,19 @@ type ImageModelSource interface {
 	ImageModels(context.Context) ([]ImageModel, error)
 }
 
+// EmbeddingModelSource lists embedding models for a provider-owned runtime source.
+type EmbeddingModelSource interface {
+	EmbeddingModels(context.Context) ([]EmbeddingModel, error)
+}
+
 // TextModelSourceFunc adapts a function into a TextModelSource.
 type TextModelSourceFunc func(context.Context) ([]Model, error)
 
 // ImageModelSourceFunc adapts a function into an ImageModelSource.
 type ImageModelSourceFunc func(context.Context) ([]ImageModel, error)
+
+// EmbeddingModelSourceFunc adapts a function into an EmbeddingModelSource.
+type EmbeddingModelSourceFunc func(context.Context) ([]EmbeddingModel, error)
 
 // TextModels calls f.
 func (f TextModelSourceFunc) TextModels(ctx context.Context) ([]Model, error) {
@@ -50,6 +58,14 @@ func (f TextModelSourceFunc) TextModels(ctx context.Context) ([]Model, error) {
 func (f ImageModelSourceFunc) ImageModels(ctx context.Context) ([]ImageModel, error) {
 	if f == nil {
 		return nil, registryError("image model source is required")
+	}
+	return f(ctx)
+}
+
+// EmbeddingModels calls f.
+func (f EmbeddingModelSourceFunc) EmbeddingModels(ctx context.Context) ([]EmbeddingModel, error) {
+	if f == nil {
+		return nil, registryError("embedding model source is required")
 	}
 	return f(ctx)
 }
@@ -117,6 +133,11 @@ type imageModelSourceRegistration struct {
 	metadataOnly bool
 }
 
+type embeddingModelSourceRegistration struct {
+	source       EmbeddingModelSource
+	metadataOnly bool
+}
+
 // Registry stores provider implementations and model metadata.
 type Registry struct {
 	mu sync.RWMutex
@@ -143,6 +164,10 @@ type Registry struct {
 
 	embeddingModels     map[ModelRef]EmbeddingModel
 	embeddingModelOrder []ModelRef
+
+	embeddingModelSources     map[ProviderID]embeddingModelSourceRegistration
+	embeddingModelSourceOrder []ProviderID
+	embeddingModelSourceRefs  map[ProviderID]map[ModelRef]struct{}
 }
 
 var defaultRegistry = newDefaultRegistry()
@@ -222,6 +247,14 @@ func RegisterImageModelSource(registry *Registry, provider ProviderID, source Im
 		return registryError("registry is required")
 	}
 	return registry.RegisterImageModelSource(provider, source, opts...)
+}
+
+// RegisterEmbeddingModelSource registers a runtime embedding model source on registry.
+func RegisterEmbeddingModelSource(registry *Registry, provider ProviderID, source EmbeddingModelSource, opts ...RegisterOption) error {
+	if registry == nil {
+		return registryError("registry is required")
+	}
+	return registry.RegisterEmbeddingModelSource(provider, source, opts...)
 }
 
 // RegisterProviderAuth registers auth metadata on registry.
@@ -323,6 +356,34 @@ func (r *Registry) RegisterImageModelSource(provider ProviderID, source ImageMod
 		r.imageModelSourceOrder = append(r.imageModelSourceOrder, provider)
 	}
 	r.imageModelSources[provider] = imageModelSourceRegistration{
+		source:       source,
+		metadataOnly: options.metadataOnly,
+	}
+	return nil
+}
+
+// RegisterEmbeddingModelSource registers a runtime embedding model source for provider.
+func (r *Registry) RegisterEmbeddingModelSource(provider ProviderID, source EmbeddingModelSource, opts ...RegisterOption) error {
+	if provider == "" {
+		return registryError("provider id is required")
+	}
+	if source == nil {
+		return registryError("embedding model source is required")
+	}
+
+	options := applyRegisterOptions(opts)
+	r.ensure()
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if _, ok := r.embeddingModelSources[provider]; ok && !options.override {
+		return registryConflict("embedding model source already registered")
+	}
+	if _, ok := r.embeddingModelSources[provider]; !ok {
+		r.embeddingModelSourceOrder = append(r.embeddingModelSourceOrder, provider)
+	}
+	r.embeddingModelSources[provider] = embeddingModelSourceRegistration{
 		source:       source,
 		metadataOnly: options.metadataOnly,
 	}
@@ -497,6 +558,7 @@ func (r *Registry) RegisterEmbeddingModel(model EmbeddingModel, opts ...Register
 		r.embeddingModelOrder = append(r.embeddingModelOrder, key)
 	}
 	r.embeddingModels[key] = cloneEmbeddingModel(model)
+	r.removeEmbeddingModelSourceRefLocked(model.Provider, key)
 	return nil
 }
 
@@ -547,6 +609,32 @@ func (r *Registry) RefreshImageModels(ctx context.Context, providers ...Provider
 		}
 		if err := r.applyImageModelRefresh(source.provider, source.registration, models); err != nil {
 			errs = append(errs, fmt.Errorf("refresh image models for %s: %w", source.provider, err))
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// RefreshEmbeddingModels refreshes embedding models from registered runtime sources.
+func (r *Registry) RefreshEmbeddingModels(ctx context.Context, providers ...ProviderID) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	r.ensure()
+
+	sources, err := r.embeddingSourcesForRefresh(providers)
+	if err != nil {
+		return err
+	}
+
+	var errs []error
+	for _, source := range sources {
+		models, err := source.registration.source.EmbeddingModels(ctx)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("refresh embedding models for %s: %w", source.provider, err))
+			continue
+		}
+		if err := r.applyEmbeddingModelRefresh(source.provider, source.registration, models); err != nil {
+			errs = append(errs, fmt.Errorf("refresh embedding models for %s: %w", source.provider, err))
 		}
 	}
 	return errors.Join(errs...)
@@ -761,6 +849,13 @@ func (r *Registry) Clone() *Registry {
 	for key, model := range r.embeddingModels {
 		clone.embeddingModels[key] = cloneEmbeddingModel(model)
 	}
+	clone.embeddingModelSourceOrder = append(clone.embeddingModelSourceOrder, r.embeddingModelSourceOrder...)
+	for provider, source := range r.embeddingModelSources {
+		clone.embeddingModelSources[provider] = source
+	}
+	for provider, refs := range r.embeddingModelSourceRefs {
+		clone.embeddingModelSourceRefs[provider] = copyModelRefSet(refs)
+	}
 	return clone
 }
 
@@ -786,15 +881,17 @@ func newDefaultRegistry() *Registry {
 
 func newRegistry() *Registry {
 	return &Registry{
-		providers:            make(map[ProviderID]providerRegistration),
-		textModelSources:     make(map[ProviderID]textModelSourceRegistration),
-		textModelSourceRefs:  make(map[ProviderID]map[ModelRef]struct{}),
-		providerAuths:        make(map[ProviderID]ProviderAuth),
-		models:               make(map[ModelRef]Model),
-		imageModels:          make(map[ModelRef]ImageModel),
-		imageModelSources:    make(map[ProviderID]imageModelSourceRegistration),
-		imageModelSourceRefs: make(map[ProviderID]map[ModelRef]struct{}),
-		embeddingModels:      make(map[ModelRef]EmbeddingModel),
+		providers:                make(map[ProviderID]providerRegistration),
+		textModelSources:         make(map[ProviderID]textModelSourceRegistration),
+		textModelSourceRefs:      make(map[ProviderID]map[ModelRef]struct{}),
+		providerAuths:            make(map[ProviderID]ProviderAuth),
+		models:                   make(map[ModelRef]Model),
+		imageModels:              make(map[ModelRef]ImageModel),
+		imageModelSources:        make(map[ProviderID]imageModelSourceRegistration),
+		imageModelSourceRefs:     make(map[ProviderID]map[ModelRef]struct{}),
+		embeddingModels:          make(map[ModelRef]EmbeddingModel),
+		embeddingModelSources:    make(map[ProviderID]embeddingModelSourceRegistration),
+		embeddingModelSourceRefs: make(map[ProviderID]map[ModelRef]struct{}),
 	}
 }
 
@@ -833,6 +930,12 @@ func (r *Registry) ensure() {
 	if r.embeddingModels == nil {
 		r.embeddingModels = make(map[ModelRef]EmbeddingModel)
 	}
+	if r.embeddingModelSources == nil {
+		r.embeddingModelSources = make(map[ProviderID]embeddingModelSourceRegistration)
+	}
+	if r.embeddingModelSourceRefs == nil {
+		r.embeddingModelSourceRefs = make(map[ProviderID]map[ModelRef]struct{})
+	}
 }
 
 func (r *Registry) removeTextModelSourceRefLocked(provider ProviderID, ref ModelRef) {
@@ -857,6 +960,17 @@ func (r *Registry) removeImageModelSourceRefLocked(provider ProviderID, ref Mode
 	}
 }
 
+func (r *Registry) removeEmbeddingModelSourceRefLocked(provider ProviderID, ref ModelRef) {
+	refs := r.embeddingModelSourceRefs[provider]
+	if len(refs) == 0 {
+		return
+	}
+	delete(refs, ref)
+	if len(refs) == 0 {
+		delete(r.embeddingModelSourceRefs, provider)
+	}
+}
+
 type textSourceForRefresh struct {
 	provider     ProviderID
 	registration textModelSourceRegistration
@@ -865,6 +979,11 @@ type textSourceForRefresh struct {
 type imageSourceForRefresh struct {
 	provider     ProviderID
 	registration imageModelSourceRegistration
+}
+
+type embeddingSourceForRefresh struct {
+	provider     ProviderID
+	registration embeddingModelSourceRegistration
 }
 
 func (r *Registry) textSourcesForRefresh(providers []ProviderID) ([]textSourceForRefresh, error) {
@@ -939,6 +1058,42 @@ func (r *Registry) imageSourcesForRefresh(providers []ProviderID) ([]imageSource
 	return sources, nil
 }
 
+func (r *Registry) embeddingSourcesForRefresh(providers []ProviderID) ([]embeddingSourceForRefresh, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	if len(providers) == 0 {
+		sources := make([]embeddingSourceForRefresh, 0, len(r.embeddingModelSourceOrder))
+		for _, provider := range r.embeddingModelSourceOrder {
+			registration, ok := r.embeddingModelSources[provider]
+			if !ok {
+				continue
+			}
+			sources = append(sources, embeddingSourceForRefresh{
+				provider:     provider,
+				registration: registration,
+			})
+		}
+		return sources, nil
+	}
+
+	sources := make([]embeddingSourceForRefresh, 0, len(providers))
+	for _, provider := range providers {
+		if provider == "" {
+			return nil, registryError("provider id is required")
+		}
+		registration, ok := r.embeddingModelSources[provider]
+		if !ok {
+			return nil, registryError("embedding model source is not registered")
+		}
+		sources = append(sources, embeddingSourceForRefresh{
+			provider:     provider,
+			registration: registration,
+		})
+	}
+	return sources, nil
+}
+
 func (r *Registry) applyTextModelRefresh(provider ProviderID, source textModelSourceRegistration, models []Model) error {
 	refs, copied, err := r.validateTextModelRefresh(provider, source.metadataOnly, models)
 	if err != nil {
@@ -1005,6 +1160,39 @@ func (r *Registry) applyImageModelRefresh(provider ProviderID, source imageModel
 	return nil
 }
 
+func (r *Registry) applyEmbeddingModelRefresh(provider ProviderID, source embeddingModelSourceRegistration, models []EmbeddingModel) error {
+	refs, copied, err := r.validateEmbeddingModelRefresh(provider, source.metadataOnly, models)
+	if err != nil {
+		return err
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	owned := r.embeddingModelSourceRefs[provider]
+	for _, ref := range refs {
+		if _, exists := r.embeddingModels[ref]; exists {
+			if _, ok := owned[ref]; !ok {
+				return registryConflict("embedding model source returned model already registered outside source")
+			}
+		}
+	}
+
+	ownedRefs := r.embeddingModelSourceRefs[provider]
+	if len(ownedRefs) > 0 {
+		for ref := range ownedRefs {
+			delete(r.embeddingModels, ref)
+		}
+		r.embeddingModelOrder = removeModelRefs(r.embeddingModelOrder, ownedRefs)
+	}
+	for index, ref := range refs {
+		r.embeddingModels[ref] = copied[index]
+		r.embeddingModelOrder = append(r.embeddingModelOrder, ref)
+	}
+	r.embeddingModelSourceRefs[provider] = modelRefSet(refs)
+	return nil
+}
+
 func (r *Registry) validateTextModelRefresh(provider ProviderID, metadataOnly bool, models []Model) ([]ModelRef, []Model, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -1057,6 +1245,34 @@ func (r *Registry) validateImageModelRefresh(provider ProviderID, metadataOnly b
 		seen[ref] = struct{}{}
 		refs = append(refs, ref)
 		copied = append(copied, cloneImageModel(model))
+	}
+	return refs, copied, nil
+}
+
+func (r *Registry) validateEmbeddingModelRefresh(provider ProviderID, metadataOnly bool, models []EmbeddingModel) ([]ModelRef, []EmbeddingModel, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	refs := make([]ModelRef, 0, len(models))
+	copied := make([]EmbeddingModel, 0, len(models))
+	seen := make(map[ModelRef]struct{}, len(models))
+	for _, model := range models {
+		if model.Provider != provider {
+			return nil, nil, registryError("embedding model source returned model for different provider")
+		}
+		if err := validateEmbeddingModel(model); err != nil {
+			return nil, nil, err
+		}
+		if err := r.validateEmbeddingModelProviderLocked(model, metadataOnly); err != nil {
+			return nil, nil, err
+		}
+		ref := ModelRef{Provider: model.Provider, ID: model.ID}
+		if _, ok := seen[ref]; ok {
+			return nil, nil, registryConflict("embedding model source returned duplicate model")
+		}
+		seen[ref] = struct{}{}
+		refs = append(refs, ref)
+		copied = append(copied, cloneEmbeddingModel(model))
 	}
 	return refs, copied, nil
 }

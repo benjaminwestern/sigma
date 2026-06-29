@@ -411,6 +411,17 @@ func (c *Client) EmbeddingModels() []EmbeddingModel {
 	return c.registry.ListEmbeddingModels()
 }
 
+// RefreshEmbeddingModels refreshes runtime embedding model sources on the client's registry.
+func (c *Client) RefreshEmbeddingModels(ctx context.Context, providers ...ProviderID) error {
+	if c == nil {
+		c = NewClient()
+	}
+	if c.registry == nil {
+		return registryError("registry is required")
+	}
+	return c.registry.RefreshEmbeddingModels(ctx, providers...)
+}
+
 // GetEmbeddingModel returns an embedding model from the default registry.
 func GetEmbeddingModel(provider ProviderID, id ModelID) (EmbeddingModel, bool) {
 	return defaultClient().GetEmbeddingModel(provider, id)

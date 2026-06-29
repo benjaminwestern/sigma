@@ -65,6 +65,9 @@ workflows remain future work.
 - [x] Add an explicit local OpenAI-compatible embedding registration helper
       with Ollama-friendly defaults and normalized `/v1` base URLs.
 - [x] Add explicit embedding dimension-range metadata for discovery and routing.
+- [x] Add provider-scoped runtime embedding model sources and refresh helpers so
+      applications can update app-owned dynamic embedding model listings
+      without replacing Sigma's curated offline catalog.
 - [x] Add retrieval document/chunk types, deterministic character-based
       splitting, and in-memory cosine search routed through `Client.EmbedBatch`.
 - [x] Add a compact query/document embedder helper around the provider-neutral
