@@ -84,6 +84,10 @@ See [release notes](docs/release-notes-v0.6.0.md).
   request configuration helpers for AI Gateway account/gateway placeholder
   resolution, Bedrock request regions, and Bedrock request-scoped static AWS
   credentials while preserving existing environment fallbacks.
+- Generated Amazon Bedrock metadata now includes focused EU Anthropic Claude
+  regional rows for Fable 5, Haiku 4.5, Opus 4.5/4.6/4.7/4.8, and Sonnet 4.6,
+  reusing the existing EU runtime endpoint fallback for `eu.` inference-profile
+  model IDs.
 - Cloudflare Workers AI now has a first-class OpenAI-compatible Chat
   Completions wrapper for direct Workers AI routes, including request-scoped
   account placeholder resolution, normal bearer-token auth, generated metadata,
@@ -539,8 +543,9 @@ See [release notes](docs/release-notes-v0.3.0.md).
   references, and broad catalog expansion remain deferred until their request
   shapes are covered by deterministic fixtures.
 - Bedrock credential-chain integration, profiles, SSO, web identity, IMDS,
-  shared AWS config loading, broader regional alias expansion beyond the built-in
-  EU inference-profile fallback, and live Bedrock CI coverage remain deferred.
+  shared AWS config loading, broader regional alias expansion beyond focused EU
+  Anthropic inference-profile metadata, and live Bedrock CI coverage remain
+  deferred.
 - Broader Fireworks catalog expansion remains deferred beyond the built-in Fire
   Pass route and the verified Kimi K2.6 and Kimi K2.7 Code rows.
 - Live Google Gemini API and Vertex AI validation remains deferred; deterministic

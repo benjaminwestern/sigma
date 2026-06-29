@@ -39,6 +39,9 @@ can inspect candidate and configured API-key variable names before making a
 request, and focused provider helpers now let callers pass Cloudflare AI
 Gateway placeholder values and Bedrock region/static credential values without
 mutating process environment.
+Generated Bedrock metadata now also includes focused EU Anthropic Claude
+regional rows that reuse the existing `eu.` inference-profile endpoint fallback
+for the EU runtime route.
 Credential stores and provider auth descriptors now give applications an
 opt-in way to resolve stored API keys, serialize OAuth refreshes, and preserve
 rotated credentials while leaving Sigma's default environment-based credential
@@ -298,6 +301,10 @@ catalogs.
 - `bedrock.WithRequestRegion` and `bedrock.WithRequestStaticCredentials` now
   provide request-scoped Bedrock runtime region and static AWS credential values
   before the existing AWS region and static credential environment fallbacks.
+- Generated Amazon Bedrock metadata now includes focused EU Anthropic Claude
+  regional rows for Fable 5, Haiku 4.5, Opus 4.5/4.6/4.7/4.8, and Sonnet 4.6,
+  with deterministic registry assertions and the existing `eu.` runtime
+  endpoint fallback.
 - `cmd/sigma-surface-probe -handoff` now builds a small tool-call context for
   each selected live route/model and replays it pairwise into the other selected
   routes, emitting JSONL diagnostics with `sourceRoute` and `sourceModel` so
@@ -534,6 +541,9 @@ cancellation bar described in [RELEASING.md](../RELEASING.md).
   route, embedding catalog expansion, and any route behavior beyond the shared
   OpenAI-compatible adapters remain deferred until each surface has
   deterministic request, response, error, and metadata evidence.
+- Broader Bedrock regional catalog expansion beyond the focused EU Anthropic
+  rows remains deferred until regional routing, availability, and compatibility
+  evidence are reviewed for each promoted row.
 - Moonshot live-provider expansion beyond the focused direct Chat Completions
   wrapper and reviewed K2.7 metadata remains deferred until route-specific
   behavior needs deterministic evidence.

@@ -257,6 +257,45 @@ func TestGeneratedModelMetadataRegistersIntoFreshRegistry(t *testing.T) {
 	}
 	assertMetadataString(t, nova.ProviderMetadata, "modelFamily", "nova")
 
+	euBedrockModels := []struct {
+		id              string
+		contextWindow   int
+		maxOutputTokens int
+		thinkingFormat  AnthropicThinkingFormat
+		xhigh           string
+	}{
+		{id: "eu.anthropic.claude-fable-5", contextWindow: 1000000, maxOutputTokens: 128000, thinkingFormat: AnthropicThinkingAdaptive, xhigh: "xhigh"},
+		{id: "eu.anthropic.claude-haiku-4-5-20251001-v1:0", contextWindow: 200000, maxOutputTokens: 64000, thinkingFormat: AnthropicThinkingBudget},
+		{id: "eu.anthropic.claude-opus-4-5-20251101-v1:0", contextWindow: 200000, maxOutputTokens: 64000, thinkingFormat: AnthropicThinkingBudget},
+		{id: "eu.anthropic.claude-opus-4-6-v1", contextWindow: 1000000, maxOutputTokens: 128000, thinkingFormat: AnthropicThinkingBudget, xhigh: "max"},
+		{id: "eu.anthropic.claude-opus-4-7", contextWindow: 1000000, maxOutputTokens: 128000, thinkingFormat: AnthropicThinkingBudget, xhigh: "xhigh"},
+		{id: "eu.anthropic.claude-opus-4-8", contextWindow: 1000000, maxOutputTokens: 128000, thinkingFormat: AnthropicThinkingBudget, xhigh: "xhigh"},
+		{id: "eu.anthropic.claude-sonnet-4-6", contextWindow: 1000000, maxOutputTokens: 64000, thinkingFormat: AnthropicThinkingBudget},
+	}
+	for _, tt := range euBedrockModels {
+		model, ok := registry.Model(ProviderAmazonBedrock, ModelID(tt.id))
+		if !ok {
+			t.Fatalf("fresh registry missing generated EU Bedrock model %s", tt.id)
+		}
+		if model.API != APIBedrockConverseStream || !model.SupportsTools || !model.SupportsImages() || !model.SupportsReasoning() {
+			t.Fatalf("EU Bedrock model %s metadata = %+v, want Converse Stream tools, images, and reasoning", tt.id, model)
+		}
+		if model.ContextWindow != tt.contextWindow || model.MaxOutputTokens != tt.maxOutputTokens {
+			t.Fatalf("EU Bedrock model %s limits = context %d max %d, want %d/%d", tt.id, model.ContextWindow, model.MaxOutputTokens, tt.contextWindow, tt.maxOutputTokens)
+		}
+		if model.AnthropicMessagesCompat == nil || model.AnthropicMessagesCompat.ThinkingFormat != tt.thinkingFormat {
+			t.Fatalf("EU Bedrock model %s compat = %#v, want %s thinking", tt.id, model.AnthropicMessagesCompat, tt.thinkingFormat)
+		}
+		if tt.xhigh != "" {
+			if got, ok := model.ProviderThinkingLevel(ThinkingLevelXHigh); !ok || got != tt.xhigh {
+				t.Fatalf("EU Bedrock model %s xhigh level = %q, %v; want %q, true", tt.id, got, ok, tt.xhigh)
+			}
+		}
+		assertMetadataString(t, model.ProviderMetadata, "baseURL", "https://bedrock-runtime.{region}.amazonaws.com")
+		assertMetadataString(t, model.ProviderMetadata, "modelFamily", "claude")
+		assertMetadataStrings(t, model.ProviderMetadata, MetadataAPIKeyEnvVars, []string{"AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN"})
+	}
+
 	routed, ok := registry.Model(ProviderOpenRouter, "openai/gpt-4o-mini")
 	if !ok {
 		t.Fatal("fresh registry missing generated OpenRouter model")

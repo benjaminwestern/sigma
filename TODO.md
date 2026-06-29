@@ -503,6 +503,9 @@ should still come through the catalog refresh workflow.
 - [x] Derive the `eu-central-1` runtime endpoint for built-in EU regional
       inference-profile rows when callers have not configured an endpoint,
       region, or AWS region environment variable.
+- [x] Add focused EU Anthropic Bedrock regional metadata rows for high-value
+      Claude routes that already match the built-in EU runtime endpoint
+      fallback.
 - [x] Derive the runtime region from Bedrock application inference profile ARNs
       supplied as the model ID or `inference_profile_arn` provider option before
       AWS region environment fallbacks, while preserving explicit region
@@ -522,8 +525,8 @@ should still come through the catalog refresh workflow.
 - [ ] Keep live Bedrock validation out of `mise run ci`; use credential-gated
       checks only for manual compatibility investigation.
 - [ ] Expand broad Bedrock generated metadata only through the catalog refresh
-      workflow, with deterministic modeldata, payload, error, and compatibility
-      coverage for promoted rows.
+      workflow, with deterministic modeldata, payload, error, regional routing,
+      and compatibility coverage for promoted rows.
 - [ ] Keep AWS profile, SSO, web identity, IMDS, and shared-config loading
       outside the built-in stdlib Bedrock adapter unless Sigma adopts an AWS SDK
       credential integration.
