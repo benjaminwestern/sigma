@@ -65,6 +65,10 @@ See [release notes](docs/release-notes-v0.6.0.md).
 - `MaxTokensForContext` and `WithMaxTokensForContext` now provide opt-in
   context-aware max-output-token budgeting from model metadata and
   deterministic request estimates without changing provider dispatch defaults.
+- `ReasoningBudgetForContext` and `WithReasoningBudgetForContext` now provide
+  opt-in planning for visible output caps and hidden thinking budgets using
+  model/context metadata and deterministic request estimates without changing
+  provider dispatch defaults.
 - Mistral Conversations now maps cache-enabled `sigma.WithSessionID` requests
   to both `prompt_cache_key` and `x-affinity`, and streamed Mistral cached
   prompt tokens now populate `Usage.CacheReadInputTokens` instead of ordinary

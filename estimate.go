@@ -7,6 +7,7 @@ package sigma
 
 import (
 	"encoding/json"
+	"strconv"
 	"unicode/utf8"
 )
 
@@ -23,6 +24,12 @@ type TokenEstimate struct {
 	UsageTokens           int  `json:"usageTokens,omitempty"`
 	TrailingTokens        int  `json:"trailingTokens,omitempty"`
 	LastUsageMessageIndex *int `json:"lastUsageMessageIndex,omitempty"`
+}
+
+// ReasoningBudget reports an opt-in output and thinking budget plan.
+type ReasoningBudget struct {
+	MaxTokens            int `json:"maxTokens,omitempty"`
+	ThinkingBudgetTokens int `json:"thinkingBudgetTokens,omitempty"`
 }
 
 // EstimateTextTokens returns a deterministic approximate token count for text.
@@ -132,6 +139,90 @@ func WithMaxTokensForContext(model Model, req Request, requestedMaxTokens int) O
 	}
 }
 
+// ReasoningBudgetForContext returns an opt-in max output and thinking budget
+// plan for req, model, and level.
+//
+// requestedMaxTokens is treated as the caller's desired visible output cap when
+// positive; otherwise model.MaxOutputTokens is used. Non-off reasoning levels
+// reserve a thinking budget inside the final max token cap while preserving at
+// least 1024 visible output tokens when possible. The helper uses
+// EstimateRequestTokens and a fixed safety margin; it does not call provider
+// tokenizers or affect dispatch unless the caller applies the returned values.
+func ReasoningBudgetForContext(model Model, req Request, level ThinkingLevel, requestedMaxTokens int) ReasoningBudget {
+	maxTokens := requestedMaxTokens
+	if maxTokens <= 0 {
+		maxTokens = model.MaxOutputTokens
+	}
+	if maxTokens <= 0 {
+		return ReasoningBudget{}
+	}
+
+	thinkingBudget := defaultThinkingBudget(model, level)
+	if thinkingBudget > 0 {
+		maxTokens += thinkingBudget
+	}
+	if model.MaxOutputTokens > 0 && maxTokens > model.MaxOutputTokens {
+		maxTokens = model.MaxOutputTokens
+	}
+	if model.ContextWindow > 0 {
+		available := model.ContextWindow - EstimateRequestTokens(req).Tokens - estimateContextSafetyTokens
+		if available < 1 {
+			available = 1
+		}
+		if available < maxTokens {
+			maxTokens = available
+		}
+	}
+	if thinkingBudget > 0 {
+		thinkingBudget = minInt(thinkingBudget, maxInt(0, maxTokens-1024))
+	}
+	return ReasoningBudget{
+		MaxTokens:            maxTokens,
+		ThinkingBudgetTokens: thinkingBudget,
+	}
+}
+
+// WithReasoningBudgetForContext configures ReasoningLevel, MaxTokens, and
+// ThinkingBudgetTokens from ReasoningBudgetForContext.
+//
+// If ReasoningBudgetForContext returns zero values, this option only applies
+// the requested reasoning level.
+func WithReasoningBudgetForContext(model Model, req Request, level ThinkingLevel, requestedMaxTokens int) Option {
+	return func(options *Options) {
+		options.ReasoningLevel = level
+		budget := ReasoningBudgetForContext(model, req, level, requestedMaxTokens)
+		if budget.MaxTokens > 0 {
+			options.MaxTokens = intPtr(budget.MaxTokens)
+		}
+		if budget.ThinkingBudgetTokens > 0 {
+			options.ThinkingBudgetTokens = intPtr(budget.ThinkingBudgetTokens)
+		}
+	}
+}
+
+func defaultThinkingBudget(model Model, level ThinkingLevel) int {
+	if level == "" || level == ThinkingLevelOff {
+		return 0
+	}
+	if value, ok := model.ProviderThinkingLevel(level); ok {
+		if tokens, err := strconv.Atoi(value); err == nil && tokens > 0 {
+			return tokens
+		}
+	}
+	switch level {
+	case ThinkingLevelMinimal:
+		return 1024
+	case ThinkingLevelLow:
+		return 2048
+	case ThinkingLevelMedium:
+		return 8192
+	case ThinkingLevelHigh, ThinkingLevelXHigh:
+		return 16384
+	default:
+		return 0
+	}
+}
+
 func latestUsageAnchor(messages []Message) (int, int, bool) {
 	for index := len(messages) - 1; index >= 0; index-- {
 		message := messages[index]
@@ -154,4 +245,18 @@ func stableEstimateJSON(value any) string {
 		return "[unserializable]"
 	}
 	return string(encoded)
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }

@@ -215,3 +215,84 @@ func TestMaxTokensForContextWithoutUsableCapReturnsZero(t *testing.T) {
 		t.Fatalf("MaxTokensForContext = %d, want 0", got)
 	}
 }
+
+func TestReasoningBudgetForContextAddsThinkingToVisibleCap(t *testing.T) {
+	t.Parallel()
+
+	model := sigma.Model{ContextWindow: 50000, MaxOutputTokens: 20000}
+	req := sigma.Request{Messages: []sigma.Message{sigma.UserText("12345678")}}
+
+	got := sigma.ReasoningBudgetForContext(model, req, sigma.ThinkingLevelMedium, 2048)
+	want := sigma.ReasoningBudget{MaxTokens: 10240, ThinkingBudgetTokens: 8192}
+	if got != want {
+		t.Fatalf("ReasoningBudgetForContext = %+v, want %+v", got, want)
+	}
+}
+
+func TestReasoningBudgetForContextClampsToModelAndPreservesVisibleOutput(t *testing.T) {
+	t.Parallel()
+
+	model := sigma.Model{ContextWindow: 50000, MaxOutputTokens: 6000}
+	req := sigma.Request{Messages: []sigma.Message{sigma.UserText("12345678")}}
+
+	got := sigma.ReasoningBudgetForContext(model, req, sigma.ThinkingLevelMedium, 2048)
+	want := sigma.ReasoningBudget{MaxTokens: 6000, ThinkingBudgetTokens: 4976}
+	if got != want {
+		t.Fatalf("ReasoningBudgetForContext = %+v, want %+v", got, want)
+	}
+}
+
+func TestReasoningBudgetForContextUsesUsageAnchoredEstimate(t *testing.T) {
+	t.Parallel()
+
+	model := sigma.Model{ContextWindow: 5000, MaxOutputTokens: 20000}
+	req := sigma.Request{Messages: []sigma.Message{
+		sigma.UserText("covered by provider usage"),
+		{
+			Role:       sigma.RoleAssistant,
+			StopReason: sigma.StopReasonEndTurn,
+			Usage:      &sigma.Usage{TotalTokens: 800},
+		},
+		sigma.UserText("12345678"),
+	}}
+
+	got := sigma.ReasoningBudgetForContext(model, req, sigma.ThinkingLevelLow, 2000)
+	want := sigma.ReasoningBudget{MaxTokens: 102}
+	if got != want {
+		t.Fatalf("ReasoningBudgetForContext = %+v, want %+v", got, want)
+	}
+}
+
+func TestReasoningBudgetForContextOffAndEmptyLevelsHaveNoThinkingBudget(t *testing.T) {
+	t.Parallel()
+
+	model := sigma.Model{MaxOutputTokens: 1000}
+	req := sigma.Request{Messages: []sigma.Message{sigma.UserText("12345678")}}
+
+	for _, level := range []sigma.ThinkingLevel{"", sigma.ThinkingLevelOff} {
+		got := sigma.ReasoningBudgetForContext(model, req, level, 500)
+		want := sigma.ReasoningBudget{MaxTokens: 500}
+		if got != want {
+			t.Fatalf("ReasoningBudgetForContext(%q) = %+v, want %+v", level, got, want)
+		}
+	}
+}
+
+func TestReasoningBudgetForContextUsesNumericProviderThinkingLevel(t *testing.T) {
+	t.Parallel()
+
+	model := sigma.Model{
+		ContextWindow:   50000,
+		MaxOutputTokens: 20000,
+		ThinkingLevelMap: map[sigma.ThinkingLevel]string{
+			sigma.ThinkingLevelHigh: "4096",
+		},
+	}
+	req := sigma.Request{Messages: []sigma.Message{sigma.UserText("12345678")}}
+
+	got := sigma.ReasoningBudgetForContext(model, req, sigma.ThinkingLevelHigh, 1000)
+	want := sigma.ReasoningBudget{MaxTokens: 5096, ThinkingBudgetTokens: 4072}
+	if got != want {
+		t.Fatalf("ReasoningBudgetForContext = %+v, want %+v", got, want)
+	}
+}

@@ -25,6 +25,9 @@ cancellation/error coverage (see the coverage standards in
 - [x] Add opt-in context-aware max-output-token budgeting helpers that combine
       model context/output metadata with deterministic request estimates without
       changing dispatch defaults.
+- [x] Add opt-in reasoning budget planning helpers that combine visible output
+      caps, model/context limits, deterministic request estimates, and hidden
+      thinking budgets without changing dispatch defaults.
 - [ ] Keep tokenizer-exact context budgeting deferred unless Sigma adopts a
       provider tokenizer dependency or caller-supplied tokenizer contract.
 - [ ] Keep automatic dispatch-time output-token clamping deferred unless Sigma

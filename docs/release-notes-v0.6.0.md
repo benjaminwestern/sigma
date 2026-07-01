@@ -20,7 +20,11 @@ prompt-cache keys, reports provider cached prompt tokens as cache reads, and
 accepts URL-backed image references for image-capable chat inputs and
 image-bearing tool results. Context-aware max-output-token helpers now let
 callers opt in to output budgeting from model metadata and deterministic
-request estimates without changing provider dispatch defaults. It also adds
+request estimates without changing provider dispatch defaults. Reasoning
+budget planning helpers now also let callers opt in to planning visible output
+caps and hidden thinking budgets together from model/context metadata and
+deterministic request estimates without changing provider dispatch defaults.
+It also adds
 caller-owned GitHub Copilot OAuth
 helpers for
 device-code login, token refresh, request-time credential resolution, and
@@ -142,6 +146,11 @@ catalogs.
   model context/output metadata with `EstimateRequestTokens` to produce an
   opt-in max-output-token cap for callers that want context-aware budgeting
   before dispatch.
+- `sigma.ReasoningBudgetForContext` and
+  `sigma.WithReasoningBudgetForContext` now combine visible output caps,
+  hidden thinking budgets, model context/output metadata, and
+  `EstimateRequestTokens` into an opt-in reasoning budget plan before
+  dispatch.
 - Mistral Conversations now maps cache-enabled `sigma.WithSessionID` requests
   to `prompt_cache_key` and `x-affinity`, and streamed provider cached prompt
   token fields now populate `Usage.CacheReadInputTokens` while preserving raw

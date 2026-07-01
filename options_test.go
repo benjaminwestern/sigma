@@ -232,6 +232,28 @@ func TestWithMaxTokensForContextSetsOnlyUsableBudget(t *testing.T) {
 	}
 }
 
+func TestWithReasoningBudgetForContextSetsReasoningAndBudgets(t *testing.T) {
+	t.Parallel()
+
+	client, provider, model := newOptionsTestClient(t)
+	model.ContextWindow = 50000
+	model.MaxOutputTokens = 20000
+	req := sigma.Request{Messages: []sigma.Message{sigma.UserText("12345678")}}
+
+	if _, err := client.Complete(context.Background(), model, req, sigma.WithReasoningBudgetForContext(model, req, sigma.ThinkingLevelLow, 1000)); err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+	if got, want := provider.opts.ReasoningLevel, sigma.ThinkingLevelLow; got != want {
+		t.Fatalf("reasoning level = %q, want %q", got, want)
+	}
+	if got, want := valueOf(provider.opts.MaxTokens), 3048; got != want {
+		t.Fatalf("max tokens = %d, want %d", got, want)
+	}
+	if got, want := valueOf(provider.opts.ThinkingBudgetTokens), 2024; got != want {
+		t.Fatalf("thinking budget tokens = %d, want %d", got, want)
+	}
+}
+
 func TestOptionsAPIKeyOverrideDoesNotLeakIntoDefaults(t *testing.T) {
 	t.Parallel()
 
