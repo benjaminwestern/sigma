@@ -16,13 +16,17 @@ import (
 )
 
 type optionsRecordingProvider struct {
+	api    sigma.API
 	opts   sigma.Options
 	final  sigma.AssistantMessage
 	called bool
 }
 
 func (p *optionsRecordingProvider) API() sigma.API {
-	return sigma.APIOpenAIResponses
+	if p.api != "" {
+		return p.api
+	}
+	return optionsTestAPI
 }
 
 func (p *optionsRecordingProvider) Stream(ctx context.Context, model sigma.Model, req sigma.Request, opts sigma.Options) *sigma.Stream {
@@ -532,6 +536,7 @@ func TestOptionsValidateCommonInvalidValues(t *testing.T) {
 		name string
 		opt  sigma.Option
 	}{
+		{name: "transport", opt: sigma.WithTransport(sigma.Transport("named-pipe"))},
 		{name: "temperature", opt: sigma.WithTemperature(-0.1)},
 		{name: "max tokens", opt: sigma.WithMaxTokens(-1)},
 		{name: "timeout", opt: sigma.WithTimeout(-time.Second)},
@@ -563,6 +568,90 @@ func TestOptionsValidateCommonInvalidValues(t *testing.T) {
 			}
 			if provider.called {
 				t.Fatal("provider was called for invalid options")
+			}
+		})
+	}
+}
+
+func TestTransportValidationCompatibility(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		api         sigma.API
+		transport   sigma.Transport
+		wantError   bool
+		wantCalled  bool
+		wantCapture sigma.Transport
+	}{
+		{
+			name:      "non codex built in rejects websocket",
+			api:       sigma.APIOpenAIResponses,
+			transport: sigma.TransportWebSocket,
+			wantError: true,
+		},
+		{
+			name:      "non codex built in rejects http",
+			api:       sigma.APIAnthropicMessages,
+			transport: sigma.TransportHTTP,
+			wantError: true,
+		},
+		{
+			name:        "codex accepts websocket",
+			api:         sigma.APIOpenAICodexResponses,
+			transport:   sigma.TransportWebSocket,
+			wantCalled:  true,
+			wantCapture: sigma.TransportWebSocket,
+		},
+		{
+			name:        "custom api accepts known websocket",
+			api:         optionsTestAPI,
+			transport:   sigma.TransportWebSocket,
+			wantCalled:  true,
+			wantCapture: sigma.TransportWebSocket,
+		},
+		{
+			name:        "custom api accepts known http",
+			api:         optionsTestAPI,
+			transport:   sigma.TransportHTTP,
+			wantCalled:  true,
+			wantCapture: sigma.TransportHTTP,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			client, provider, model := newOptionsTestClient(t)
+			model.API = tt.api
+
+			_, err := client.Complete(context.Background(), model, sigma.Request{}, sigma.WithTransport(tt.transport))
+			if tt.wantError {
+				if err == nil {
+					t.Fatal("Complete returned nil error")
+				}
+				var sigmaErr *sigma.Error
+				if !stderrors.As(err, &sigmaErr) {
+					t.Fatalf("error type = %T, want *sigma.Error", err)
+				}
+				if sigmaErr.Code != sigma.ErrorInvalidOptions {
+					t.Fatalf("error code = %q, want %q", sigmaErr.Code, sigma.ErrorInvalidOptions)
+				}
+				if provider.called {
+					t.Fatal("provider was called for invalid transport")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("Complete returned error: %v", err)
+			}
+			if provider.called != tt.wantCalled {
+				t.Fatalf("provider called = %v, want %v", provider.called, tt.wantCalled)
+			}
+			if got := provider.opts.Transport; got != tt.wantCapture {
+				t.Fatalf("transport = %q, want %q", got, tt.wantCapture)
 			}
 		})
 	}
@@ -648,17 +737,20 @@ func TestOpenAIOptionsValidateAPICompatibility(t *testing.T) {
 	}
 }
 
+const optionsTestAPI sigma.API = "options-test"
+
 func newOptionsTestClient(t *testing.T, opts ...sigma.ClientOption) (*sigma.Client, *optionsRecordingProvider, sigma.Model) {
 	t.Helper()
 
 	registry := sigma.NewRegistry()
 	provider := &optionsRecordingProvider{
+		api: optionsTestAPI,
 		final: sigma.AssistantMessage{
 			Content: []sigma.ContentBlock{sigma.Text("ok")},
 		},
 	}
 	providerID := sigma.ProviderID("options-provider")
-	model := sigma.Model{ID: "options-model", Provider: providerID, API: sigma.APIOpenAIResponses}
+	model := sigma.Model{ID: "options-model", Provider: providerID, API: optionsTestAPI}
 	if err := registry.RegisterTextProvider(providerID, provider); err != nil {
 		t.Fatalf("RegisterTextProvider returned error: %v", err)
 	}

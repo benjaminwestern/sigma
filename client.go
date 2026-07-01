@@ -7,6 +7,7 @@ package sigma
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 )
 
@@ -416,6 +417,9 @@ func modelDefaultOptions(model Model) Options {
 }
 
 func validateOptions(model Model, options Options) error {
+	if err := validateTransport(model, options.Transport); err != nil {
+		return err
+	}
 	if options.Temperature != nil && *options.Temperature < 0 {
 		return invalidOptionsError(model, "temperature must be non-negative")
 	}
@@ -483,6 +487,49 @@ func validateOptions(model Model, options Options) error {
 		}
 	}
 	return nil
+}
+
+func validateTransport(model Model, transport Transport) error {
+	switch transport {
+	case "", TransportSSE, TransportHTTP, TransportWebSocket:
+	default:
+		return invalidOptionsError(model, fmt.Sprintf("unsupported transport %q", transport))
+	}
+
+	api := effectiveTextAPI(model)
+	if !builtInTextAPI(api) {
+		return nil
+	}
+	switch transport {
+	case "", TransportSSE:
+		return nil
+	case TransportWebSocket:
+		if api == APIOpenAICodexResponses {
+			return nil
+		}
+		return invalidOptionsError(model, fmt.Sprintf("transport %q is only supported by openai-codex-responses", transport))
+	case TransportHTTP:
+		return invalidOptionsError(model, fmt.Sprintf("transport %q is not supported by streaming text providers", transport))
+	default:
+		return nil
+	}
+}
+
+func builtInTextAPI(api API) bool {
+	switch api {
+	case APIOpenAICompletions,
+		APIOpenAIResponses,
+		APIAzureOpenAIResponses,
+		APIOpenAICodexResponses,
+		APIAnthropicMessages,
+		APIBedrockConverseStream,
+		APIGoogleGenerativeAI,
+		APIGoogleVertex,
+		APIMistralConversations:
+		return true
+	default:
+		return false
+	}
 }
 
 func validBedrockToolChoice(choice BedrockToolChoice) bool {

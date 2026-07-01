@@ -590,7 +590,7 @@ should still come through the catalog refresh workflow.
 - [x] Add Codex WebSocket session caching, cleanup, and SSE fallback behavior.
 - [ ] Add WebSocket transport support for other provider routes only when their
       route-specific wire protocols are covered by deterministic fixtures.
-- [ ] Ensure unsupported transport choices continue to fail locally before any
+- [x] Ensure unsupported transport choices continue to fail locally before any
       network call, with tests asserting the early failure.
 
 ## Usage and cost reporting

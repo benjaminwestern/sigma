@@ -35,7 +35,10 @@ connect timeout plus session-cache debug stats for connection reuse, cached
 context deltas, and fallback diagnostics. Root session-resource cleanup helpers
 now also let callers release cached provider resources without knowing the
 provider-specific cleanup function, with Codex WebSocket sessions registered
-automatically. Kimi and Kimi Coding are promoted as
+automatically. Text request transport choices now also fail locally before
+provider dispatch when callers pass unknown transports or request HTTP/WebSocket
+transport for built-in streaming APIs that do not support them. Kimi and Kimi
+Coding are promoted as
 focused Anthropic-compatible provider slices with generated metadata,
 credential discovery, request headers, adaptive thinking metadata, and
 session-affinity support. Xiaomi is promoted as a focused OpenAI-compatible
@@ -178,6 +181,10 @@ catalogs.
   per-session debug stats for created/reused WebSocket connections, full and
   delta context requests, previous response IDs, WebSocket failures, and SSE
   fallback activation.
+- Text request transport options now validate locally before provider dispatch.
+  Unknown transport strings, HTTP transport for built-in streaming text APIs,
+  and WebSocket transport outside the Codex Responses route fail as invalid
+  options before a provider call is made.
 - `sigma.CleanupSessionResources` and `sigma.RegisterSessionResourceCleanup`
   now provide provider-neutral session resource cleanup. Codex Responses
   WebSocket sessions register automatically, so callers can release one session

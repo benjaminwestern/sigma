@@ -48,6 +48,9 @@ See [release notes](docs/release-notes-v0.6.0.md).
   timeout plus session-cache debug stats for created/reused connections,
   full/delta context requests, previous response IDs, WebSocket failures, and
   SSE fallback activation.
+- Text request transport options now fail locally before provider dispatch when
+  callers pass an unknown transport or request HTTP/WebSocket transport for a
+  built-in streaming API that does not support it.
 - `sigma.CleanupSessionResources` and `sigma.RegisterSessionResourceCleanup`
   now provide a provider-neutral way to release cached session resources, with
   OpenAI Codex Responses WebSocket sessions registered automatically while the
