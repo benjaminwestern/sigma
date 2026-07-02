@@ -583,6 +583,9 @@ should still come through the catalog refresh workflow.
       provider options for advanced fields.
 - [x] Add GitHub Copilot and Cloudflare AI Gateway Anthropic Messages routing
       coverage before making either a first-class Anthropic-compatible row.
+- [x] Normalize built-in Anthropic Messages base URLs for Anthropic, Vercel AI
+      Gateway, GitHub Copilot, and Cloudflare AI Gateway so Sigma's adapter
+      appends `/messages` to versioned route bases.
 - [ ] Add opt-in live Anthropic-compatible provider probes for compatibility
       metadata, separate from the deterministic release gate.
 

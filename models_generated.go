@@ -1339,7 +1339,7 @@ var builtinTextModels = []Model{
 		},
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"ANTHROPIC_API_KEY"},
-			"baseURL":             "https://api.anthropic.com",
+			"baseURL":             "https://api.anthropic.com/v1",
 			"headers":             map[string]string{"anthropic-version": "2023-06-01"},
 			"modelFamily":         "claude",
 		},
@@ -1367,7 +1367,7 @@ var builtinTextModels = []Model{
 		},
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"ANTHROPIC_API_KEY"},
-			"baseURL":             "https://api.anthropic.com",
+			"baseURL":             "https://api.anthropic.com/v1",
 			"headers":             map[string]string{"anthropic-version": "2023-06-01"},
 			"modelFamily":         "claude",
 		},
@@ -1395,7 +1395,7 @@ var builtinTextModels = []Model{
 		},
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"ANTHROPIC_API_KEY"},
-			"baseURL":             "https://api.anthropic.com",
+			"baseURL":             "https://api.anthropic.com/v1",
 			"headers":             map[string]string{"anthropic-version": "2023-06-01"},
 			"modelFamily":         "claude",
 		},
@@ -1423,7 +1423,7 @@ var builtinTextModels = []Model{
 		},
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"ANTHROPIC_API_KEY"},
-			"baseURL":             "https://api.anthropic.com",
+			"baseURL":             "https://api.anthropic.com/v1",
 			"headers":             map[string]string{"anthropic-version": "2023-06-01"},
 			"modelFamily":         "claude",
 		},
@@ -1452,7 +1452,7 @@ var builtinTextModels = []Model{
 		},
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"ANTHROPIC_API_KEY"},
-			"baseURL":             "https://api.anthropic.com",
+			"baseURL":             "https://api.anthropic.com/v1",
 			"headers":             map[string]string{"anthropic-version": "2023-06-01"},
 			"modelFamily":         "claude",
 		},
@@ -1480,7 +1480,7 @@ var builtinTextModels = []Model{
 		},
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"ANTHROPIC_API_KEY"},
-			"baseURL":             "https://api.anthropic.com",
+			"baseURL":             "https://api.anthropic.com/v1",
 			"headers":             map[string]string{"anthropic-version": "2023-06-01"},
 			"modelFamily":         "claude",
 		},
@@ -1508,7 +1508,7 @@ var builtinTextModels = []Model{
 		},
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"ANTHROPIC_API_KEY"},
-			"baseURL":             "https://api.anthropic.com",
+			"baseURL":             "https://api.anthropic.com/v1",
 			"headers":             map[string]string{"anthropic-version": "2023-06-01"},
 			"modelFamily":         "claude",
 		},
@@ -1536,7 +1536,7 @@ var builtinTextModels = []Model{
 		},
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"ANTHROPIC_API_KEY"},
-			"baseURL":             "https://api.anthropic.com",
+			"baseURL":             "https://api.anthropic.com/v1",
 			"headers":             map[string]string{"anthropic-version": "2023-06-01"},
 			"modelFamily":         "claude",
 		},
@@ -1569,7 +1569,7 @@ var builtinTextModels = []Model{
 		},
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"ANTHROPIC_API_KEY"},
-			"baseURL":             "https://api.anthropic.com",
+			"baseURL":             "https://api.anthropic.com/v1",
 			"headers":             map[string]string{"anthropic-version": "2023-06-01"},
 			"modelFamily":         "claude",
 		},
@@ -1598,7 +1598,7 @@ var builtinTextModels = []Model{
 		},
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"ANTHROPIC_API_KEY"},
-			"baseURL":             "https://api.anthropic.com",
+			"baseURL":             "https://api.anthropic.com/v1",
 			"headers":             map[string]string{"anthropic-version": "2023-06-01"},
 			"modelFamily":         "claude",
 		},
@@ -1627,7 +1627,7 @@ var builtinTextModels = []Model{
 		},
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"ANTHROPIC_API_KEY"},
-			"baseURL":             "https://api.anthropic.com",
+			"baseURL":             "https://api.anthropic.com/v1",
 			"headers":             map[string]string{"anthropic-version": "2023-06-01"},
 			"modelFamily":         "claude",
 		},
@@ -1656,7 +1656,7 @@ var builtinTextModels = []Model{
 		},
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"ANTHROPIC_API_KEY"},
-			"baseURL":             "https://api.anthropic.com",
+			"baseURL":             "https://api.anthropic.com/v1",
 			"headers":             map[string]string{"anthropic-version": "2023-06-01"},
 			"modelFamily":         "claude",
 		},
@@ -1685,7 +1685,7 @@ var builtinTextModels = []Model{
 		},
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"ANTHROPIC_API_KEY"},
-			"baseURL":             "https://api.anthropic.com",
+			"baseURL":             "https://api.anthropic.com/v1",
 			"headers":             map[string]string{"anthropic-version": "2023-06-01"},
 			"modelFamily":         "claude",
 		},
@@ -1714,7 +1714,7 @@ var builtinTextModels = []Model{
 		},
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"ANTHROPIC_API_KEY"},
-			"baseURL":             "https://api.anthropic.com",
+			"baseURL":             "https://api.anthropic.com/v1",
 			"headers":             map[string]string{"anthropic-version": "2023-06-01"},
 			"modelFamily":         "claude",
 		},
@@ -1743,7 +1743,7 @@ var builtinTextModels = []Model{
 		},
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"ANTHROPIC_API_KEY"},
-			"baseURL":             "https://api.anthropic.com",
+			"baseURL":             "https://api.anthropic.com/v1",
 			"headers":             map[string]string{"anthropic-version": "2023-06-01"},
 			"modelFamily":         "claude",
 		},
@@ -1772,7 +1772,7 @@ var builtinTextModels = []Model{
 		},
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"ANTHROPIC_API_KEY"},
-			"baseURL":             "https://api.anthropic.com",
+			"baseURL":             "https://api.anthropic.com/v1",
 			"headers":             map[string]string{"anthropic-version": "2023-06-01"},
 			"modelFamily":         "claude",
 		},
@@ -1801,7 +1801,7 @@ var builtinTextModels = []Model{
 		},
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"ANTHROPIC_API_KEY"},
-			"baseURL":             "https://api.anthropic.com",
+			"baseURL":             "https://api.anthropic.com/v1",
 			"headers":             map[string]string{"anthropic-version": "2023-06-01"},
 			"modelFamily":         "claude",
 		},
@@ -1833,7 +1833,7 @@ var builtinTextModels = []Model{
 		},
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"ANTHROPIC_API_KEY"},
-			"baseURL":             "https://api.anthropic.com",
+			"baseURL":             "https://api.anthropic.com/v1",
 			"headers":             map[string]string{"anthropic-version": "2023-06-01"},
 			"modelFamily":         "claude",
 		},
@@ -1865,7 +1865,7 @@ var builtinTextModels = []Model{
 		},
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"ANTHROPIC_API_KEY"},
-			"baseURL":             "https://api.anthropic.com",
+			"baseURL":             "https://api.anthropic.com/v1",
 			"headers":             map[string]string{"anthropic-version": "2023-06-01"},
 			"modelFamily":         "claude",
 		},
@@ -1897,7 +1897,7 @@ var builtinTextModels = []Model{
 		},
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"ANTHROPIC_API_KEY"},
-			"baseURL":             "https://api.anthropic.com",
+			"baseURL":             "https://api.anthropic.com/v1",
 			"headers":             map[string]string{"anthropic-version": "2023-06-01"},
 			"modelFamily":         "claude",
 		},
@@ -1926,7 +1926,7 @@ var builtinTextModels = []Model{
 		},
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"ANTHROPIC_API_KEY"},
-			"baseURL":             "https://api.anthropic.com",
+			"baseURL":             "https://api.anthropic.com/v1",
 			"headers":             map[string]string{"anthropic-version": "2023-06-01"},
 			"modelFamily":         "claude",
 		},
@@ -1955,7 +1955,7 @@ var builtinTextModels = []Model{
 		},
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"ANTHROPIC_API_KEY"},
-			"baseURL":             "https://api.anthropic.com",
+			"baseURL":             "https://api.anthropic.com/v1",
 			"headers":             map[string]string{"anthropic-version": "2023-06-01"},
 			"modelFamily":         "claude",
 		},
@@ -1984,7 +1984,7 @@ var builtinTextModels = []Model{
 		},
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"ANTHROPIC_API_KEY"},
-			"baseURL":             "https://api.anthropic.com",
+			"baseURL":             "https://api.anthropic.com/v1",
 			"headers":             map[string]string{"anthropic-version": "2023-06-01"},
 			"modelFamily":         "claude",
 		},
@@ -2013,7 +2013,7 @@ var builtinTextModels = []Model{
 		},
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"ANTHROPIC_API_KEY"},
-			"baseURL":             "https://api.anthropic.com",
+			"baseURL":             "https://api.anthropic.com/v1",
 			"headers":             map[string]string{"anthropic-version": "2023-06-01"},
 			"modelFamily":         "claude",
 		},
@@ -2042,7 +2042,7 @@ var builtinTextModels = []Model{
 		},
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"ANTHROPIC_API_KEY"},
-			"baseURL":             "https://api.anthropic.com",
+			"baseURL":             "https://api.anthropic.com/v1",
 			"headers":             map[string]string{"anthropic-version": "2023-06-01"},
 			"modelFamily":         "claude",
 		},
@@ -3343,7 +3343,7 @@ var builtinTextModels = []Model{
 		DefaultTransport:              Transport("sse"),
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"CLOUDFLARE_API_KEY"},
-			"baseURL":             "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic",
+			"baseURL":             "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic/v1",
 			"gatewayProvider":     "anthropic-messages",
 			"headers":             map[string]string{},
 			"modelFamily":         "claude",
@@ -3366,7 +3366,7 @@ var builtinTextModels = []Model{
 		DefaultTransport:              Transport("sse"),
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"CLOUDFLARE_API_KEY"},
-			"baseURL":             "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic",
+			"baseURL":             "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic/v1",
 			"gatewayProvider":     "anthropic-messages",
 			"headers":             map[string]string{},
 			"modelFamily":         "claude",
@@ -3389,7 +3389,7 @@ var builtinTextModels = []Model{
 		DefaultTransport:              Transport("sse"),
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"CLOUDFLARE_API_KEY"},
-			"baseURL":             "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic",
+			"baseURL":             "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic/v1",
 			"gatewayProvider":     "anthropic-messages",
 			"headers":             map[string]string{},
 			"modelFamily":         "claude",
@@ -3412,7 +3412,7 @@ var builtinTextModels = []Model{
 		DefaultTransport:              Transport("sse"),
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"CLOUDFLARE_API_KEY"},
-			"baseURL":             "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic",
+			"baseURL":             "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic/v1",
 			"gatewayProvider":     "anthropic-messages",
 			"headers":             map[string]string{},
 			"modelFamily":         "claude",
@@ -3435,7 +3435,7 @@ var builtinTextModels = []Model{
 		DefaultTransport:              Transport("sse"),
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"CLOUDFLARE_API_KEY"},
-			"baseURL":             "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic",
+			"baseURL":             "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic/v1",
 			"gatewayProvider":     "anthropic-messages",
 			"headers":             map[string]string{},
 			"modelFamily":         "claude",
@@ -3458,7 +3458,7 @@ var builtinTextModels = []Model{
 		DefaultTransport:              Transport("sse"),
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"CLOUDFLARE_API_KEY"},
-			"baseURL":             "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic",
+			"baseURL":             "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic/v1",
 			"gatewayProvider":     "anthropic-messages",
 			"headers":             map[string]string{},
 			"modelFamily":         "claude",
@@ -3482,7 +3482,7 @@ var builtinTextModels = []Model{
 		DefaultTransport:              Transport("sse"),
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"CLOUDFLARE_API_KEY"},
-			"baseURL":             "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic",
+			"baseURL":             "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic/v1",
 			"gatewayProvider":     "anthropic-messages",
 			"headers":             map[string]string{},
 			"modelFamily":         "claude",
@@ -3506,7 +3506,7 @@ var builtinTextModels = []Model{
 		DefaultTransport:              Transport("sse"),
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"CLOUDFLARE_API_KEY"},
-			"baseURL":             "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic",
+			"baseURL":             "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic/v1",
 			"gatewayProvider":     "anthropic-messages",
 			"headers":             map[string]string{},
 			"modelFamily":         "claude",
@@ -3530,7 +3530,7 @@ var builtinTextModels = []Model{
 		DefaultTransport:              Transport("sse"),
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"CLOUDFLARE_API_KEY"},
-			"baseURL":             "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic",
+			"baseURL":             "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic/v1",
 			"gatewayProvider":     "anthropic-messages",
 			"headers":             map[string]string{},
 			"modelFamily":         "claude",
@@ -3554,7 +3554,7 @@ var builtinTextModels = []Model{
 		DefaultTransport:              Transport("sse"),
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"CLOUDFLARE_API_KEY"},
-			"baseURL":             "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic",
+			"baseURL":             "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic/v1",
 			"gatewayProvider":     "anthropic-messages",
 			"headers":             map[string]string{},
 			"modelFamily":         "claude",
@@ -3584,7 +3584,7 @@ var builtinTextModels = []Model{
 		},
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"CLOUDFLARE_API_KEY"},
-			"baseURL":             "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic",
+			"baseURL":             "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic/v1",
 			"gatewayProvider":     "anthropic-messages",
 			"headers":             map[string]string{},
 			"modelFamily":         "claude",
@@ -3615,7 +3615,7 @@ var builtinTextModels = []Model{
 		},
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"CLOUDFLARE_API_KEY"},
-			"baseURL":             "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic",
+			"baseURL":             "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic/v1",
 			"gatewayProvider":     "anthropic-messages",
 			"headers":             map[string]string{},
 			"modelFamily":         "claude",
@@ -3646,7 +3646,7 @@ var builtinTextModels = []Model{
 		},
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"CLOUDFLARE_API_KEY"},
-			"baseURL":             "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic",
+			"baseURL":             "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic/v1",
 			"gatewayProvider":     "anthropic-messages",
 			"headers":             map[string]string{},
 			"modelFamily":         "claude",
@@ -3670,7 +3670,7 @@ var builtinTextModels = []Model{
 		DefaultTransport:              Transport("sse"),
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"CLOUDFLARE_API_KEY"},
-			"baseURL":             "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic",
+			"baseURL":             "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic/v1",
 			"gatewayProvider":     "anthropic-messages",
 			"headers":             map[string]string{},
 			"modelFamily":         "claude",
@@ -3694,7 +3694,7 @@ var builtinTextModels = []Model{
 		DefaultTransport:              Transport("sse"),
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"CLOUDFLARE_API_KEY"},
-			"baseURL":             "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic",
+			"baseURL":             "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic/v1",
 			"gatewayProvider":     "anthropic-messages",
 			"headers":             map[string]string{},
 			"modelFamily":         "claude",
@@ -3721,7 +3721,7 @@ var builtinTextModels = []Model{
 		},
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"CLOUDFLARE_API_KEY"},
-			"baseURL":             "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic",
+			"baseURL":             "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic/v1",
 			"gatewayProvider":     "anthropic-messages",
 			"headers":             map[string]string{},
 			"modelFamily":         "claude",
@@ -4673,7 +4673,7 @@ var builtinTextModels = []Model{
 		},
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"COPILOT_GITHUB_TOKEN"},
-			"baseURL":             "https://api.individual.githubcopilot.com",
+			"baseURL":             "https://api.individual.githubcopilot.com/v1",
 			"headers":             map[string]string{"Copilot-Integration-Id": "vscode-chat", "Editor-Plugin-Version": "copilot-chat/0.35.0", "Editor-Version": "vscode/1.107.0", "User-Agent": "GitHubCopilotChat/0.35.0"},
 			"modelFamily":         "claude",
 		},
@@ -4696,7 +4696,7 @@ var builtinTextModels = []Model{
 		DefaultTransport:              Transport("sse"),
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"COPILOT_GITHUB_TOKEN"},
-			"baseURL":             "https://api.individual.githubcopilot.com",
+			"baseURL":             "https://api.individual.githubcopilot.com/v1",
 			"headers":             map[string]string{"Copilot-Integration-Id": "vscode-chat", "Editor-Plugin-Version": "copilot-chat/0.35.0", "Editor-Version": "vscode/1.107.0", "User-Agent": "GitHubCopilotChat/0.35.0"},
 			"modelFamily":         "claude",
 		},
@@ -4725,7 +4725,7 @@ var builtinTextModels = []Model{
 		},
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"COPILOT_GITHUB_TOKEN"},
-			"baseURL":             "https://api.individual.githubcopilot.com",
+			"baseURL":             "https://api.individual.githubcopilot.com/v1",
 			"headers":             map[string]string{"Copilot-Integration-Id": "vscode-chat", "Editor-Plugin-Version": "copilot-chat/0.35.0", "Editor-Version": "vscode/1.107.0", "User-Agent": "GitHubCopilotChat/0.35.0"},
 			"modelFamily":         "claude",
 		},
@@ -4755,7 +4755,7 @@ var builtinTextModels = []Model{
 		},
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"COPILOT_GITHUB_TOKEN"},
-			"baseURL":             "https://api.individual.githubcopilot.com",
+			"baseURL":             "https://api.individual.githubcopilot.com/v1",
 			"headers":             map[string]string{"Copilot-Integration-Id": "vscode-chat", "Editor-Plugin-Version": "copilot-chat/0.35.0", "Editor-Version": "vscode/1.107.0", "User-Agent": "GitHubCopilotChat/0.35.0"},
 			"modelFamily":         "claude",
 		},
@@ -4785,7 +4785,7 @@ var builtinTextModels = []Model{
 		},
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"COPILOT_GITHUB_TOKEN"},
-			"baseURL":             "https://api.individual.githubcopilot.com",
+			"baseURL":             "https://api.individual.githubcopilot.com/v1",
 			"headers":             map[string]string{"Copilot-Integration-Id": "vscode-chat", "Editor-Plugin-Version": "copilot-chat/0.35.0", "Editor-Version": "vscode/1.107.0", "User-Agent": "GitHubCopilotChat/0.35.0"},
 			"modelFamily":         "claude",
 		},
@@ -4811,7 +4811,7 @@ var builtinTextModels = []Model{
 		},
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"COPILOT_GITHUB_TOKEN"},
-			"baseURL":             "https://api.individual.githubcopilot.com",
+			"baseURL":             "https://api.individual.githubcopilot.com/v1",
 			"headers":             map[string]string{"Copilot-Integration-Id": "vscode-chat", "Editor-Plugin-Version": "copilot-chat/0.35.0", "Editor-Version": "vscode/1.107.0", "User-Agent": "GitHubCopilotChat/0.35.0"},
 			"modelFamily":         "claude",
 		},
@@ -4837,7 +4837,7 @@ var builtinTextModels = []Model{
 		},
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"COPILOT_GITHUB_TOKEN"},
-			"baseURL":             "https://api.individual.githubcopilot.com",
+			"baseURL":             "https://api.individual.githubcopilot.com/v1",
 			"headers":             map[string]string{"Copilot-Integration-Id": "vscode-chat", "Editor-Plugin-Version": "copilot-chat/0.35.0", "Editor-Version": "vscode/1.107.0", "User-Agent": "GitHubCopilotChat/0.35.0"},
 			"modelFamily":         "claude",
 		},
@@ -4863,7 +4863,7 @@ var builtinTextModels = []Model{
 		},
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"COPILOT_GITHUB_TOKEN"},
-			"baseURL":             "https://api.individual.githubcopilot.com",
+			"baseURL":             "https://api.individual.githubcopilot.com/v1",
 			"headers":             map[string]string{"Copilot-Integration-Id": "vscode-chat", "Editor-Plugin-Version": "copilot-chat/0.35.0", "Editor-Version": "vscode/1.107.0", "User-Agent": "GitHubCopilotChat/0.35.0"},
 			"modelFamily":         "claude",
 		},
@@ -11882,7 +11882,7 @@ var builtinTextModels = []Model{
 		DefaultTransport:              Transport("sse"),
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"AI_GATEWAY_API_KEY"},
-			"baseURL":             "https://ai-gateway.vercel.sh",
+			"baseURL":             "https://ai-gateway.vercel.sh/v1",
 			"gatewayProvider":     "vercel",
 			"headers":             map[string]string{},
 			"modelFamily":         "claude",
@@ -11913,7 +11913,7 @@ var builtinTextModels = []Model{
 		},
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"AI_GATEWAY_API_KEY"},
-			"baseURL":             "https://ai-gateway.vercel.sh",
+			"baseURL":             "https://ai-gateway.vercel.sh/v1",
 			"gatewayProvider":     "vercel",
 			"headers":             map[string]string{},
 			"modelFamily":         "claude",
@@ -11940,7 +11940,7 @@ var builtinTextModels = []Model{
 		},
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"AI_GATEWAY_API_KEY"},
-			"baseURL":             "https://ai-gateway.vercel.sh",
+			"baseURL":             "https://ai-gateway.vercel.sh/v1",
 			"gatewayProvider":     "vercel",
 			"headers":             map[string]string{},
 			"modelFamily":         "claude",
@@ -11963,7 +11963,7 @@ var builtinTextModels = []Model{
 		DefaultTransport:             Transport("sse"),
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"AI_GATEWAY_API_KEY"},
-			"baseURL":             "https://ai-gateway.vercel.sh",
+			"baseURL":             "https://ai-gateway.vercel.sh/v1",
 			"gatewayProvider":     "vercel",
 			"headers":             map[string]string{},
 			"modelFamily":         "gemini",
@@ -11989,7 +11989,7 @@ var builtinTextModels = []Model{
 		DefaultTransport:             Transport("sse"),
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"AI_GATEWAY_API_KEY"},
-			"baseURL":             "https://ai-gateway.vercel.sh",
+			"baseURL":             "https://ai-gateway.vercel.sh/v1",
 			"gatewayProvider":     "vercel",
 			"headers":             map[string]string{},
 			"modelFamily":         "gpt",
@@ -12015,7 +12015,7 @@ var builtinTextModels = []Model{
 		DefaultTransport:             Transport("sse"),
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"AI_GATEWAY_API_KEY"},
-			"baseURL":             "https://ai-gateway.vercel.sh",
+			"baseURL":             "https://ai-gateway.vercel.sh/v1",
 			"gatewayProvider":     "vercel",
 			"headers":             map[string]string{},
 			"modelFamily":         "gpt",
@@ -12038,7 +12038,7 @@ var builtinTextModels = []Model{
 		DefaultTransport:             Transport("sse"),
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"AI_GATEWAY_API_KEY"},
-			"baseURL":             "https://ai-gateway.vercel.sh",
+			"baseURL":             "https://ai-gateway.vercel.sh/v1",
 			"gatewayProvider":     "vercel",
 			"headers":             map[string]string{},
 			"modelFamily":         "grok",
@@ -12061,7 +12061,7 @@ var builtinTextModels = []Model{
 		DefaultTransport:             Transport("sse"),
 		ProviderMetadata: map[string]any{
 			MetadataAPIKeyEnvVars: []string{"AI_GATEWAY_API_KEY"},
-			"baseURL":             "https://ai-gateway.vercel.sh",
+			"baseURL":             "https://ai-gateway.vercel.sh/v1",
 			"gatewayProvider":     "vercel",
 			"headers":             map[string]string{},
 			"modelFamily":         "glm",

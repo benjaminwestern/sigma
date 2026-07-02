@@ -215,6 +215,10 @@ See [release notes](docs/release-notes-v0.6.0.md).
 
 ### Fixed
 
+- Built-in Anthropic Messages routes now use versioned base URLs for Anthropic,
+  Vercel AI Gateway, GitHub Copilot, and Cloudflare AI Gateway metadata and
+  wrapper defaults, so Sigma dispatches to `/v1/messages`-shaped endpoints
+  instead of provider-root `/messages` paths.
 - OpenAI Responses streams now require a terminal provider response event before
   treating EOF as success, preserve partial content on premature EOF errors, and
   finalize terminal incomplete responses as max-token stops with usage intact.

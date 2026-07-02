@@ -68,7 +68,7 @@ func TestAIGatewayAnthropicResolvesPlaceholdersAndUsesGatewayAuth(t *testing.T) 
 	registry := sigma.NewRegistry()
 	if err := cloudflare.RegisterAIGatewayAnthropic(
 		registry,
-		cloudflare.WithAnthropicBaseURL(server.URL+"/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic"),
+		cloudflare.WithAnthropicBaseURL(server.URL+"/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic/v1"),
 	); err != nil {
 		t.Fatalf("RegisterAIGatewayAnthropic returned error: %v", err)
 	}
@@ -87,7 +87,7 @@ func TestAIGatewayAnthropicResolvesPlaceholdersAndUsesGatewayAuth(t *testing.T) 
 	}
 
 	request := receiveRequest(t, requests)
-	if got, want := request.Path, "/account/gateway/anthropic/messages"; got != want {
+	if got, want := request.Path, "/account/gateway/anthropic/v1/messages"; got != want {
 		t.Fatalf("path = %q, want %q", got, want)
 	}
 	assertHeader(t, request.Headers, "cf-aig-authorization", "Bearer cf-token")
@@ -188,7 +188,7 @@ func TestAIGatewayAnthropicUsesStoredProviderConfig(t *testing.T) {
 	registry := sigma.NewRegistry()
 	if err := cloudflare.RegisterAIGatewayAnthropic(
 		registry,
-		cloudflare.WithAnthropicBaseURL(server.URL+"/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic"),
+		cloudflare.WithAnthropicBaseURL(server.URL+"/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic/v1"),
 	); err != nil {
 		t.Fatalf("RegisterAIGatewayAnthropic returned error: %v", err)
 	}
@@ -210,7 +210,7 @@ func TestAIGatewayAnthropicUsesStoredProviderConfig(t *testing.T) {
 	}
 
 	request := receiveRequest(t, requests)
-	if got, want := request.Path, "/stored-account/stored-gateway/anthropic/messages"; got != want {
+	if got, want := request.Path, "/stored-account/stored-gateway/anthropic/v1/messages"; got != want {
 		t.Fatalf("path = %q, want %q", got, want)
 	}
 	assertHeader(t, request.Headers, "cf-aig-authorization", "Bearer stored-token")

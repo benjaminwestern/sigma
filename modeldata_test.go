@@ -125,6 +125,7 @@ func TestGeneratedModelMetadataRegistersIntoFreshRegistry(t *testing.T) {
 	if anthropic.ContextWindow == 0 || anthropic.MaxOutputTokens == 0 {
 		t.Fatalf("Anthropic limits were not generated: %+v", anthropic)
 	}
+	assertMetadataString(t, anthropic.ProviderMetadata, "baseURL", "https://api.anthropic.com/v1")
 	headers, ok := anthropic.ProviderMetadata["headers"].(map[string]string)
 	if !ok {
 		t.Fatalf("Anthropic headers metadata type = %T, want map[string]string", anthropic.ProviderMetadata["headers"])
@@ -812,6 +813,7 @@ func assertGeneratedOpenAICompatibleProviderMetadata(t *testing.T, registry *Reg
 		{provider: ProviderNVIDIA, id: "openai/gpt-oss-20b", baseURL: "https://integrate.api.nvidia.com/v1", envVars: []string{"NVIDIA_API_KEY"}},
 		{provider: ProviderXAI, id: "grok-3", baseURL: "https://api.x.ai/v1", envVars: []string{"XAI_API_KEY"}},
 		{provider: ProviderGitHubCopilot, id: "gpt-5.2-codex", baseURL: "https://api.individual.githubcopilot.com", envVars: []string{"COPILOT_GITHUB_TOKEN"}},
+		{provider: ProviderGitHubCopilot, id: "claude-sonnet-4.6", baseURL: "https://api.individual.githubcopilot.com/v1", envVars: []string{"COPILOT_GITHUB_TOKEN"}},
 		{provider: ProviderZAI, id: "glm-5.1", baseURL: "https://api.z.ai/api/coding/paas/v4", envVars: []string{"ZAI_API_KEY"}},
 		{provider: ProviderZAICodingCN, id: "glm-5.2", baseURL: "https://open.bigmodel.cn/api/coding/paas/v4", envVars: []string{"ZAI_CODING_CN_API_KEY"}},
 	} {
@@ -880,6 +882,16 @@ func assertGeneratedOpenAICompatibleProviderMetadata(t *testing.T, registry *Reg
 	}
 	assertMetadataString(t, cloudflare.ProviderMetadata, "baseURL", "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/openai")
 	assertMetadataStrings(t, cloudflare.ProviderMetadata, MetadataAPIKeyEnvVars, []string{"CLOUDFLARE_API_KEY"})
+
+	cloudflareAnthropic, ok := registry.Model(ProviderCloudflareAIGateway, "claude-sonnet-4-6")
+	if !ok {
+		t.Fatal("fresh registry missing generated Cloudflare AI Gateway Anthropic model")
+	}
+	if cloudflareAnthropic.API != APIAnthropicMessages || !cloudflareAnthropic.SupportsTools || !cloudflareAnthropic.SupportsImages() || !cloudflareAnthropic.SupportsReasoning() {
+		t.Fatalf("Cloudflare AI Gateway Anthropic model capabilities = %+v, want Messages tools, images, and reasoning", cloudflareAnthropic)
+	}
+	assertMetadataString(t, cloudflareAnthropic.ProviderMetadata, "baseURL", "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic/v1")
+	assertMetadataStrings(t, cloudflareAnthropic.ProviderMetadata, MetadataAPIKeyEnvVars, []string{"CLOUDFLARE_API_KEY"})
 
 	azure, ok := registry.Model(ProviderAzureOpenAIResponses, "gpt-5.4")
 	if !ok {
@@ -987,7 +999,7 @@ func assertGeneratedAnthropicCompatibleProviderMetadata(t *testing.T, registry *
 		vercel.AnthropicMessagesCompat.SupportsTemperature != AnthropicCompatUnsupported {
 		t.Fatalf("Vercel AI Gateway compat = %#v, want adaptive thinking and temperature suppression", vercel.AnthropicMessagesCompat)
 	}
-	assertMetadataString(t, vercel.ProviderMetadata, "baseURL", "https://ai-gateway.vercel.sh")
+	assertMetadataString(t, vercel.ProviderMetadata, "baseURL", "https://ai-gateway.vercel.sh/v1")
 	assertMetadataStrings(t, vercel.ProviderMetadata, MetadataAPIKeyEnvVars, []string{"AI_GATEWAY_API_KEY"})
 }
 

@@ -87,7 +87,7 @@ func TestCompleteUsesVercelDefaultsAndModelMetadata(t *testing.T) {
 
 	model := vercelTestModel(t)
 	model.ProviderMetadata = copyProviderMetadata(model.ProviderMetadata)
-	model.ProviderMetadata["baseURL"] = server.URL
+	model.ProviderMetadata["baseURL"] = server.URL + "/v1"
 	client := vercelTestClient(t, model)
 
 	final, err := client.Complete(
@@ -108,7 +108,7 @@ func TestCompleteUsesVercelDefaultsAndModelMetadata(t *testing.T) {
 	if got, want := request.Method, http.MethodPost; got != want {
 		t.Fatalf("method = %q, want %q", got, want)
 	}
-	if got, want := request.Path, "/messages"; got != want {
+	if got, want := request.Path, "/v1/messages"; got != want {
 		t.Fatalf("path = %q, want %q", got, want)
 	}
 	assertHeader(t, request.Headers, "X-Api-Key", "request-key")

@@ -66,8 +66,11 @@ Cloudflare Workers AI is also promoted as a direct
 OpenAI-compatible Chat Completions wrapper with account placeholder resolution
 and normal bearer-token auth for the direct Workers AI endpoint. Vercel AI
 Gateway is promoted as a focused Anthropic-compatible Messages wrapper over
-the generated gateway model metadata with normal API-key auth. NVIDIA NIM is
-also promoted as a focused OpenAI-compatible text and embedding wrapper with
+the generated gateway model metadata with normal API-key auth. Built-in
+Anthropic-compatible route metadata and wrapper defaults now use versioned
+Messages base URLs for Anthropic, Vercel AI Gateway, GitHub Copilot, and
+Cloudflare AI Gateway so Sigma targets `/v1/messages`-shaped endpoints. NVIDIA
+NIM is also promoted as a focused OpenAI-compatible text and embedding wrapper with
 generated metadata, direct NIM base URL defaults, request header metadata, and
 NVIDIA-specific embedding input-type mapping; its text metadata now also
 requests streamed usage when supported, includes focused GPT-OSS 120B and
@@ -479,6 +482,9 @@ advice without adding any execution loop or configuration format to Sigma.
 - Cloudflare Workers AI direct routing is additive and Chat Completions-only in
   this release. It uses normal bearer-token auth, while Cloudflare AI Gateway
   routes continue to use `cf-aig-authorization`.
+- Built-in Anthropic-compatible route base URLs are normalized for Sigma's
+  Messages adapter. Custom caller-supplied base URLs are still used as provided,
+  with Sigma appending `/messages`.
 - NVIDIA NIM direct routing is additive and uses Sigma's existing
   OpenAI-compatible text and embedding adapters through a provider-specific
   wrapper. Endpoint overrides remain explicit through provider options or model

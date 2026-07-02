@@ -13,7 +13,10 @@ import (
 	"github.com/wintermi/sigma/provider/openai"
 )
 
-const DefaultBaseURL = "https://api.individual.githubcopilot.com"
+const (
+	DefaultBaseURL          = "https://api.individual.githubcopilot.com"
+	defaultAnthropicBaseURL = DefaultBaseURL + "/v1"
+)
 
 // Provider adapts GitHub Copilot's OpenAI-compatible Chat Completions endpoint.
 type Provider = openai.Provider
@@ -44,7 +47,7 @@ func NewResponsesProvider(opts ...ProviderOption) *ResponsesProvider {
 
 // NewAnthropicProvider constructs a GitHub Copilot Anthropic-compatible provider.
 func NewAnthropicProvider(opts ...AnthropicProviderOption) *AnthropicProvider {
-	providerOpts := append([]AnthropicProviderOption{anthropic.WithBaseURL(DefaultBaseURL)}, opts...)
+	providerOpts := append([]AnthropicProviderOption{anthropic.WithBaseURL(defaultAnthropicBaseURL)}, opts...)
 	return anthropic.NewProvider(providerOpts...)
 }
 

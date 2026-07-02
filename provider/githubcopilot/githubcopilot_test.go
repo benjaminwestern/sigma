@@ -101,7 +101,7 @@ func TestAnthropicWrapperUsesBearerAuthAndCopilotHeaders(t *testing.T) {
 
 	model := copilotAnthropicModel()
 	registry := sigma.NewRegistry()
-	if err := githubcopilot.RegisterAnthropic(registry, githubcopilot.WithAnthropicBaseURL(server.URL)); err != nil {
+	if err := githubcopilot.RegisterAnthropic(registry, githubcopilot.WithAnthropicBaseURL(server.URL+"/v1")); err != nil {
 		t.Fatalf("RegisterAnthropic returned error: %v", err)
 	}
 	registerModel(t, registry, model)
@@ -119,7 +119,7 @@ func TestAnthropicWrapperUsesBearerAuthAndCopilotHeaders(t *testing.T) {
 	}
 
 	request := receiveRequest(t, requests)
-	if got, want := request.Path, "/messages"; got != want {
+	if got, want := request.Path, "/v1/messages"; got != want {
 		t.Fatalf("path = %q, want %q", got, want)
 	}
 	assertHeader(t, request.Headers, "Authorization", "Bearer copilot-token")

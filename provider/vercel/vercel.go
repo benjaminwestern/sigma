@@ -12,7 +12,7 @@ import (
 	"github.com/wintermi/sigma/provider/anthropic"
 )
 
-const DefaultBaseURL = "https://ai-gateway.vercel.sh"
+const DefaultBaseURL = "https://ai-gateway.vercel.sh/v1"
 
 // Provider adapts Vercel AI Gateway's Anthropic-compatible Messages endpoint.
 type Provider = anthropic.Provider

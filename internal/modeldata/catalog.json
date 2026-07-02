@@ -1850,7 +1850,7 @@
       "name": "Claude Fable 5",
       "provider": "anthropic",
       "api": "anthropic-messages",
-      "baseURL": "https://api.anthropic.com",
+      "baseURL": "https://api.anthropic.com/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -1892,7 +1892,7 @@
       "name": "Claude Haiku 3.5",
       "provider": "anthropic",
       "api": "anthropic-messages",
-      "baseURL": "https://api.anthropic.com",
+      "baseURL": "https://api.anthropic.com/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -1930,7 +1930,7 @@
       "name": "Claude Haiku 3.5 (latest)",
       "provider": "anthropic",
       "api": "anthropic-messages",
-      "baseURL": "https://api.anthropic.com",
+      "baseURL": "https://api.anthropic.com/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -1968,7 +1968,7 @@
       "name": "Claude Sonnet 3.5",
       "provider": "anthropic",
       "api": "anthropic-messages",
-      "baseURL": "https://api.anthropic.com",
+      "baseURL": "https://api.anthropic.com/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -2006,7 +2006,7 @@
       "name": "Claude Sonnet 3.5 v2",
       "provider": "anthropic",
       "api": "anthropic-messages",
-      "baseURL": "https://api.anthropic.com",
+      "baseURL": "https://api.anthropic.com/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -2044,7 +2044,7 @@
       "name": "Claude Sonnet 3.7",
       "provider": "anthropic",
       "api": "anthropic-messages",
-      "baseURL": "https://api.anthropic.com",
+      "baseURL": "https://api.anthropic.com/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -2082,7 +2082,7 @@
       "name": "Claude Haiku 3",
       "provider": "anthropic",
       "api": "anthropic-messages",
-      "baseURL": "https://api.anthropic.com",
+      "baseURL": "https://api.anthropic.com/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -2120,7 +2120,7 @@
       "name": "Claude Opus 3",
       "provider": "anthropic",
       "api": "anthropic-messages",
-      "baseURL": "https://api.anthropic.com",
+      "baseURL": "https://api.anthropic.com/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -2158,7 +2158,7 @@
       "name": "Claude Sonnet 3",
       "provider": "anthropic",
       "api": "anthropic-messages",
-      "baseURL": "https://api.anthropic.com",
+      "baseURL": "https://api.anthropic.com/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -2196,7 +2196,7 @@
       "name": "Claude Haiku 4.5 (latest)",
       "provider": "anthropic",
       "api": "anthropic-messages",
-      "baseURL": "https://api.anthropic.com",
+      "baseURL": "https://api.anthropic.com/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -2234,7 +2234,7 @@
       "name": "Claude Haiku 4.5",
       "provider": "anthropic",
       "api": "anthropic-messages",
-      "baseURL": "https://api.anthropic.com",
+      "baseURL": "https://api.anthropic.com/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -2272,7 +2272,7 @@
       "name": "Claude Opus 4 (latest)",
       "provider": "anthropic",
       "api": "anthropic-messages",
-      "baseURL": "https://api.anthropic.com",
+      "baseURL": "https://api.anthropic.com/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -2310,7 +2310,7 @@
       "name": "Claude Opus 4.1 (latest)",
       "provider": "anthropic",
       "api": "anthropic-messages",
-      "baseURL": "https://api.anthropic.com",
+      "baseURL": "https://api.anthropic.com/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -2348,7 +2348,7 @@
       "name": "Claude Opus 4.1",
       "provider": "anthropic",
       "api": "anthropic-messages",
-      "baseURL": "https://api.anthropic.com",
+      "baseURL": "https://api.anthropic.com/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -2386,7 +2386,7 @@
       "name": "Claude Opus 4",
       "provider": "anthropic",
       "api": "anthropic-messages",
-      "baseURL": "https://api.anthropic.com",
+      "baseURL": "https://api.anthropic.com/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -2424,7 +2424,7 @@
       "name": "Claude Opus 4.5 (latest)",
       "provider": "anthropic",
       "api": "anthropic-messages",
-      "baseURL": "https://api.anthropic.com",
+      "baseURL": "https://api.anthropic.com/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -2462,7 +2462,7 @@
       "name": "Claude Opus 4.5",
       "provider": "anthropic",
       "api": "anthropic-messages",
-      "baseURL": "https://api.anthropic.com",
+      "baseURL": "https://api.anthropic.com/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -2500,7 +2500,7 @@
       "name": "Claude Opus 4.6",
       "provider": "anthropic",
       "api": "anthropic-messages",
-      "baseURL": "https://api.anthropic.com",
+      "baseURL": "https://api.anthropic.com/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -2541,7 +2541,7 @@
       "name": "Claude Opus 4.7",
       "provider": "anthropic",
       "api": "anthropic-messages",
-      "baseURL": "https://api.anthropic.com",
+      "baseURL": "https://api.anthropic.com/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -2582,7 +2582,7 @@
       "name": "Claude Opus 4.8",
       "provider": "anthropic",
       "api": "anthropic-messages",
-      "baseURL": "https://api.anthropic.com",
+      "baseURL": "https://api.anthropic.com/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -2623,7 +2623,7 @@
       "name": "Claude Sonnet 4 (latest)",
       "provider": "anthropic",
       "api": "anthropic-messages",
-      "baseURL": "https://api.anthropic.com",
+      "baseURL": "https://api.anthropic.com/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -2661,7 +2661,7 @@
       "name": "Claude Sonnet 4",
       "provider": "anthropic",
       "api": "anthropic-messages",
-      "baseURL": "https://api.anthropic.com",
+      "baseURL": "https://api.anthropic.com/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -2699,7 +2699,7 @@
       "name": "Claude Sonnet 4.5 (latest)",
       "provider": "anthropic",
       "api": "anthropic-messages",
-      "baseURL": "https://api.anthropic.com",
+      "baseURL": "https://api.anthropic.com/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -2737,7 +2737,7 @@
       "name": "Claude Sonnet 4.5",
       "provider": "anthropic",
       "api": "anthropic-messages",
-      "baseURL": "https://api.anthropic.com",
+      "baseURL": "https://api.anthropic.com/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -2775,7 +2775,7 @@
       "name": "Claude Sonnet 4.6",
       "provider": "anthropic",
       "api": "anthropic-messages",
-      "baseURL": "https://api.anthropic.com",
+      "baseURL": "https://api.anthropic.com/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -4466,7 +4466,7 @@
       "name": "Claude Haiku 3.5 (latest)",
       "provider": "cloudflare-ai-gateway",
       "api": "anthropic-messages",
-      "baseURL": "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic",
+      "baseURL": "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -4497,7 +4497,7 @@
       "name": "Claude Haiku 3",
       "provider": "cloudflare-ai-gateway",
       "api": "anthropic-messages",
-      "baseURL": "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic",
+      "baseURL": "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -4528,7 +4528,7 @@
       "name": "Claude Opus 3",
       "provider": "cloudflare-ai-gateway",
       "api": "anthropic-messages",
-      "baseURL": "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic",
+      "baseURL": "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -4559,7 +4559,7 @@
       "name": "Claude Sonnet 3",
       "provider": "cloudflare-ai-gateway",
       "api": "anthropic-messages",
-      "baseURL": "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic",
+      "baseURL": "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -4590,7 +4590,7 @@
       "name": "Claude Haiku 3.5 (latest)",
       "provider": "cloudflare-ai-gateway",
       "api": "anthropic-messages",
-      "baseURL": "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic",
+      "baseURL": "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -4621,7 +4621,7 @@
       "name": "Claude Sonnet 3.5 v2",
       "provider": "cloudflare-ai-gateway",
       "api": "anthropic-messages",
-      "baseURL": "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic",
+      "baseURL": "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -4652,7 +4652,7 @@
       "name": "Claude Haiku 4.5 (latest)",
       "provider": "cloudflare-ai-gateway",
       "api": "anthropic-messages",
-      "baseURL": "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic",
+      "baseURL": "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -4683,7 +4683,7 @@
       "name": "Claude Opus 4 (latest)",
       "provider": "cloudflare-ai-gateway",
       "api": "anthropic-messages",
-      "baseURL": "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic",
+      "baseURL": "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -4714,7 +4714,7 @@
       "name": "Claude Opus 4.1 (latest)",
       "provider": "cloudflare-ai-gateway",
       "api": "anthropic-messages",
-      "baseURL": "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic",
+      "baseURL": "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -4745,7 +4745,7 @@
       "name": "Claude Opus 4.5 (latest)",
       "provider": "cloudflare-ai-gateway",
       "api": "anthropic-messages",
-      "baseURL": "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic",
+      "baseURL": "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -4776,7 +4776,7 @@
       "name": "Claude Opus 4.6 (latest)",
       "provider": "cloudflare-ai-gateway",
       "api": "anthropic-messages",
-      "baseURL": "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic",
+      "baseURL": "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -4813,7 +4813,7 @@
       "name": "Claude Opus 4.7",
       "provider": "cloudflare-ai-gateway",
       "api": "anthropic-messages",
-      "baseURL": "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic",
+      "baseURL": "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -4851,7 +4851,7 @@
       "name": "Claude Opus 4.8",
       "provider": "cloudflare-ai-gateway",
       "api": "anthropic-messages",
-      "baseURL": "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic",
+      "baseURL": "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -4889,7 +4889,7 @@
       "name": "Claude Sonnet 4 (latest)",
       "provider": "cloudflare-ai-gateway",
       "api": "anthropic-messages",
-      "baseURL": "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic",
+      "baseURL": "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -4920,7 +4920,7 @@
       "name": "Claude Sonnet 4.5 (latest)",
       "provider": "cloudflare-ai-gateway",
       "api": "anthropic-messages",
-      "baseURL": "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic",
+      "baseURL": "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -4951,7 +4951,7 @@
       "name": "Claude Sonnet 4.6",
       "provider": "cloudflare-ai-gateway",
       "api": "anthropic-messages",
-      "baseURL": "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic",
+      "baseURL": "https://gateway.ai.cloudflare.com/v1/{CLOUDFLARE_ACCOUNT_ID}/{CLOUDFLARE_GATEWAY_ID}/anthropic/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -6211,7 +6211,7 @@
       "name": "Claude Haiku 4.5 (latest)",
       "provider": "github-copilot",
       "api": "anthropic-messages",
-      "baseURL": "https://api.individual.githubcopilot.com",
+      "baseURL": "https://api.individual.githubcopilot.com/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -6249,7 +6249,7 @@
       "name": "Claude Opus 4.5 (latest)",
       "provider": "github-copilot",
       "api": "anthropic-messages",
-      "baseURL": "https://api.individual.githubcopilot.com",
+      "baseURL": "https://api.individual.githubcopilot.com/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -6284,7 +6284,7 @@
       "name": "Claude Opus 4.6",
       "provider": "github-copilot",
       "api": "anthropic-messages",
-      "baseURL": "https://api.individual.githubcopilot.com",
+      "baseURL": "https://api.individual.githubcopilot.com/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -6325,7 +6325,7 @@
       "name": "Claude Opus 4.7",
       "provider": "github-copilot",
       "api": "anthropic-messages",
-      "baseURL": "https://api.individual.githubcopilot.com",
+      "baseURL": "https://api.individual.githubcopilot.com/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -6367,7 +6367,7 @@
       "name": "Claude Opus 4.8",
       "provider": "github-copilot",
       "api": "anthropic-messages",
-      "baseURL": "https://api.individual.githubcopilot.com",
+      "baseURL": "https://api.individual.githubcopilot.com/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -6409,7 +6409,7 @@
       "name": "Claude Sonnet 4 (latest)",
       "provider": "github-copilot",
       "api": "anthropic-messages",
-      "baseURL": "https://api.individual.githubcopilot.com",
+      "baseURL": "https://api.individual.githubcopilot.com/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -6447,7 +6447,7 @@
       "name": "Claude Sonnet 4.5 (latest)",
       "provider": "github-copilot",
       "api": "anthropic-messages",
-      "baseURL": "https://api.individual.githubcopilot.com",
+      "baseURL": "https://api.individual.githubcopilot.com/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -6485,7 +6485,7 @@
       "name": "Claude Sonnet 4.6",
       "provider": "github-copilot",
       "api": "anthropic-messages",
-      "baseURL": "https://api.individual.githubcopilot.com",
+      "baseURL": "https://api.individual.githubcopilot.com/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -15843,7 +15843,7 @@
       "name": "Claude Haiku 4.5",
       "provider": "vercel-ai-gateway",
       "api": "anthropic-messages",
-      "baseURL": "https://ai-gateway.vercel.sh",
+      "baseURL": "https://ai-gateway.vercel.sh/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -15874,7 +15874,7 @@
       "name": "Claude Opus 4.8",
       "provider": "vercel-ai-gateway",
       "api": "anthropic-messages",
-      "baseURL": "https://ai-gateway.vercel.sh",
+      "baseURL": "https://ai-gateway.vercel.sh/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -15912,7 +15912,7 @@
       "name": "Claude Sonnet 4.6",
       "provider": "vercel-ai-gateway",
       "api": "anthropic-messages",
-      "baseURL": "https://ai-gateway.vercel.sh",
+      "baseURL": "https://ai-gateway.vercel.sh/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -15946,7 +15946,7 @@
       "name": "Gemini 3 Pro Preview",
       "provider": "vercel-ai-gateway",
       "api": "anthropic-messages",
-      "baseURL": "https://ai-gateway.vercel.sh",
+      "baseURL": "https://ai-gateway.vercel.sh/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -15976,7 +15976,7 @@
       "name": "GPT 5.4",
       "provider": "vercel-ai-gateway",
       "api": "anthropic-messages",
-      "baseURL": "https://ai-gateway.vercel.sh",
+      "baseURL": "https://ai-gateway.vercel.sh/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -16009,7 +16009,7 @@
       "name": "GPT 5.5",
       "provider": "vercel-ai-gateway",
       "api": "anthropic-messages",
-      "baseURL": "https://ai-gateway.vercel.sh",
+      "baseURL": "https://ai-gateway.vercel.sh/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -16042,7 +16042,7 @@
       "name": "Grok 4.20 Reasoning",
       "provider": "vercel-ai-gateway",
       "api": "anthropic-messages",
-      "baseURL": "https://ai-gateway.vercel.sh",
+      "baseURL": "https://ai-gateway.vercel.sh/v1",
       "supportedInputs": [
         "text",
         "image"
@@ -16072,7 +16072,7 @@
       "name": "GLM 5.1",
       "provider": "vercel-ai-gateway",
       "api": "anthropic-messages",
-      "baseURL": "https://ai-gateway.vercel.sh",
+      "baseURL": "https://ai-gateway.vercel.sh/v1",
       "supportedInputs": [
         "text",
         "image"
