@@ -565,6 +565,10 @@ func codexResponsesAssistantInputItems(model sigma.Model, final sigma.AssistantM
 }
 
 func (p *CodexResponsesProvider) codexWebSocketHeaders(ctx context.Context, model sigma.Model, opts sigma.Options) (http.Header, error) {
+	opts, credential, hasCredential, err := p.resolveRequestAuth(ctx, model, opts)
+	if err != nil {
+		return nil, err
+	}
 	endpoint, err := p.endpoint(model, opts)
 	if err != nil {
 		return nil, err
@@ -576,7 +580,7 @@ func (p *CodexResponsesProvider) codexWebSocketHeaders(ctx context.Context, mode
 	req.Header.Set("OpenAI-Beta", codexResponsesWebSocketBeta)
 	req.Header.Set("originator", "sigma")
 	req.Header.Set("User-Agent", "sigma/openai-codex-responses")
-	if err := p.addAuthHeader(ctx, req, model, opts); err != nil {
+	if err := p.addAuthHeader(ctx, req, model, opts, credential, hasCredential); err != nil {
 		return nil, err
 	}
 	p.addProviderHeaders(req, model.Provider, opts)

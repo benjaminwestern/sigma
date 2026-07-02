@@ -142,6 +142,10 @@ func (p *CodexResponsesProvider) newRequest(ctx context.Context, model sigma.Mod
 	if err := validateCodexResponsesTransport(model, opts.Transport); err != nil {
 		return nil, err
 	}
+	opts, credential, hasCredential, err := p.resolveRequestAuth(ctx, model, opts)
+	if err != nil {
+		return nil, err
+	}
 	body, err := p.requestBody(model, req, opts)
 	if err != nil {
 		return nil, err
@@ -161,7 +165,7 @@ func (p *CodexResponsesProvider) newRequest(ctx context.Context, model sigma.Mod
 	httpReq.Header.Set("originator", "sigma")
 	httpReq.Header.Set("User-Agent", "sigma/openai-codex-responses")
 
-	if err := p.addAuthHeader(ctx, httpReq, model, opts); err != nil {
+	if err := p.addAuthHeader(ctx, httpReq, model, opts, credential, hasCredential); err != nil {
 		return nil, err
 	}
 	p.addProviderHeaders(httpReq, model.Provider, opts)
@@ -177,6 +181,17 @@ func (p *CodexResponsesProvider) newRequest(ctx context.Context, model sigma.Mod
 		return nil, err
 	}
 	return httpReq, nil
+}
+
+func (p *CodexResponsesProvider) resolveRequestAuth(ctx context.Context, model sigma.Model, opts sigma.Options) (sigma.Options, sigma.Credential, bool, error) {
+	if codexResponsesOAuthTokenProvider(model.Provider, opts) != nil || opts.AuthResolver == nil {
+		return opts, sigma.Credential{}, false, nil
+	}
+	resolved, credential, err := sigma.ResolveAuthForRequest(ctx, model, opts)
+	if err != nil {
+		return sigma.Options{}, sigma.Credential{}, false, fmt.Errorf("openai codex responses: resolve auth: %w", err)
+	}
+	return resolved, credential, true, nil
 }
 
 func normalizeCodexResponsesPayload(payload map[string]any) {
@@ -221,7 +236,10 @@ func (p *CodexResponsesProvider) requestBody(model sigma.Model, req sigma.Reques
 	return body, nil
 }
 
-func (p *CodexResponsesProvider) addAuthHeader(ctx context.Context, req *http.Request, model sigma.Model, opts sigma.Options) error {
+func (p *CodexResponsesProvider) addAuthHeader(ctx context.Context, req *http.Request, model sigma.Model, opts sigma.Options, credential sigma.Credential, hasCredential bool) error {
+	if hasCredential {
+		return p.addAuthCredentialHeader(req, model, credential)
+	}
 	tokenProvider := codexResponsesOAuthTokenProvider(model.Provider, opts)
 	if tokenProvider == nil {
 		return &sigma.CredentialUnavailableError{
@@ -244,6 +262,17 @@ func (p *CodexResponsesProvider) addAuthHeader(ctx context.Context, req *http.Re
 			Err:      err,
 		}
 	}
+	if credential.Value == "" {
+		return &sigma.CredentialUnavailableError{
+			Provider: model.Provider,
+			Model:    model.ID,
+			Sources:  []string{"oauth-token-provider"},
+		}
+	}
+	return p.addAuthCredentialHeader(req, model, credential)
+}
+
+func (p *CodexResponsesProvider) addAuthCredentialHeader(req *http.Request, model sigma.Model, credential sigma.Credential) error {
 	if credential.Value == "" {
 		return &sigma.CredentialUnavailableError{
 			Provider: model.Provider,

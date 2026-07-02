@@ -114,34 +114,44 @@ type StoredCredentialAuthResolver struct {
 
 // Resolve implements AuthResolver.
 func (r StoredCredentialAuthResolver) Resolve(ctx context.Context, model Model, opts Options) (Credential, error) {
+	resolution, err := r.ResolveAuthResolution(ctx, model, opts)
+	if err != nil {
+		return Credential{}, err
+	}
+	return resolution.Credential, nil
+}
+
+// ResolveAuthResolution implements AuthResolutionResolver.
+func (r StoredCredentialAuthResolver) ResolveAuthResolution(ctx context.Context, model Model, opts Options) (AuthResolution, error) {
 	if opts.APIKey != "" {
-		return Credential{
+		credential := Credential{
 			Type:   CredentialTypeAPIKey,
 			Value:  opts.APIKey,
 			Source: "request:api-key",
-		}, nil
+		}
+		return AuthResolution{Credential: credential, Source: credential.Source}, nil
 	}
 	if r.Store == nil {
-		return r.resolveFallback(ctx, model, opts, "credential-store")
+		return r.resolveFallbackResolution(ctx, model, opts, "credential-store")
 	}
 
 	stored, ok, err := r.Store.ReadCredential(ctx, model.Provider)
 	if err != nil {
-		return Credential{}, credentialStoreFailure(model.Provider, err)
+		return AuthResolution{}, credentialStoreFailure(model.Provider, err)
 	}
 	auth, hasAuth := r.providerAuth(model.Provider)
 	if ok {
 		resolution, resolved, err := r.resolveStored(ctx, model, opts, auth, hasAuth, stored)
 		if err != nil {
-			return Credential{}, err
+			return AuthResolution{}, err
 		}
 		if resolved {
-			return resolution.Credential, nil
+			return normalizeAuthResolution(resolution), nil
 		}
-		return Credential{}, storedCredentialUnsupported(model, stored.Type)
+		return AuthResolution{}, storedCredentialUnsupported(model, stored.Type)
 	}
 
-	return r.resolveFallback(ctx, model, opts, "credential-store:"+string(model.Provider))
+	return r.resolveFallbackResolution(ctx, model, opts, "credential-store:"+string(model.Provider))
 }
 
 func (r StoredCredentialAuthResolver) resolveStored(
@@ -246,19 +256,19 @@ func credentialNeedsOAuthRefresh(credential StoredCredential, now func() time.Ti
 	return !credential.Expiry.IsZero() && !now().Add(refreshBefore).Before(credential.Expiry)
 }
 
-func (r StoredCredentialAuthResolver) resolveFallback(ctx context.Context, model Model, opts Options, source string) (Credential, error) {
+func (r StoredCredentialAuthResolver) resolveFallbackResolution(ctx context.Context, model Model, opts Options, source string) (AuthResolution, error) {
 	if r.Fallback == nil {
-		return Credential{}, unavailableCredential(model, source)
+		return AuthResolution{}, unavailableCredential(model, source)
 	}
-	credential, err := r.Fallback.Resolve(ctx, model, opts)
+	resolution, err := resolveAuthResolution(ctx, model, opts, r.Fallback)
 	if err == nil {
-		return credential, nil
+		return resolution, nil
 	}
 	if errors.Is(err, ErrCredentialUnavailable) {
 		sources := append([]string{source}, credentialErrorSources(err)...)
-		return Credential{}, unavailableCredential(model, sources...)
+		return AuthResolution{}, unavailableCredential(model, sources...)
 	}
-	return Credential{}, err
+	return AuthResolution{}, err
 }
 
 func (r StoredCredentialAuthResolver) providerAuth(provider ProviderID) (ProviderAuth, bool) {

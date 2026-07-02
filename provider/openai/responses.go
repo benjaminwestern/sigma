@@ -118,6 +118,10 @@ func (p *ResponsesProvider) do(ctx context.Context, model sigma.Model, req sigma
 }
 
 func (p *ResponsesProvider) newRequest(ctx context.Context, model sigma.Model, req sigma.Request, opts sigma.Options) (*http.Request, error) {
+	opts, credential, err := p.base.resolveAuth(ctx, model, opts)
+	if err != nil {
+		return nil, err
+	}
 	payload, err := responsesPayload(model, req, opts)
 	if err != nil {
 		return nil, err
@@ -139,9 +143,7 @@ func (p *ResponsesProvider) newRequest(ctx context.Context, model sigma.Model, r
 	httpReq.Header.Set("Accept", "text/event-stream")
 	httpReq.Header.Set("User-Agent", "sigma/openai-responses")
 
-	if err := p.base.addAuthHeader(ctx, httpReq, model, opts); err != nil {
-		return nil, err
-	}
+	p.base.addAuthCredentialHeader(httpReq, model, credential)
 	p.addProviderHeaders(httpReq, model.Provider, opts)
 	for key, value := range p.base.headers {
 		httpReq.Header.Set(key, value)

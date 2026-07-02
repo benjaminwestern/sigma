@@ -55,7 +55,9 @@ for the EU runtime route.
 Credential stores and provider auth descriptors now give applications an
 opt-in way to resolve stored API keys, serialize OAuth refreshes, and preserve
 rotated credentials while leaving Sigma's default environment-based credential
-resolution unchanged.
+resolution unchanged. Stored auth descriptors can now also apply
+provider-scoped request configuration, such as routing placeholder values,
+before provider URLs and headers are built.
 Request-scoped header suppression now also lets callers remove final outgoing
 compatibility/default headers across text, image, and embedding requests while
 preserving credential resolution and avoiding a generic environment override
@@ -218,9 +220,10 @@ advice without adding any execution loop or configuration format to Sigma.
   `sigma.ProviderAuth`, and `sigma.WithStoredProviderAuth` now provide an
   opt-in stored credential layer for API-key and OAuth credentials. Store
   updates use serialized modify callbacks, registries can carry provider auth
-  descriptors independently from provider implementations, and Anthropic,
-  GitHub Copilot, OpenAI Codex, and Cloudflare helpers expose focused
-  descriptors over their existing auth behavior.
+  descriptors independently from provider implementations, auth-derived
+  provider configuration is applied before provider URL/header construction,
+  and Anthropic, GitHub Copilot, OpenAI Codex, and Cloudflare helpers expose
+  focused descriptors over their existing auth behavior.
 - `sigma.WithSuppressedHeader` and `sigma.WithSuppressedHeaders` now remove
   final outgoing request headers after provider defaults, model metadata
   headers, dynamic compatibility headers, and caller headers are merged. Image
@@ -547,8 +550,9 @@ advice without adding any execution loop or configuration format to Sigma.
   same request API-key, client resolver, environment, and provider-callback
   behavior unless they configure both a credential store and
   `WithStoredProviderAuth`. Sigma provides an in-memory store and provider auth
-  descriptors, but does not add built-in file, keychain, or encrypted
-  persistence.
+  descriptors, and auth-derived provider configuration has lower precedence
+  than caller-supplied request options. Sigma does not add built-in file,
+  keychain, or encrypted persistence.
 
 ## Deferred work
 
@@ -561,9 +565,9 @@ persistence, embeddings+retrieval, images, sigmatest, and generated metadata)
 identified additional user-visible capability gaps that align with existing
 deferred items. Public handoff support now ships as a narrow helper surface,
 runtime text model refresh now supports app-owned sources, and opt-in
-CredentialStore-based auth now covers stored API-key and OAuth resolution;
-file-backed or encrypted persistence plus non-text or built-in live model
-discovery remain deferred.
+CredentialStore-based auth now covers stored API-key and OAuth resolution plus
+provider-scoped request configuration; file-backed or encrypted persistence
+plus built-in live model discovery remain deferred.
 See the expanded bullets below and [TODO.md](../TODO.md) for the current list.
 All candidate work remains subject to the deterministic evidence, fixture, and
 cancellation bar described in [RELEASING.md](../RELEASING.md).

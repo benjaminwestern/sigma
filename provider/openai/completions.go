@@ -163,6 +163,10 @@ func (p *Provider) run(ctx context.Context, writer sigma.StreamWriter, model sig
 }
 
 func (p *Provider) newRequest(ctx context.Context, model sigma.Model, req sigma.Request, opts sigma.Options) (*http.Request, error) {
+	opts, credential, err := p.resolveAuth(ctx, model, opts)
+	if err != nil {
+		return nil, err
+	}
 	baseURL := p.baseURLForModel(model, opts)
 	compat := openAICompletionsCompat(model, baseURL)
 	payload, err := chatCompletionsPayload(model, req, opts, compat)
@@ -195,9 +199,7 @@ func (p *Provider) newRequest(ctx context.Context, model sigma.Model, req sigma.
 	for key, value := range opts.Headers {
 		httpReq.Header.Set(key, value)
 	}
-	if err := p.addAuthHeader(ctx, httpReq, model, opts); err != nil {
-		return nil, err
-	}
+	p.addAuthCredentialHeader(httpReq, model, credential)
 	sigma.ApplySuppressedHeaders(httpReq.Header, opts)
 	if err := sigma.RunTextPayloadDebugHooks(ctx, opts, model.Provider, sigma.APIOpenAICompletions, model.ID, body, httpReq.Header); err != nil {
 		return nil, err
@@ -205,26 +207,29 @@ func (p *Provider) newRequest(ctx context.Context, model sigma.Model, req sigma.
 	return httpReq, nil
 }
 
-func (p *Provider) addAuthHeader(ctx context.Context, req *http.Request, model sigma.Model, opts sigma.Options) error {
+func (p *Provider) resolveAuth(ctx context.Context, model sigma.Model, opts sigma.Options) (sigma.Options, sigma.Credential, error) {
 	if opts.AuthResolver == nil {
-		return &sigma.Error{
+		return sigma.Options{}, sigma.Credential{}, &sigma.Error{
 			Code:     sigma.ErrorUnsupported,
 			Message:  "openai completions: auth resolver is required",
 			Provider: model.Provider,
 			Model:    model.ID,
 		}
 	}
-	credential, err := opts.AuthResolver.Resolve(ctx, model, opts)
+	resolved, credential, err := sigma.ResolveAuthForRequest(ctx, model, opts)
 	if err != nil {
-		return err
+		return sigma.Options{}, sigma.Credential{}, fmt.Errorf("openai completions: resolve auth: %w", err)
 	}
+	return resolved, credential, nil
+}
+
+func (p *Provider) addAuthCredentialHeader(req *http.Request, model sigma.Model, credential sigma.Credential) {
 	if credential.Value != "" {
 		if addCloudflareAuthHeader(req, model, credential) {
-			return nil
+			return
 		}
 		req.Header.Set("Authorization", "Bearer "+credential.Value)
 	}
-	return nil
 }
 
 func (p *Provider) addProviderHeaders(req *http.Request, provider sigma.ProviderID, opts sigma.Options, compat completionsCompat) {

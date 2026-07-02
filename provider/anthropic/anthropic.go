@@ -138,7 +138,7 @@ func (p *Provider) run(ctx context.Context, writer sigma.StreamWriter, model sig
 		Provider: model.Provider,
 	}
 
-	credential, err := p.resolveCredential(ctx, model, opts)
+	opts, credential, err := p.resolveAuth(ctx, model, opts)
 	if err != nil {
 		_ = writer.Error(ctx, err, final)
 		return
@@ -253,16 +253,20 @@ func (p *Provider) newRequest(ctx context.Context, model sigma.Model, req sigma.
 	return httpReq, nil
 }
 
-func (p *Provider) resolveCredential(ctx context.Context, model sigma.Model, opts sigma.Options) (sigma.Credential, error) {
+func (p *Provider) resolveAuth(ctx context.Context, model sigma.Model, opts sigma.Options) (sigma.Options, sigma.Credential, error) {
 	if opts.AuthResolver == nil {
-		return sigma.Credential{}, &sigma.Error{
+		return sigma.Options{}, sigma.Credential{}, &sigma.Error{
 			Code:     sigma.ErrorUnsupported,
 			Message:  "anthropic messages: auth resolver is required",
 			Provider: model.Provider,
 			Model:    model.ID,
 		}
 	}
-	return opts.AuthResolver.Resolve(ctx, model, opts)
+	resolved, credential, err := sigma.ResolveAuthForRequest(ctx, model, opts)
+	if err != nil {
+		return sigma.Options{}, sigma.Credential{}, fmt.Errorf("anthropic messages: resolve auth: %w", err)
+	}
+	return resolved, credential, nil
 }
 
 func applyAuthHeader(req *http.Request, provider sigma.ProviderID, credential sigma.Credential) {

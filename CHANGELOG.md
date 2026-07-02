@@ -93,8 +93,9 @@ See [release notes](docs/release-notes-v0.6.0.md).
 - Sigma now exposes opt-in credential stores and provider auth descriptors for
   stored API-key and OAuth flows. `CredentialStore`,
   `InMemoryCredentialStore`, registered `ProviderAuth` descriptors, and
-  `WithStoredProviderAuth` let applications resolve stored credentials and
-  serialize OAuth refreshes without changing default environment-based
+  `WithStoredProviderAuth` let applications resolve stored credentials,
+  serialize OAuth refreshes, and apply descriptor-provided provider
+  configuration for request routing without changing default environment-based
   credential behavior.
 - Request options now support final outgoing header suppression across text,
   image, and embedding calls, letting callers remove provider/default

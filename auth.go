@@ -142,6 +142,12 @@ type AuthResolver interface {
 	Resolve(context.Context, Model, Options) (Credential, error)
 }
 
+// AuthResolutionResolver resolves provider credentials plus provider-scoped
+// request configuration for a request.
+type AuthResolutionResolver interface {
+	ResolveAuthResolution(context.Context, Model, Options) (AuthResolution, error)
+}
+
 // AuthResolverFunc adapts a function into an AuthResolver.
 type AuthResolverFunc func(context.Context, Model, Options) (Credential, error)
 
@@ -151,6 +157,93 @@ func (f AuthResolverFunc) Resolve(ctx context.Context, model Model, opts Options
 		return Credential{}, unavailableCredential(model)
 	}
 	return f(ctx, model, opts)
+}
+
+// ResolveAuthForRequest resolves request auth and returns options augmented
+// with descriptor-provided provider configuration. Caller-supplied headers and
+// provider options keep precedence over auth-derived values.
+func ResolveAuthForRequest(ctx context.Context, model Model, opts Options) (Options, Credential, error) {
+	resolution, err := ResolveAuthResolution(ctx, model, opts)
+	if err != nil {
+		return Options{}, Credential{}, err
+	}
+	return optionsWithAuthResolution(model.Provider, opts, resolution), resolution.Credential, nil
+}
+
+// ResolveAuthResolution resolves request auth through opts.AuthResolver.
+func ResolveAuthResolution(ctx context.Context, model Model, opts Options) (AuthResolution, error) {
+	return resolveAuthResolution(ctx, model, opts, opts.AuthResolver)
+}
+
+func resolveAuthResolution(ctx context.Context, model Model, opts Options, resolver AuthResolver) (AuthResolution, error) {
+	if resolver == nil {
+		return AuthResolution{}, unavailableCredential(model, "auth-resolver")
+	}
+	if rich, ok := resolver.(AuthResolutionResolver); ok {
+		resolution, err := rich.ResolveAuthResolution(ctx, model, opts)
+		if err != nil {
+			return AuthResolution{}, fmt.Errorf("auth resolution: %w", err)
+		}
+		return normalizeAuthResolution(resolution), nil
+	}
+	credential, err := resolver.Resolve(ctx, model, opts)
+	if err != nil {
+		return AuthResolution{}, err
+	}
+	return normalizeAuthResolution(AuthResolution{Credential: credential, Source: credential.Source}), nil
+}
+
+func normalizeAuthResolution(resolution AuthResolution) AuthResolution {
+	if resolution.Source == "" {
+		resolution.Source = resolution.Credential.Source
+	}
+	return resolution
+}
+
+func optionsWithAuthResolution(provider ProviderID, opts Options, resolution AuthResolution) Options {
+	applied := cloneOptions(opts)
+	mergeAuthResolutionHeaders(&applied, resolution.Headers)
+	mergeAuthResolutionProviderOptions(&applied, provider, resolution.BaseURL, resolution.ProviderOptions)
+	return applied
+}
+
+func mergeAuthResolutionHeaders(opts *Options, headers map[string]string) {
+	if len(headers) == 0 {
+		return
+	}
+	if opts.Headers == nil {
+		opts.Headers = make(map[string]string, len(headers))
+	}
+	for key, value := range headers {
+		if _, exists := opts.Headers[key]; !exists {
+			opts.Headers[key] = value
+		}
+	}
+}
+
+func mergeAuthResolutionProviderOptions(opts *Options, provider ProviderID, baseURL string, values map[string]any) {
+	if baseURL == "" && len(values) == 0 {
+		return
+	}
+	if opts.ProviderOptions == nil {
+		opts.ProviderOptions = make(map[ProviderID]map[string]any)
+	}
+	if opts.ProviderOptions[provider] == nil {
+		opts.ProviderOptions[provider] = make(map[string]any, len(values)+1)
+	}
+	providerOptions := opts.ProviderOptions[provider]
+	if baseURL != "" {
+		if _, hasSnake := providerOptions["base_url"]; !hasSnake {
+			if _, hasCamel := providerOptions["baseURL"]; !hasCamel {
+				providerOptions["base_url"] = baseURL
+			}
+		}
+	}
+	for key, value := range values {
+		if _, exists := providerOptions[key]; !exists {
+			providerOptions[key] = value
+		}
+	}
 }
 
 // OAuthTokenProvider provides OAuth tokens for a provider adapter.
@@ -260,12 +353,22 @@ type ChainAuthResolver struct {
 
 // Resolve checks request overrides, the client resolver, environment, then provider callbacks.
 func (r ChainAuthResolver) Resolve(ctx context.Context, model Model, opts Options) (Credential, error) {
+	resolution, err := r.ResolveAuthResolution(ctx, model, opts)
+	if err != nil {
+		return Credential{}, err
+	}
+	return resolution.Credential, nil
+}
+
+// ResolveAuthResolution checks request overrides, the client resolver, environment, then provider callbacks.
+func (r ChainAuthResolver) ResolveAuthResolution(ctx context.Context, model Model, opts Options) (AuthResolution, error) {
 	if opts.APIKey != "" {
-		return Credential{
+		credential := Credential{
 			Type:   CredentialTypeAPIKey,
 			Value:  opts.APIKey,
 			Source: "request:api-key",
-		}, nil
+		}
+		return AuthResolution{Credential: credential, Source: credential.Source}, nil
 	}
 
 	var sources []string
@@ -273,12 +376,12 @@ func (r ChainAuthResolver) Resolve(ctx context.Context, model Model, opts Option
 	resolverOptions.AuthResolver = nil
 
 	if r.Client != nil {
-		credential, err := r.Client.Resolve(ctx, model, resolverOptions)
+		resolution, err := resolveAuthResolution(ctx, model, resolverOptions, r.Client)
 		if err == nil {
-			return credential, nil
+			return resolution, nil
 		}
 		if !errors.Is(err, ErrCredentialUnavailable) {
-			return Credential{}, err
+			return AuthResolution{}, err
 		}
 		sources = append(sources, credentialErrorSources(err)...)
 	}
@@ -287,27 +390,27 @@ func (r ChainAuthResolver) Resolve(ctx context.Context, model Model, opts Option
 	if environment == nil {
 		environment = EnvironmentAuthResolver{}
 	}
-	credential, err := environment.Resolve(ctx, model, resolverOptions)
+	resolution, err := resolveAuthResolution(ctx, model, resolverOptions, environment)
 	if err == nil {
-		return credential, nil
+		return resolution, nil
 	}
 	if !errors.Is(err, ErrCredentialUnavailable) {
-		return Credential{}, err
+		return AuthResolution{}, err
 	}
 	sources = append(sources, credentialErrorSources(err)...)
 
 	if callback := r.ProviderCallbacks[model.Provider]; callback != nil {
-		credential, err := callback.Resolve(ctx, model, resolverOptions)
+		resolution, err := resolveAuthResolution(ctx, model, resolverOptions, callback)
 		if err == nil {
-			return credential, nil
+			return resolution, nil
 		}
 		if !errors.Is(err, ErrCredentialUnavailable) {
-			return Credential{}, err
+			return AuthResolution{}, err
 		}
 		sources = append(sources, credentialErrorSources(err)...)
 	}
 
-	return Credential{}, unavailableCredential(model, sources...)
+	return AuthResolution{}, unavailableCredential(model, sources...)
 }
 
 func unavailableCredential(model Model, sources ...string) error {

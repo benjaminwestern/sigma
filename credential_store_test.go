@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/wintermi/sigma"
+	"github.com/wintermi/sigma/provider/cloudflare"
 )
 
 func TestInMemoryCredentialStoreCopiesAndDeletesCredentials(t *testing.T) {
@@ -135,6 +136,120 @@ func TestStoredCredentialAuthResolverUsesStoreBeforeEnvironment(t *testing.T) {
 	}
 	if got, want := credential.Value, "request-secret"; got != want {
 		t.Fatalf("request credential value = %q, want %q", got, want)
+	}
+}
+
+func TestStoredCredentialAuthResolutionAppliesProviderOptions(t *testing.T) {
+	t.Parallel()
+
+	store := sigma.NewInMemoryCredentialStore()
+	_, _, err := store.ModifyCredential(context.Background(), sigma.ProviderCloudflareAIGateway, func(sigma.StoredCredential, bool) (sigma.StoredCredential, bool, error) {
+		return sigma.StoredCredential{
+			Type:  sigma.CredentialTypeAPIKey,
+			Value: "stored-secret",
+			ProviderEnv: map[string]string{
+				"CLOUDFLARE_ACCOUNT_ID": "stored-account",
+				"CLOUDFLARE_GATEWAY_ID": "stored-gateway",
+			},
+		}, true, nil
+	})
+	if err != nil {
+		t.Fatalf("ModifyCredential returned error: %v", err)
+	}
+	registry := sigma.NewRegistry()
+	if err := cloudflare.RegisterAIGatewayAuth(registry); err != nil {
+		t.Fatalf("RegisterAIGatewayAuth returned error: %v", err)
+	}
+	model := sigma.Model{Provider: sigma.ProviderCloudflareAIGateway, ID: "gpt-test"}
+	resolver := sigma.ChainAuthResolver{
+		Client: sigma.StoredCredentialAuthResolver{Store: store, Registry: registry},
+	}
+
+	options, credential, err := sigma.ResolveAuthForRequest(context.Background(), model, sigma.Options{AuthResolver: resolver})
+	if err != nil {
+		t.Fatalf("ResolveAuthForRequest returned error: %v", err)
+	}
+	if got, want := credential.Value, "stored-secret"; got != want {
+		t.Fatalf("credential value = %q, want %q", got, want)
+	}
+	providerOptions := options.ProviderOptions[sigma.ProviderCloudflareAIGateway]
+	if got, want := providerOptions["cloudflare_ai_gateway_account_id"], "stored-account"; got != want {
+		t.Fatalf("account provider option = %#v, want %q", got, want)
+	}
+	if got, want := providerOptions["cloudflare_ai_gateway_id"], "stored-gateway"; got != want {
+		t.Fatalf("gateway provider option = %#v, want %q", got, want)
+	}
+}
+
+func TestAuthResolutionDoesNotOverrideRequestProviderOptions(t *testing.T) {
+	t.Parallel()
+
+	store := sigma.NewInMemoryCredentialStore()
+	_, _, err := store.ModifyCredential(context.Background(), sigma.ProviderCloudflareAIGateway, func(sigma.StoredCredential, bool) (sigma.StoredCredential, bool, error) {
+		return sigma.StoredCredential{
+			Type:  sigma.CredentialTypeAPIKey,
+			Value: "stored-secret",
+			ProviderEnv: map[string]string{
+				"CLOUDFLARE_ACCOUNT_ID": "stored-account",
+				"CLOUDFLARE_GATEWAY_ID": "stored-gateway",
+			},
+		}, true, nil
+	})
+	if err != nil {
+		t.Fatalf("ModifyCredential returned error: %v", err)
+	}
+	registry := sigma.NewRegistry()
+	if err := cloudflare.RegisterAIGatewayAuth(registry); err != nil {
+		t.Fatalf("RegisterAIGatewayAuth returned error: %v", err)
+	}
+	model := sigma.Model{Provider: sigma.ProviderCloudflareAIGateway, ID: "gpt-test"}
+	resolver := sigma.ChainAuthResolver{
+		Client: sigma.StoredCredentialAuthResolver{Store: store, Registry: registry},
+	}
+
+	options, _, err := sigma.ResolveAuthForRequest(context.Background(), model, sigma.Options{
+		AuthResolver: resolver,
+		ProviderOptions: map[sigma.ProviderID]map[string]any{
+			sigma.ProviderCloudflareAIGateway: {
+				"cloudflare_ai_gateway_account_id": "request-account",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("ResolveAuthForRequest returned error: %v", err)
+	}
+	providerOptions := options.ProviderOptions[sigma.ProviderCloudflareAIGateway]
+	if got, want := providerOptions["cloudflare_ai_gateway_account_id"], "request-account"; got != want {
+		t.Fatalf("account provider option = %#v, want %q", got, want)
+	}
+	if got, want := providerOptions["cloudflare_ai_gateway_id"], "stored-gateway"; got != want {
+		t.Fatalf("gateway provider option = %#v, want %q", got, want)
+	}
+}
+
+func TestResolveAuthForRequestSupportsLegacyAuthResolver(t *testing.T) {
+	t.Parallel()
+
+	resolver := sigma.AuthResolverFunc(func(context.Context, sigma.Model, sigma.Options) (sigma.Credential, error) {
+		return sigma.Credential{
+			Type:   sigma.CredentialTypeAPIKey,
+			Value:  "legacy-secret",
+			Source: "legacy",
+		}, nil
+	})
+	options, credential, err := sigma.ResolveAuthForRequest(
+		context.Background(),
+		sigma.Model{Provider: sigma.ProviderOpenAI, ID: "gpt-test"},
+		sigma.Options{AuthResolver: resolver},
+	)
+	if err != nil {
+		t.Fatalf("ResolveAuthForRequest returned error: %v", err)
+	}
+	if got, want := credential.Value, "legacy-secret"; got != want {
+		t.Fatalf("credential value = %q, want %q", got, want)
+	}
+	if len(options.ProviderOptions) != 0 {
+		t.Fatalf("provider options = %#v, want empty", options.ProviderOptions)
 	}
 }
 

@@ -641,7 +641,9 @@ should still come through the catalog refresh workflow.
       atomic updates during refresh, delete) plus in-memory default. Integrate so
       caller-supplied stores participate in EnvironmentAuthResolver paths and
       provider OAuth login/refresh (Anthropic, GitHub Copilot, OpenAI Codex)
-      without changing existing caller-owned default behaviour.
+      without changing existing caller-owned default behaviour. Stored auth
+      descriptors can also apply provider-scoped request configuration such as
+      routing placeholders before provider URLs are built.
 - [ ] Add file-backed, encrypted, OS keychain, or UI-driven credential
       persistence only as separate caller-owned integrations on top of
       CredentialStore; keep Sigma's built-in store process-local.
