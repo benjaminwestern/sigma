@@ -105,8 +105,11 @@ credential-gated cross-provider handoff diagnostic for replaying small
 tool-call contexts across selected live routes without moving live provider
 calls into CI. It also adds a focused structured-output probe mode for
 OpenAI-compatible routes, reporting JSON object and strict JSON Schema support
-or fallback behavior without updating generated metadata. Public handoff
-helpers now also let callers adapt persisted or incremental conversation
+or fallback behavior without updating generated metadata. Provider-neutral
+structured-output and top-logprob request controls now map onto existing
+OpenAI-compatible, Anthropic Messages, and Bedrock Converse request paths with
+local validation for unsupported APIs. Public handoff helpers now also let
+callers adapt persisted or incremental conversation
 context for a target model with explicit capability-loss reporting, while
 keeping orchestration and provider execution caller-owned. Assistant results
 now also expose provider-neutral source and
@@ -361,6 +364,12 @@ advice without adding any execution loop or configuration format to Sigma.
   results and summary recommendations that identify schema support, JSON-object
   fallback, and prompt-only JSON fallback without making live probes part of CI
   or changing generated metadata.
+- `sigma.WithStructuredOutput`, `sigma.WithJSONOutput`,
+  `sigma.WithJSONSchemaOutput`, and `sigma.WithTopLogprobs` now provide
+  provider-neutral request controls. Structured output maps to existing
+  OpenAI-compatible response formats, Anthropic `output_format`, or Bedrock's
+  synthetic schema-tool path, while unsupported API families fail locally
+  before provider dispatch.
 - `sigma.TransformRequestForModel` and `sigma.TransformMessagesForModel` now
   adapt conversation context for a target text model without invoking a
   provider. The helpers preserve same-model thinking blocks, convert foreign or
@@ -566,6 +575,10 @@ advice without adding any execution loop or configuration format to Sigma.
 - Tool schema composition validation and primitive argument coercion are
   additive. `ValidateToolCall` remains strict by default; callers must use
   `ValidateToolCallWithOptions` to request coercion.
+- Provider-neutral structured output is additive and request-scoped. Explicit
+  provider-specific response-format options still win when callers need a
+  native shape, and top-logprob requests remain limited to
+  OpenAI-compatible Chat Completions routes.
 - The new replay and stream regression tests do not change public APIs,
   provider request shapes, or persisted replay semantics.
 - The request-conversion regression tests are coverage-only. They preserve
@@ -662,6 +675,8 @@ cancellation bar described in [RELEASING.md](../RELEASING.md).
   lifecycle operations, and broad catalog expansion remain deferred.
 - Full JSON Schema runtime support, including `$ref`, formats, conditionals,
   and default argument coercion, remains deferred.
+- Broader provider-neutral structured-output mappings remain deferred until
+  each provider family has explicit request, response, and fallback semantics.
 
 ## Validation status
 

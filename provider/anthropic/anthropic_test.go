@@ -949,6 +949,41 @@ func TestTypedAnthropicOutputFormat(t *testing.T) {
 	}
 }
 
+func TestNeutralStructuredOutputMapsToAnthropicOutputFormat(t *testing.T) {
+	t.Parallel()
+
+	requests := make(chan capturedRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captureRequest(t, requests, r)
+		writeMessagesSSE(t, w, completedEvent)
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("anthropic-neutral-output-test")
+	model := anthropicTestModel(providerID)
+	client := anthropicTestClient(t, providerID, model, server.URL)
+
+	_, err := client.Complete(
+		context.Background(),
+		model,
+		sigma.Request{Messages: []sigma.Message{sigma.UserText("return json")}},
+		sigma.WithJSONOutput(),
+	)
+	if err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+
+	payload := decodePayload(t, receiveRequest(t, requests).Body)
+	outputFormat := payload["output_format"].(map[string]any)
+	if got, want := outputFormat["type"], "json_schema"; got != want {
+		t.Fatalf("output_format.type = %v, want %v", got, want)
+	}
+	schema := outputFormat["schema"].(map[string]any)
+	if got, want := schema["type"], "object"; got != want {
+		t.Fatalf("output_format.schema.type = %v, want %v", got, want)
+	}
+}
+
 func TestTypedAnthropicDisableParallelToolUseWithToolChoice(t *testing.T) {
 	t.Parallel()
 

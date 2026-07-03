@@ -214,6 +214,64 @@ func TestChatCompletionsSendsTypedResponseFormatAndLogprobs(t *testing.T) {
 	}
 }
 
+func TestChatCompletionsSendsNeutralStructuredOutputAndLogprobs(t *testing.T) {
+	t.Parallel()
+
+	requests := make(chan capturedRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captureRequest(t, requests, r)
+		writeFixture(t, w, "text_usage.sse")
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("openai-neutral-controls-test")
+	model := openAITestModel(providerID)
+	client := openAITestClient(t, providerID, model, server.URL)
+	schema := sigma.Schema{
+		"type":                 "object",
+		"additionalProperties": false,
+	}
+
+	_, err := client.Complete(
+		context.Background(),
+		model,
+		sigma.Request{Messages: []sigma.Message{sigma.UserText("judge")}},
+		sigma.WithJSONSchemaOutput("judge", schema, true),
+		sigma.WithTopLogprobs(2),
+	)
+	if err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(receiveRequest(t, requests).Body, &payload); err != nil {
+		t.Fatalf("Unmarshal request body returned error: %v", err)
+	}
+	responseFormat := payload["response_format"].(map[string]any)
+	if got, want := responseFormat["type"], "json_schema"; got != want {
+		t.Fatalf("response_format.type = %v, want %v", got, want)
+	}
+	jsonSchema := responseFormat["json_schema"].(map[string]any)
+	if got, want := jsonSchema["name"], "judge"; got != want {
+		t.Fatalf("json_schema.name = %v, want %v", got, want)
+	}
+	if got, want := jsonSchema["strict"], true; got != want {
+		t.Fatalf("json_schema.strict = %v, want %v", got, want)
+	}
+	if !reflect.DeepEqual(jsonSchema["schema"], map[string]any{
+		"type":                 "object",
+		"additionalProperties": false,
+	}) {
+		t.Fatalf("json_schema.schema = %#v, want schema", jsonSchema["schema"])
+	}
+	if got, want := payload["logprobs"], true; got != want {
+		t.Fatalf("logprobs = %v, want %v", got, want)
+	}
+	if got, want := payload["top_logprobs"], float64(2); got != want {
+		t.Fatalf("top_logprobs = %v, want %v", got, want)
+	}
+}
+
 func TestChatCompletionsRequestShapeGuards(t *testing.T) {
 	t.Parallel()
 

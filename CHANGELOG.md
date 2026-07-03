@@ -172,6 +172,11 @@ See [release notes](docs/release-notes-v0.6.0.md).
   OpenAI-compatible JSON object and strict JSON Schema capability probes,
   emitting reviewable hints for supported schema output, JSON-object fallback,
   and prompt-only JSON fallback without updating generated metadata.
+- `sigma.WithStructuredOutput`, `sigma.WithJSONOutput`,
+  `sigma.WithJSONSchemaOutput`, and `sigma.WithTopLogprobs` now provide
+  provider-neutral request controls that map onto existing OpenAI-compatible,
+  Anthropic Messages, and Bedrock Converse structured-output paths with local
+  validation for unsupported APIs.
 - `sigma.TransformRequestForModel` and `sigma.TransformMessagesForModel` now
   expose opt-in cross-provider handoff helpers that adapt replayed messages for
   a target model, including thinking-to-text conversion, unsupported-image

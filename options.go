@@ -158,6 +158,25 @@ type BedrockOptions struct {
 	AdditionalModelResponseFieldPaths []string
 }
 
+// StructuredOutputType identifies provider-neutral structured-output modes.
+type StructuredOutputType string
+
+const (
+	// StructuredOutputJSONObject asks the provider to return any JSON object.
+	StructuredOutputJSONObject StructuredOutputType = "json_object"
+	// StructuredOutputJSONSchema asks the provider to return an object matching
+	// the supplied JSON Schema-compatible schema.
+	StructuredOutputJSONSchema StructuredOutputType = "json_schema"
+)
+
+// StructuredOutput describes a provider-neutral structured-output request.
+type StructuredOutput struct {
+	Type   StructuredOutputType
+	Name   string
+	Schema any
+	Strict bool
+}
+
 // Options configures a single provider request.
 //
 // Client.Stream merges options in this order: client defaults, defaults from
@@ -182,6 +201,8 @@ type Options struct {
 	Metadata                    map[string]any
 	ReasoningLevel              ThinkingLevel
 	ThinkingBudgetTokens        *int
+	StructuredOutput            *StructuredOutput
+	TopLogprobs                 int
 	ProviderOptions             map[ProviderID]map[string]any
 	ProviderAuthResolvers       map[ProviderID]AuthResolver
 	TextPayloadDebugHooks       []TextPayloadDebugHook
@@ -355,6 +376,36 @@ func WithThinkingBudgetTokens(tokens int) Option {
 	}
 }
 
+// WithStructuredOutput requests provider-neutral structured output.
+func WithStructuredOutput(output StructuredOutput) Option {
+	return func(options *Options) {
+		options.StructuredOutput = cloneStructuredOutput(&output)
+	}
+}
+
+// WithJSONOutput asks the provider to return any JSON object.
+func WithJSONOutput() Option {
+	return WithStructuredOutput(StructuredOutput{Type: StructuredOutputJSONObject})
+}
+
+// WithJSONSchemaOutput asks the provider to return JSON matching schema.
+func WithJSONSchemaOutput(name string, schema any, strict bool) Option {
+	return WithStructuredOutput(StructuredOutput{
+		Type:   StructuredOutputJSONSchema,
+		Name:   name,
+		Schema: schema,
+		Strict: strict,
+	})
+}
+
+// WithTopLogprobs requests top token log probabilities when the provider API
+// supports them.
+func WithTopLogprobs(top int) Option {
+	return func(options *Options) {
+		options.TopLogprobs = top
+	}
+}
+
 // WithProviderOptions adds or replaces advanced provider-specific values.
 func WithProviderOptions(provider ProviderID, values map[string]any) Option {
 	return func(options *Options) {
@@ -462,6 +513,8 @@ func cloneOptions(options Options) Options {
 		Metadata:                    copyStringAnyMap(options.Metadata),
 		ReasoningLevel:              options.ReasoningLevel,
 		ThinkingBudgetTokens:        cloneIntPtr(options.ThinkingBudgetTokens),
+		StructuredOutput:            cloneStructuredOutput(options.StructuredOutput),
+		TopLogprobs:                 options.TopLogprobs,
 		ProviderOptions:             copyProviderOptions(options.ProviderOptions),
 		ProviderAuthResolvers:       copyProviderAuthResolvers(options.ProviderAuthResolvers),
 		TextPayloadDebugHooks:       append([]TextPayloadDebugHook(nil), options.TextPayloadDebugHooks...),
@@ -523,6 +576,15 @@ func cloneAnthropicOptions(options *AnthropicOptions) *AnthropicOptions {
 	copied.InterleavedThinking = cloneBoolPtr(options.InterleavedThinking)
 	copied.OutputFormat = cloneAnyValue(options.OutputFormat)
 	copied.DisableParallelToolUse = cloneBoolPtr(options.DisableParallelToolUse)
+	return &copied
+}
+
+func cloneStructuredOutput(output *StructuredOutput) *StructuredOutput {
+	if output == nil {
+		return nil
+	}
+	copied := *output
+	copied.Schema = cloneAnyValue(output.Schema)
 	return &copied
 }
 

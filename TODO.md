@@ -624,8 +624,13 @@ should still come through the catalog refresh workflow.
 
 ## Request controls
 
-- [ ] Design provider-neutral structured-output and logprob semantics before
-      mapping those controls beyond OpenAI-compatible API families.
+- [x] Add provider-neutral structured-output and top-logprob request controls
+      that map onto existing OpenAI-compatible, Anthropic Messages, and Bedrock
+      Converse structured-output paths with local validation for unsupported
+      APIs.
+- [ ] Keep broader provider-neutral structured-output mappings deferred until
+      each provider family has explicit request, response, and fallback
+      semantics.
 
 ## Platform reach
 

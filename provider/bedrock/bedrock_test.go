@@ -688,6 +688,35 @@ func TestCompleteUsesFakeCredentialDetectorAndClient(t *testing.T) {
 	}
 }
 
+func TestCompleteMapsNeutralStructuredOutputToResponseFormatTool(t *testing.T) {
+	t.Parallel()
+
+	fakeClient := &fakeConverseClient{}
+	providerID := sigma.ProviderID("bedrock-neutral-output-test")
+	model := bedrockTestModel(providerID)
+	client := bedrockTestClient(t, providerID, model, fakeClient, fakeCredentialDetector{})
+
+	_, err := client.Complete(
+		context.Background(),
+		model,
+		sigma.Request{Messages: []sigma.Message{sigma.UserText("return json")}},
+		sigma.WithJSONSchemaOutput("answer", sigma.Schema{"type": "object"}, true),
+	)
+	if err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+	if got, want := fakeClient.request.Tools[0].Name, bedrockResponseFormatToolName; got != want {
+		t.Fatalf("synthetic tool name = %q, want %q", got, want)
+	}
+	if got, want := fakeClient.request.ToolChoice.Name, bedrockResponseFormatToolName; got != want {
+		t.Fatalf("tool choice name = %q, want %q", got, want)
+	}
+	schema := fakeClient.request.Tools[0].InputSchema.(map[string]any)
+	if got, want := schema["type"], "object"; got != want {
+		t.Fatalf("synthetic schema type = %v, want %v", got, want)
+	}
+}
+
 func TestConverseRejectsProviderDefinedTools(t *testing.T) {
 	t.Parallel()
 

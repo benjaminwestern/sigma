@@ -95,6 +95,95 @@ func TestOptionsMergePrecedence(t *testing.T) {
 	}
 }
 
+func TestProviderNeutralControlsMergeAndMapToOpenAIOptions(t *testing.T) {
+	t.Parallel()
+
+	schema := map[string]any{"type": "object"}
+	client, provider, model := newOptionsTestClient(t,
+		sigma.WithDefaultOptions(
+			sigma.WithJSONSchemaOutput("answer", schema, true),
+			sigma.WithTopLogprobs(3),
+		),
+	)
+	model.API = sigma.APIOpenAICompletions
+	schema["type"] = "mutated"
+
+	if _, err := client.Complete(context.Background(), model, sigma.Request{}); err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+
+	if provider.opts.StructuredOutput == nil {
+		t.Fatal("structured output = nil")
+	}
+	if got, want := provider.opts.StructuredOutput.Schema.(map[string]any)["type"], "object"; got != want {
+		t.Fatalf("structured output schema type = %v, want %v", got, want)
+	}
+	if got, want := provider.opts.TopLogprobs, 3; got != want {
+		t.Fatalf("top logprobs = %d, want %d", got, want)
+	}
+	if provider.opts.OpenAIOptions == nil {
+		t.Fatal("openai options = nil")
+	}
+	responseFormat := provider.opts.OpenAIOptions.ResponseFormat.(map[string]any)
+	jsonSchema := responseFormat["json_schema"].(map[string]any)
+	if got, want := responseFormat["type"], "json_schema"; got != want {
+		t.Fatalf("response format type = %v, want %v", got, want)
+	}
+	if got, want := jsonSchema["name"], "answer"; got != want {
+		t.Fatalf("json schema name = %v, want %v", got, want)
+	}
+	if got, want := jsonSchema["strict"], true; got != want {
+		t.Fatalf("json schema strict = %v, want %v", got, want)
+	}
+	if got, want := jsonSchema["schema"].(map[string]any)["type"], "object"; got != want {
+		t.Fatalf("json schema type = %v, want %v", got, want)
+	}
+	if got, want := provider.opts.OpenAIOptions.TopLogprobs, 3; got != want {
+		t.Fatalf("openai top logprobs = %d, want %d", got, want)
+	}
+
+	provider.opts.StructuredOutput.Schema.(map[string]any)["type"] = "provider-mutated"
+	jsonSchema["schema"].(map[string]any)["type"] = "provider-mutated"
+	if _, err := client.Complete(context.Background(), model, sigma.Request{}); err != nil {
+		t.Fatalf("second Complete returned error: %v", err)
+	}
+	if got, want := provider.opts.StructuredOutput.Schema.(map[string]any)["type"], "object"; got != want {
+		t.Fatalf("structured output schema type after mutation = %v, want %v", got, want)
+	}
+	responseFormat = provider.opts.OpenAIOptions.ResponseFormat.(map[string]any)
+	jsonSchema = responseFormat["json_schema"].(map[string]any)
+	if got, want := jsonSchema["schema"].(map[string]any)["type"], "object"; got != want {
+		t.Fatalf("json schema type after mutation = %v, want %v", got, want)
+	}
+}
+
+func TestProviderSpecificStructuredOptionsWinOverNeutralControls(t *testing.T) {
+	t.Parallel()
+
+	explicit := map[string]any{"type": "json_object", "note": "explicit"}
+	client, provider, model := newOptionsTestClient(t,
+		sigma.WithDefaultOptions(
+			sigma.WithJSONSchemaOutput("neutral", sigma.Schema{"type": "object"}, true),
+			sigma.WithTopLogprobs(3),
+			sigma.WithOpenAIOptions(sigma.OpenAIOptions{
+				ResponseFormat: explicit,
+				TopLogprobs:    7,
+			}),
+		),
+	)
+	model.API = sigma.APIOpenAICompletions
+
+	if _, err := client.Complete(context.Background(), model, sigma.Request{}); err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+	if got := provider.opts.OpenAIOptions.ResponseFormat; !reflect.DeepEqual(got, explicit) {
+		t.Fatalf("response format = %#v, want %#v", got, explicit)
+	}
+	if got, want := provider.opts.OpenAIOptions.TopLogprobs, 7; got != want {
+		t.Fatalf("openai top logprobs = %d, want %d", got, want)
+	}
+}
+
 func TestModelDefaultTransportOverridesClientDefault(t *testing.T) {
 	t.Parallel()
 
@@ -542,6 +631,7 @@ func TestOptionsValidateCommonInvalidValues(t *testing.T) {
 		{name: "timeout", opt: sigma.WithTimeout(-time.Second)},
 		{name: "max retry delay", opt: sigma.WithMaxRetryDelay(-time.Second)},
 		{name: "thinking budget", opt: sigma.WithThinkingBudgetTokens(-1)},
+		{name: "top logprobs", opt: sigma.WithTopLogprobs(-1)},
 		{name: "openai top logprobs", opt: sigma.WithOpenAIOptions(sigma.OpenAIOptions{TopLogprobs: -1})},
 		{name: "openai codex websocket connect timeout", opt: sigma.WithOpenAIOptions(sigma.OpenAIOptions{CodexWebSocketConnectTimeout: testDurationPtr(-time.Second)})},
 		{name: "mistral simple tool choice with name", opt: sigma.WithMistralOptions(sigma.MistralOptions{ToolChoice: &sigma.MistralToolChoice{Type: sigma.MistralToolChoiceAuto, Name: "lookup"}})},
@@ -569,6 +659,80 @@ func TestOptionsValidateCommonInvalidValues(t *testing.T) {
 			}
 			if provider.called {
 				t.Fatal("provider was called for invalid options")
+			}
+		})
+	}
+}
+
+func TestProviderNeutralControlsValidateAPICompatibility(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		api  sigma.API
+		opt  sigma.Option
+	}{
+		{
+			name: "structured output rejects google",
+			api:  sigma.APIGoogleGenerativeAI,
+			opt:  sigma.WithJSONOutput(),
+		},
+		{
+			name: "structured output rejects mistral",
+			api:  sigma.APIMistralConversations,
+			opt:  sigma.WithJSONSchemaOutput("answer", sigma.Schema{"type": "object"}, true),
+		},
+		{
+			name: "structured output rejects custom",
+			api:  optionsTestAPI,
+			opt:  sigma.WithJSONOutput(),
+		},
+		{
+			name: "structured output rejects missing schema name",
+			api:  sigma.APIOpenAICompletions,
+			opt:  sigma.WithJSONSchemaOutput("", sigma.Schema{"type": "object"}, true),
+		},
+		{
+			name: "structured output rejects missing schema",
+			api:  sigma.APIOpenAICompletions,
+			opt:  sigma.WithJSONSchemaOutput("answer", nil, true),
+		},
+		{
+			name: "structured output rejects unknown type",
+			api:  sigma.APIOpenAICompletions,
+			opt:  sigma.WithStructuredOutput(sigma.StructuredOutput{Type: "xml"}),
+		},
+		{
+			name: "top logprobs rejects responses",
+			api:  sigma.APIOpenAIResponses,
+			opt:  sigma.WithTopLogprobs(2),
+		},
+		{
+			name: "top logprobs rejects anthropic",
+			api:  sigma.APIAnthropicMessages,
+			opt:  sigma.WithTopLogprobs(2),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			client, provider, model := newOptionsTestClient(t)
+			model.API = tt.api
+			_, err := client.Complete(context.Background(), model, sigma.Request{}, tt.opt)
+			if err == nil {
+				t.Fatal("Complete returned nil error")
+			}
+			var sigmaErr *sigma.Error
+			if !stderrors.As(err, &sigmaErr) {
+				t.Fatalf("error type = %T, want *sigma.Error", err)
+			}
+			if sigmaErr.Code != sigma.ErrorInvalidOptions {
+				t.Fatalf("error code = %q, want %q", sigmaErr.Code, sigma.ErrorInvalidOptions)
+			}
+			if provider.called {
+				t.Fatal("provider was called for invalid provider-neutral controls")
 			}
 		})
 	}

@@ -189,7 +189,7 @@ func (c *Client) Stream(ctx context.Context, model Model, req Request, opts ...O
 		})
 	}
 
-	options := c.requestOptions(model, opts)
+	options := applyProviderNeutralControls(model, c.requestOptions(model, opts))
 	if err := validateOptions(model, options); err != nil {
 		return errorStream(ctx, err, AssistantMessage{
 			Model:    model.ID,
@@ -353,6 +353,12 @@ func mergeOptions(base Options, override Options) Options {
 	if override.ThinkingBudgetTokens != nil {
 		merged.ThinkingBudgetTokens = cloneIntPtr(override.ThinkingBudgetTokens)
 	}
+	if override.StructuredOutput != nil {
+		merged.StructuredOutput = cloneStructuredOutput(override.StructuredOutput)
+	}
+	if override.TopLogprobs != 0 {
+		merged.TopLogprobs = override.TopLogprobs
+	}
 	if len(override.ProviderOptions) > 0 {
 		if merged.ProviderOptions == nil {
 			merged.ProviderOptions = make(map[ProviderID]map[string]any, len(override.ProviderOptions))
@@ -416,6 +422,92 @@ func modelDefaultOptions(model Model) Options {
 	}
 }
 
+func applyProviderNeutralControls(model Model, options Options) Options {
+	applied := cloneOptions(options)
+	api := effectiveTextAPI(model)
+	if applied.StructuredOutput != nil {
+		applyStructuredOutputControl(api, &applied)
+	}
+	if applied.TopLogprobs > 0 {
+		if applied.OpenAIOptions == nil {
+			applied.OpenAIOptions = &OpenAIOptions{}
+		}
+		if applied.OpenAIOptions.TopLogprobs == 0 {
+			applied.OpenAIOptions.TopLogprobs = applied.TopLogprobs
+		}
+	}
+	return applied
+}
+
+func applyStructuredOutputControl(api API, options *Options) {
+	switch api {
+	case APIOpenAICompletions, APIOpenAIResponses, APIAzureOpenAIResponses, APIOpenAICodexResponses:
+		applyOpenAIStructuredOutput(options)
+	case APIAnthropicMessages:
+		applyAnthropicStructuredOutput(options)
+	case APIBedrockConverseStream:
+		applyBedrockStructuredOutput(options)
+	case APIGoogleGenerativeAI, APIGoogleVertex, APIMistralConversations:
+	default:
+	}
+}
+
+func applyOpenAIStructuredOutput(options *Options) {
+	if options.OpenAIOptions == nil {
+		options.OpenAIOptions = &OpenAIOptions{}
+	}
+	if options.OpenAIOptions.ResponseFormat == nil {
+		options.OpenAIOptions.ResponseFormat = openAIStructuredOutput(*options.StructuredOutput)
+	}
+}
+
+func applyAnthropicStructuredOutput(options *Options) {
+	if options.AnthropicOptions == nil {
+		options.AnthropicOptions = &AnthropicOptions{}
+	}
+	if options.AnthropicOptions.OutputFormat == nil {
+		options.AnthropicOptions.OutputFormat = schemaStructuredOutput(*options.StructuredOutput)
+	}
+}
+
+func applyBedrockStructuredOutput(options *Options) {
+	if options.BedrockOptions == nil {
+		options.BedrockOptions = &BedrockOptions{}
+	}
+	if options.BedrockOptions.ResponseFormat == nil {
+		options.BedrockOptions.ResponseFormat = openAIStructuredOutput(*options.StructuredOutput)
+	}
+}
+
+func openAIStructuredOutput(output StructuredOutput) map[string]any {
+	if output.Type == StructuredOutputJSONSchema {
+		jsonSchema := map[string]any{
+			"name":   output.Name,
+			"schema": cloneAnyValue(output.Schema),
+		}
+		if output.Strict {
+			jsonSchema["strict"] = true
+		}
+		format := map[string]any{
+			"type":        "json_schema",
+			"json_schema": jsonSchema,
+		}
+		return format
+	}
+	return map[string]any{"type": "json_object"}
+}
+
+func schemaStructuredOutput(output StructuredOutput) map[string]any {
+	format := map[string]any{
+		"type":   "json_schema",
+		"schema": map[string]any{"type": "object"},
+	}
+	if output.Type == StructuredOutputJSONSchema {
+		format["schema"] = cloneAnyValue(output.Schema)
+	}
+	return format
+}
+
 func validateOptions(model Model, options Options) error {
 	if err := validateTransport(model, options.Transport); err != nil {
 		return err
@@ -437,6 +529,18 @@ func validateOptions(model Model, options Options) error {
 	}
 	if options.ThinkingBudgetTokens != nil && *options.ThinkingBudgetTokens < 0 {
 		return invalidOptionsError(model, "thinking budget tokens must be non-negative")
+	}
+	if options.TopLogprobs < 0 {
+		return invalidOptionsError(model, "top logprobs must be non-negative")
+	}
+	api := effectiveTextAPI(model)
+	if options.TopLogprobs > 0 && api != APIOpenAICompletions {
+		return invalidOptionsError(model, "top logprobs are only supported by openai-completions")
+	}
+	if options.StructuredOutput != nil {
+		if err := validateStructuredOutput(model, api, *options.StructuredOutput); err != nil {
+			return err
+		}
 	}
 	if model.Provider == ProviderFireworks &&
 		options.ThinkingBudgetTokens != nil &&
@@ -472,7 +576,6 @@ func validateOptions(model Model, options Options) error {
 		}
 	}
 	if options.OpenAIOptions != nil {
-		api := effectiveTextAPI(model)
 		if options.OpenAIOptions.TopLogprobs < 0 {
 			return invalidOptionsError(model, "openai top logprobs must be non-negative")
 		}
@@ -487,6 +590,39 @@ func validateOptions(model Model, options Options) error {
 		}
 	}
 	return nil
+}
+
+func validateStructuredOutput(model Model, api API, output StructuredOutput) error {
+	switch output.Type {
+	case StructuredOutputJSONObject:
+	case StructuredOutputJSONSchema:
+		if output.Name == "" {
+			return invalidOptionsError(model, "structured output schema name is required")
+		}
+		if output.Schema == nil {
+			return invalidOptionsError(model, "structured output schema is required")
+		}
+	default:
+		return invalidOptionsError(model, "structured output type must be json_object or json_schema")
+	}
+	if !supportsStructuredOutput(api) {
+		return invalidOptionsError(model, "structured output is only supported by openai-compatible, anthropic-messages, and bedrock-converse-stream APIs")
+	}
+	return nil
+}
+
+func supportsStructuredOutput(api API) bool {
+	switch api {
+	case APIOpenAICompletions,
+		APIOpenAIResponses,
+		APIAzureOpenAIResponses,
+		APIOpenAICodexResponses,
+		APIAnthropicMessages,
+		APIBedrockConverseStream:
+		return true
+	default:
+		return false
+	}
 }
 
 func validateTransport(model Model, transport Transport) error {
