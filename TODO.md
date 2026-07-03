@@ -206,6 +206,9 @@ work until their API boundaries are explicit.
       helper for diagnostic and caller-supplied context-window usage signals.
 - [x] Preserve long prompt-cache write usage separately for cost accounting
       while keeping total cache-write tokens unchanged.
+- [x] Bound Anthropic Messages prompt-cache breakpoints to API-valid placement
+      so cache-enabled agent loops do not mark every user turn, tool result, or
+      tool definition.
 - [x] Normalize text-generation usage/accounting metadata with provider/model
       identity, raw provider usage payloads, tool-use input tokens, terminal
       stream usage, and separate provider-reported versus Sigma-estimated cost.

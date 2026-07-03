@@ -115,6 +115,100 @@ func TestCompleteSendsGoldenPayloadWithCacheThinkingImagesAndTools(t *testing.T)
 	goldentest.AssertJSON(t, request.Body, "provider/anthropic/messages/rich_payload.json")
 }
 
+func TestCompleteBoundsCacheControlBreakpoints(t *testing.T) {
+	t.Parallel()
+
+	requests := make(chan capturedRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captureRequest(t, requests, r)
+		writeMessagesSSE(t, w, completedEvent)
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("anthropic-cache-bound-test")
+	model := anthropicTestModel(providerID)
+	client := anthropicTestClient(
+		t,
+		providerID,
+		model,
+		server.URL,
+		anthropic.WithMessagesCompat(anthropic.MessagesCompat{
+			LongCacheRetention:  true,
+			CacheControlOnTools: true,
+		}),
+	)
+
+	_, err := client.Complete(
+		context.Background(),
+		model,
+		sigma.Request{
+			SystemPrompt: "Stable system prompt.",
+			Messages: []sigma.Message{
+				sigma.UserText("first user"),
+				{
+					Role: sigma.RoleAssistant,
+					Content: []sigma.ContentBlock{
+						sigma.Text("calling tool"),
+						sigma.ToolCallBlock("toolu_1", "lookup", map[string]any{"query": "first"}),
+					},
+				},
+				{
+					Role:       sigma.RoleTool,
+					ToolCallID: "toolu_1",
+					Content:    []sigma.ContentBlock{sigma.Text("first result")},
+				},
+				sigma.UserText("second user"),
+				{
+					Role:    sigma.RoleAssistant,
+					Content: []sigma.ContentBlock{sigma.Text("second answer")},
+				},
+				sigma.UserContent(sigma.Text("final user"), sigma.ImageBase64("image/png", "aGk=")),
+			},
+			Tools: []sigma.Tool{
+				{
+					Name:        "lookup",
+					Description: "Lookup local records",
+					InputSchema: sigma.Schema{"type": "object"},
+				},
+				anthropic.Tools.WebSearch(anthropic.WithMaxUses(2)),
+			},
+		},
+		sigma.WithCacheRetention(sigma.CacheRetentionLong),
+	)
+	if err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+
+	payload := decodeCapturedJSON(t, receiveRequest(t, requests).Body)
+	if got, want := countCacheControl(payload), 3; got != want {
+		t.Fatalf("cache_control count = %d, want %d", got, want)
+	}
+
+	messages := payload["messages"].([]any)
+	firstUser := messages[0].(map[string]any)["content"].([]any)[0].(map[string]any)
+	if _, ok := firstUser["cache_control"]; ok {
+		t.Fatalf("first user block has cache_control: %#v", firstUser)
+	}
+	toolResult := messages[2].(map[string]any)["content"].([]any)[0].(map[string]any)
+	if _, ok := toolResult["cache_control"]; ok {
+		t.Fatalf("earlier tool result has cache_control: %#v", toolResult)
+	}
+	finalUserContent := messages[len(messages)-1].(map[string]any)["content"].([]any)
+	finalUserBlock := finalUserContent[len(finalUserContent)-1].(map[string]any)
+	if _, ok := finalUserBlock["cache_control"]; !ok {
+		t.Fatalf("final user block missing cache_control: %#v", finalUserBlock)
+	}
+	tools := payload["tools"].([]any)
+	firstTool := tools[0].(map[string]any)
+	if _, ok := firstTool["cache_control"]; ok {
+		t.Fatalf("first tool has cache_control: %#v", firstTool)
+	}
+	finalTool := tools[len(tools)-1].(map[string]any)
+	if _, ok := finalTool["cache_control"]; !ok {
+		t.Fatalf("final tool missing cache_control: %#v", finalTool)
+	}
+}
+
 func TestCompleteSuppressesFinalHeaders(t *testing.T) {
 	t.Parallel()
 
@@ -2106,6 +2200,38 @@ func captureRequest(t *testing.T, requests chan<- capturedRequest, r *http.Reque
 		Path:    r.URL.Path,
 		Headers: r.Header.Clone(),
 		Body:    string(body),
+	}
+}
+
+func decodeCapturedJSON(t *testing.T, body string) map[string]any {
+	t.Helper()
+
+	var decoded map[string]any
+	if err := json.Unmarshal([]byte(body), &decoded); err != nil {
+		t.Fatalf("json.Unmarshal request body returned error: %v", err)
+	}
+	return decoded
+}
+
+func countCacheControl(value any) int {
+	switch typed := value.(type) {
+	case map[string]any:
+		count := 0
+		if _, ok := typed["cache_control"]; ok {
+			count++
+		}
+		for _, child := range typed {
+			count += countCacheControl(child)
+		}
+		return count
+	case []any:
+		count := 0
+		for _, child := range typed {
+			count += countCacheControl(child)
+		}
+		return count
+	default:
+		return 0
 	}
 }
 

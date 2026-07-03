@@ -4,10 +4,6 @@
     {
       "content": [
         {
-          "cache_control": {
-            "ttl": "1h",
-            "type": "ephemeral"
-          },
           "text": "Use terse answers.",
           "type": "text"
         }
@@ -28,10 +24,6 @@
           "type": "image"
         },
         {
-          "cache_control": {
-            "ttl": "1h",
-            "type": "ephemeral"
-          },
           "source": {
             "data": "aGk=",
             "media_type": "image/png",

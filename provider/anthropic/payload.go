@@ -131,7 +131,7 @@ func anthropicMessages(model sigma.Model, req sigma.Request, retention sigma.Cac
 		if message.Role == sigma.RoleTool {
 			blocks := make([]map[string]any, 0, 1)
 			for index < len(req.Messages) && req.Messages[index].Role == sigma.RoleTool {
-				block, err := anthropicToolResultBlock(model, req.Messages[index], retention, compat)
+				block, err := anthropicToolResultBlock(model, req.Messages[index])
 				if err != nil {
 					return nil, err
 				}
@@ -142,23 +142,23 @@ func anthropicMessages(model sigma.Model, req sigma.Request, retention sigma.Cac
 			messages = append(messages, map[string]any{"role": "user", "content": blocks})
 			continue
 		}
-		converted, err := anthropicMessage(model, message, retention, compat)
+		converted, err := anthropicMessage(model, message, compat)
 		if err != nil {
 			return nil, err
 		}
 		messages = append(messages, converted)
 	}
+	addCacheControlToLastUserMessage(messages, retention, compat)
 	return messages, nil
 }
 
-func anthropicMessage(model sigma.Model, message sigma.Message, retention sigma.CacheRetention, compat messagesCompat) (map[string]any, error) {
+func anthropicMessage(model sigma.Model, message sigma.Message, compat messagesCompat) (map[string]any, error) {
 	switch message.Role {
 	case sigma.RoleUser, sigma.RoleDeveloper:
 		content, err := anthropicInputContent(model, message.Content, false)
 		if err != nil {
 			return nil, err
 		}
-		addCacheControlToLast(content, retention, compat)
 		return map[string]any{"role": "user", "content": content}, nil
 	case sigma.RoleAssistant:
 		content, err := anthropicAssistantContent(message.Content, compat)
@@ -167,7 +167,7 @@ func anthropicMessage(model sigma.Model, message sigma.Message, retention sigma.
 		}
 		return map[string]any{"role": "assistant", "content": content}, nil
 	case sigma.RoleTool:
-		block, err := anthropicToolResultBlock(model, message, retention, compat)
+		block, err := anthropicToolResultBlock(model, message)
 		if err != nil {
 			return nil, err
 		}
@@ -177,7 +177,7 @@ func anthropicMessage(model sigma.Model, message sigma.Message, retention sigma.
 	}
 }
 
-func anthropicToolResultBlock(model sigma.Model, message sigma.Message, retention sigma.CacheRetention, compat messagesCompat) (map[string]any, error) {
+func anthropicToolResultBlock(model sigma.Model, message sigma.Message) (map[string]any, error) {
 	content, err := anthropicToolResultContent(model, message)
 	if err != nil {
 		return nil, err
@@ -190,7 +190,6 @@ func anthropicToolResultBlock(model sigma.Model, message sigma.Message, retentio
 	if message.IsError {
 		block["is_error"] = true
 	}
-	addCacheControl(block, retention, compat)
 	return block, nil
 }
 
@@ -396,7 +395,7 @@ func unsupportedDocumentInputError(model sigma.Model, provider string) error {
 
 func anthropicTools(tools []sigma.Tool, retention sigma.CacheRetention, compat messagesCompat) ([]map[string]any, error) {
 	converted := make([]map[string]any, 0, len(tools))
-	for _, tool := range tools {
+	for index, tool := range tools {
 		if tool.ProviderDefinedType != "" {
 			convertedTool := map[string]any{
 				"type": tool.ProviderDefinedType,
@@ -405,7 +404,7 @@ func anthropicTools(tools []sigma.Tool, retention sigma.CacheRetention, compat m
 			for key, value := range tool.ProviderDefinedOptions {
 				convertedTool[key] = value
 			}
-			if compat.cacheControlOnTools {
+			if compat.cacheControlOnTools && index == len(tools)-1 {
 				addCacheControl(convertedTool, retention, compat)
 			}
 			converted = append(converted, convertedTool)
@@ -430,7 +429,7 @@ func anthropicTools(tools []sigma.Tool, retention sigma.CacheRetention, compat m
 		if compat.eagerToolInputStreaming {
 			convertedTool["eager_input_streaming"] = true
 		}
-		if compat.cacheControlOnTools {
+		if compat.cacheControlOnTools && index == len(tools)-1 {
 			addCacheControl(convertedTool, retention, compat)
 		}
 		converted = append(converted, convertedTool)
@@ -632,6 +631,21 @@ func addCacheControlToLast(content []map[string]any, retention sigma.CacheRetent
 		addCacheControl(content[i], retention, compat)
 		return
 	}
+}
+
+func addCacheControlToLastUserMessage(messages []map[string]any, retention sigma.CacheRetention, compat messagesCompat) {
+	if len(messages) == 0 {
+		return
+	}
+	last := messages[len(messages)-1]
+	if last["role"] != "user" {
+		return
+	}
+	content, ok := last["content"].([]map[string]any)
+	if !ok {
+		return
+	}
+	addCacheControlToLast(content, retention, compat)
 }
 
 func addCacheControl(block map[string]any, retention sigma.CacheRetention, compat messagesCompat) {

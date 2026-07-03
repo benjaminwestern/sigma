@@ -215,6 +215,10 @@ See [release notes](docs/release-notes-v0.6.0.md).
 
 ### Fixed
 
+- Anthropic Messages prompt-cache markers are now bounded to the system prompt,
+  final cacheable user-side block, and final tool definition, avoiding
+  API-rejected payloads when cache-enabled agent loops include multiple user
+  turns, tool results, or tools.
 - Built-in Anthropic Messages routes now use versioned base URLs for Anthropic,
   Vercel AI Gateway, GitHub Copilot, and Cloudflare AI Gateway metadata and
   wrapper defaults, so Sigma dispatches to `/v1/messages`-shaped endpoints

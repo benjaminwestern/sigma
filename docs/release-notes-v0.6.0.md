@@ -148,6 +148,9 @@ advice without adding any execution loop or configuration format to Sigma.
   `sigma.Usage.LongCacheWriteInputTokens` from long prompt-cache write usage
   and `sigma.CostForUsage` prices those writes at the long-cache input
   multiplier while preserving total cache-write token accounting.
+- Anthropic Messages prompt-cache markers are now bounded to API-valid
+  breakpoints for cache-enabled agent loops, avoiding over-marked user turns,
+  tool results, and tool definitions in long conversations.
 - Text-generation usage now populates provider/model identity on
   `sigma.Usage`, preserves a JSON-like `Usage.Raw` copy of provider usage
   payloads when providers report usage, normalizes provider tool/connector
