@@ -227,6 +227,9 @@ work until their API boundaries are explicit.
       and `not` schemas without adding implicit argument coercion.
 - [x] Add opt-in primitive argument coercion for local tool-call validation
       while keeping strict `ValidateToolCall` behavior as the default.
+- [x] Harden registry model metadata copies and opt-in union coercion so nested
+      provider metadata remains caller-owned and already-valid `anyOf` /
+      `oneOf` values are not rewritten.
 - [x] Add provider-neutral document/PDF request content blocks with base64,
       URL, and provider file-ID sources plus initial OpenAI and Anthropic
       payload compatibility.

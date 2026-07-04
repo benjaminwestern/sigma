@@ -507,6 +507,113 @@ func TestValidateToolCallWithOptionsCoercesComposedSchemas(t *testing.T) {
 	}
 }
 
+func TestValidateToolCallWithOptionsPreservesValidUnionValues(t *testing.T) {
+	t.Parallel()
+
+	schema := sigma.Schema{
+		"type": "object",
+		"properties": map[string]any{
+			"any": map[string]any{
+				"anyOf": []any{
+					map[string]any{"type": "integer"},
+					map[string]any{"type": "string"},
+				},
+			},
+			"one": map[string]any{
+				"oneOf": []any{
+					map[string]any{"type": "integer"},
+					map[string]any{"type": "string"},
+				},
+			},
+			"coercedAny": map[string]any{
+				"anyOf": []any{
+					map[string]any{"type": "integer"},
+					map[string]any{"type": "boolean"},
+				},
+			},
+			"coercedOne": map[string]any{
+				"oneOf": []any{
+					map[string]any{"type": "boolean"},
+					map[string]any{"type": "integer"},
+				},
+			},
+		},
+		"required": []any{"any", "one", "coercedAny", "coercedOne"},
+	}
+
+	decoded, err := sigma.ValidateToolCallWithOptions(
+		[]sigma.Tool{{Name: "compose", InputSchema: schema}},
+		sigma.ToolCall{Name: "compose", Arguments: map[string]any{
+			"any":        "007",
+			"one":        "007",
+			"coercedAny": "42",
+			"coercedOne": "false",
+		}},
+		sigma.ToolValidationOptions{CoercePrimitives: true},
+	)
+	if err != nil {
+		t.Fatalf("ValidateToolCallWithOptions returned error: %v", err)
+	}
+
+	want := map[string]any{
+		"any":        "007",
+		"one":        "007",
+		"coercedAny": 42,
+		"coercedOne": false,
+	}
+	if gotJSON, wantJSON := mustJSON(t, decoded), mustJSON(t, want); gotJSON != wantJSON {
+		t.Fatalf("decoded arguments = %s, want %s", gotJSON, wantJSON)
+	}
+}
+
+func TestValidateToolCallWithOptionsCoercionRejectsMalformedUnionBranches(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		keyword string
+	}{
+		{name: "anyOf", keyword: "anyOf"},
+		{name: "oneOf", keyword: "oneOf"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := sigma.ValidateToolCallWithOptions(
+				[]sigma.Tool{{
+					Name: "compose",
+					InputSchema: sigma.Schema{
+						"type": "object",
+						"properties": map[string]any{
+							"value": map[string]any{
+								tt.keyword: []any{
+									map[string]any{"type": "string"},
+									map[string]any{"type": []any{1}},
+								},
+							},
+						},
+					},
+				}},
+				sigma.ToolCall{Name: "compose", Arguments: map[string]any{"value": "007"}},
+				sigma.ToolValidationOptions{CoercePrimitives: true},
+			)
+			if err == nil {
+				t.Fatal("ValidateToolCallWithOptions returned nil error")
+			}
+
+			var validationErr *sigma.ToolValidationError
+			if !errors.As(err, &validationErr) {
+				t.Fatalf("error type = %T, want ToolValidationError", err)
+			}
+			if got, want := validationErr.Reason, "schema is malformed"; got != want {
+				t.Fatalf("reason = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
 func TestValidateToolCallWithOptionsRejectsInvalidPrimitiveCoercions(t *testing.T) {
 	t.Parallel()
 

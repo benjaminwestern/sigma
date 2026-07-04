@@ -356,7 +356,7 @@ func copyStringAnyMap(values map[string]any) map[string]any {
 	}
 	copied := make(map[string]any, len(values))
 	for key, value := range values {
-		copied[key] = value
+		copied[key] = cloneAnyValue(value)
 	}
 	return copied
 }
@@ -459,18 +459,24 @@ func cloneBoolPtr(value *bool) *bool {
 
 func cloneAnyValue(value any) any {
 	switch typed := value.(type) {
-	case map[string]any:
-		return copyStringAnyMap(typed)
 	case Schema:
 		copied := make(Schema, len(typed))
 		for key, nested := range typed {
-			copied[key] = nested
+			copied[key] = cloneAnyValue(nested)
 		}
 		return copied
+	case map[string]any:
+		return copyStringAnyMap(typed)
 	case []any:
-		return append([]any(nil), typed...)
+		copied := make([]any, len(typed))
+		for i, item := range typed {
+			copied[i] = cloneAnyValue(item)
+		}
+		return copied
 	case []string:
 		return append([]string(nil), typed...)
+	case map[string]string:
+		return copyStringStringMap(typed)
 	default:
 		return value
 	}

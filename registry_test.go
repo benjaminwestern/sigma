@@ -1419,16 +1419,18 @@ func TestRegistryReturnsDefensiveModelCopies(t *testing.T) {
 		UnsupportedThinkingLevels: []sigma.ThinkingLevel{
 			sigma.ThinkingLevelOff,
 		},
-		ProviderMetadata: map[string]any{"family": "gpt"},
+		ProviderMetadata: nestedProviderMetadata(),
 	}
 	if err := registry.RegisterModel(model, sigma.WithMetadataOnly()); err != nil {
 		t.Fatalf("RegisterModel returned error: %v", err)
 	}
+	mutateNestedProviderMetadata(model.ProviderMetadata)
 
 	listed := registry.ListModels()
 	listed[0].ThinkingLevels[0] = sigma.ThinkingLevelHigh
 	listed[0].UnsupportedThinkingLevels[0] = sigma.ThinkingLevelMedium
 	listed[0].ProviderMetadata["family"] = "mutated"
+	mutateNestedProviderMetadata(listed[0].ProviderMetadata)
 
 	got, ok := registry.Model(sigma.ProviderOpenAI, "gpt-custom")
 	if !ok {
@@ -1442,6 +1444,130 @@ func TestRegistryReturnsDefensiveModelCopies(t *testing.T) {
 	}
 	if got.ProviderMetadata["family"] != "gpt" {
 		t.Fatalf("provider metadata family = %q, want %q", got.ProviderMetadata["family"], "gpt")
+	}
+	assertNestedProviderMetadata(t, got.ProviderMetadata)
+
+	got.ProviderMetadata["family"] = "mutated"
+	mutateNestedProviderMetadata(got.ProviderMetadata)
+	got, ok = registry.Model(sigma.ProviderOpenAI, "gpt-custom")
+	if !ok {
+		t.Fatal("model was not registered")
+	}
+	assertNestedProviderMetadata(t, got.ProviderMetadata)
+
+	snapshot := registry.Snapshot()
+	snapshot.Models[0].ProviderMetadata["family"] = "mutated"
+	mutateNestedProviderMetadata(snapshot.Models[0].ProviderMetadata)
+	got, ok = registry.Model(sigma.ProviderOpenAI, "gpt-custom")
+	if !ok {
+		t.Fatal("model was not registered")
+	}
+	assertNestedProviderMetadata(t, got.ProviderMetadata)
+
+	clone := registry.Clone()
+	cloned, ok := clone.Model(sigma.ProviderOpenAI, "gpt-custom")
+	if !ok {
+		t.Fatal("cloned model was not registered")
+	}
+	cloned.ProviderMetadata["family"] = "mutated"
+	mutateNestedProviderMetadata(cloned.ProviderMetadata)
+	got, ok = registry.Model(sigma.ProviderOpenAI, "gpt-custom")
+	if !ok {
+		t.Fatal("model was not registered")
+	}
+	assertNestedProviderMetadata(t, got.ProviderMetadata)
+	cloned, ok = clone.Model(sigma.ProviderOpenAI, "gpt-custom")
+	if !ok {
+		t.Fatal("cloned model was not registered")
+	}
+	assertNestedProviderMetadata(t, cloned.ProviderMetadata)
+}
+
+func TestRegistryReturnsDefensiveImageAndEmbeddingMetadataCopies(t *testing.T) {
+	t.Parallel()
+
+	registry := sigma.NewRegistry()
+	if err := registry.RegisterImageModel(sigma.ImageModel{
+		ID:               "image-custom",
+		Provider:         sigma.ProviderOpenAI,
+		API:              sigma.ImageAPIOpenAIImages,
+		ProviderMetadata: nestedProviderMetadata(),
+	}, sigma.WithMetadataOnly()); err != nil {
+		t.Fatalf("RegisterImageModel returned error: %v", err)
+	}
+	if err := registry.RegisterEmbeddingModel(sigma.EmbeddingModel{
+		ID:               "embedding-custom",
+		Provider:         sigma.ProviderOpenAI,
+		API:              sigma.EmbeddingAPIOpenAIEmbeddings,
+		ProviderMetadata: nestedProviderMetadata(),
+	}, sigma.WithMetadataOnly()); err != nil {
+		t.Fatalf("RegisterEmbeddingModel returned error: %v", err)
+	}
+
+	images := registry.ListImageModels()
+	mutateNestedProviderMetadata(images[0].ProviderMetadata)
+	image, ok := registry.ImageModel(sigma.ProviderOpenAI, "image-custom")
+	if !ok {
+		t.Fatal("image model was not registered")
+	}
+	assertNestedProviderMetadata(t, image.ProviderMetadata)
+
+	embeddings := registry.ListEmbeddingModels()
+	mutateNestedProviderMetadata(embeddings[0].ProviderMetadata)
+	embedding, ok := registry.EmbeddingModel(sigma.ProviderOpenAI, "embedding-custom")
+	if !ok {
+		t.Fatal("embedding model was not registered")
+	}
+	assertNestedProviderMetadata(t, embedding.ProviderMetadata)
+}
+
+func nestedProviderMetadata() map[string]any {
+	return map[string]any{
+		"family":  "gpt",
+		"nested":  map[string]any{"inner": "kept"},
+		"items":   []any{map[string]any{"value": "kept"}},
+		"strings": []string{"kept"},
+		"headers": map[string]string{"x-test": "kept"},
+		"schema": sigma.Schema{
+			"properties": map[string]any{
+				"field": map[string]any{"type": "string"},
+			},
+		},
+	}
+}
+
+func mutateNestedProviderMetadata(metadata map[string]any) {
+	metadata["nested"].(map[string]any)["inner"] = "mutated"
+	metadata["items"].([]any)[0].(map[string]any)["value"] = "mutated"
+	metadata["strings"].([]string)[0] = "mutated"
+	metadata["headers"].(map[string]string)["x-test"] = "mutated"
+	schema := metadata["schema"].(sigma.Schema)
+	properties := schema["properties"].(map[string]any)
+	properties["field"].(map[string]any)["type"] = "number"
+}
+
+func assertNestedProviderMetadata(t *testing.T, metadata map[string]any) {
+	t.Helper()
+
+	if got, want := metadata["family"], "gpt"; got != want {
+		t.Fatalf("provider metadata family = %q, want %q", got, want)
+	}
+	if got, want := metadata["nested"].(map[string]any)["inner"], "kept"; got != want {
+		t.Fatalf("nested metadata = %q, want %q", got, want)
+	}
+	if got, want := metadata["items"].([]any)[0].(map[string]any)["value"], "kept"; got != want {
+		t.Fatalf("metadata item = %q, want %q", got, want)
+	}
+	if got, want := metadata["strings"].([]string)[0], "kept"; got != want {
+		t.Fatalf("metadata string = %q, want %q", got, want)
+	}
+	if got, want := metadata["headers"].(map[string]string)["x-test"], "kept"; got != want {
+		t.Fatalf("metadata header = %q, want %q", got, want)
+	}
+	schema := metadata["schema"].(sigma.Schema)
+	properties := schema["properties"].(map[string]any)
+	if got, want := properties["field"].(map[string]any)["type"], "string"; got != want {
+		t.Fatalf("metadata schema type = %q, want %q", got, want)
 	}
 }
 

@@ -205,6 +205,11 @@ func coerceAnyOf(schema map[string]any, value any, path string, toolName string)
 	if !ok {
 		return value, false, nil
 	}
+	if err := validateAnyOf(schema, value, path, toolName); err == nil {
+		return value, false, nil
+	} else if isMalformedSchemaError(err) {
+		return nil, false, err
+	}
 	for _, branch := range branches {
 		candidate := cloneAnyValue(value)
 		coerced, err := coerceValue(branch, candidate, path, toolName)
@@ -227,6 +232,11 @@ func coerceOneOf(schema map[string]any, value any, path string, toolName string)
 	}
 	if !ok {
 		return value, false, nil
+	}
+	if err := validateOneOf(schema, value, path, toolName); err == nil {
+		return value, false, nil
+	} else if isMalformedSchemaError(err) {
+		return nil, false, err
 	}
 	for _, branch := range branches {
 		candidate := cloneAnyValue(value)

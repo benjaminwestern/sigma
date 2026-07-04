@@ -226,6 +226,9 @@ See [release notes](docs/release-notes-v0.6.0.md).
 
 ### Fixed
 
+- Registry model copies now deep-copy nested provider metadata containers, and
+  opt-in primitive tool-argument coercion now preserves already-valid `anyOf`
+  and `oneOf` values instead of coercing them toward the first matching branch.
 - Amazon Bedrock SigV4 signing now canonicalizes the escaped wire path for
   model IDs with encoded slash segments, so inference-profile ARNs sign
   consistently across Converse Stream and Bedrock embeddings.

@@ -144,7 +144,8 @@ catalog and generated files untouched until the diff is reviewed.
 Registries can now also refresh app-owned dynamic text, image, and embedding
 model sources at runtime, so local servers and routers with live catalogs can
 update client model listings without changing Sigma's curated built-in
-catalogs.
+catalogs. Registry model copies now also protect nested provider metadata, so
+callers can mutate returned metadata without corrupting registry state.
 Deterministic routing-decision helpers now classify requests into route tiers
 with weighted rule-based signals, select tier candidates from caller-defined
 policies, and turn classified upstream errors into retry, fallback, or abort
@@ -400,7 +401,8 @@ advice without adding any execution loop or configuration format to Sigma.
 - `sigma.ValidateToolCallWithOptions` now accepts
   `sigma.ToolValidationOptions{CoercePrimitives: true}` so callers can opt
   into conservative primitive argument coercion before strict tool validation,
-  without changing the default `ValidateToolCall` behavior.
+  without changing the default `ValidateToolCall` behavior, and without
+  rewriting already-valid `anyOf` or `oneOf` values.
 - Deterministic provider tests now cover Google stream `thoughtSignature`-only
   chunks, empty signature deltas, signature updates on existing blocks, and
   OpenAI-compatible Chat Completions replay of prior thinking blocks as
@@ -582,7 +584,8 @@ advice without adding any execution loop or configuration format to Sigma.
   shape, live probes, credential handling, or model registry contents.
 - Tool schema composition validation and primitive argument coercion are
   additive. `ValidateToolCall` remains strict by default; callers must use
-  `ValidateToolCallWithOptions` to request coercion.
+  `ValidateToolCallWithOptions` to request coercion, and already-valid union
+  values are preserved.
 - Provider-neutral structured output is additive and request-scoped. Explicit
   provider-specific response-format options still win when callers need a
   native shape, and top-logprob requests remain limited to
