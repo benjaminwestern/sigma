@@ -202,6 +202,33 @@ func TestAzureResponsesDoesNotDuplicateResponsesPath(t *testing.T) {
 	}
 }
 
+func TestAzureResponsesPreservesEndpointPathPrefix(t *testing.T) {
+	t.Parallel()
+
+	requests := make(chan azureCapturedRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captureAzureRequest(t, requests, r)
+		writeResponsesSSE(t, w, responsesCompletedEvent)
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("azure-responses-prefix-test")
+	model := azureResponsesTestModel(providerID)
+	// A gateway (for example APIM) fronting Azure OpenAI under a path prefix
+	// must still get /openai/v1/responses appended after the prefix.
+	model.AzureOpenAIResponses.Endpoint = server.URL + "/aoai"
+	client := azureResponsesTestClient(t, providerID, model, azureAPIKeyResolver("azure-key"))
+
+	_, err := client.Complete(context.Background(), model, sigma.Request{Messages: []sigma.Message{sigma.UserText("hi")}})
+	if err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+	request := receiveAzureRequest(t, requests)
+	if got, want := request.Path, "/aoai/openai/v1/responses"; got != want {
+		t.Fatalf("path = %q, want %q", got, want)
+	}
+}
+
 func TestAzureResponsesUsesConfiguredAPIKeyEnvironmentVariable(t *testing.T) {
 	t.Setenv("SIGMA_AZURE_OPENAI_TEST_KEY", "env-key")
 

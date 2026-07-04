@@ -75,8 +75,11 @@ func ProviderAuth(opts GitHubCopilotOAuthTokenProviderOptions) sigma.ProviderAut
 			RefreshBefore: opts.RefreshBefore,
 			Refresh: func(ctx context.Context, stored sigma.StoredCredential) (sigma.StoredCredential, error) {
 				refreshOpts := opts
-				if enterpriseDomain := stringMetadata(stored.Metadata, "enterpriseDomain"); enterpriseDomain != "" {
-					refreshOpts.EnterpriseDomain = enterpriseDomain
+				// The stored credential's domain is a fallback only: an
+				// explicitly configured EnterpriseDomain must keep winning so
+				// a reconfigured deployment converges to the new domain.
+				if refreshOpts.EnterpriseDomain == "" {
+					refreshOpts.EnterpriseDomain = stringMetadata(stored.Metadata, "enterpriseDomain")
 				}
 				refreshed, err := RefreshGitHubCopilotToken(ctx, stored.RefreshToken, refreshOpts)
 				if err != nil {

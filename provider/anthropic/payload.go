@@ -78,10 +78,8 @@ func messagesPayload(model sigma.Model, req sigma.Request, opts sigma.Options, c
 	if opts.Temperature != nil && !thinkingEnabled && compat.supportsTemperature {
 		payload["temperature"] = *opts.Temperature
 	}
-	if len(opts.Metadata) > 0 {
-		if userID, ok := opts.Metadata["user_id"].(string); ok {
-			payload["metadata"] = map[string]any{"user_id": userID}
-		}
+	if userID, ok := stringOption(opts.Metadata, "user_id"); ok {
+		payload["metadata"] = map[string]any{"user_id": userID}
 	}
 	if len(transformed.Tools) > 0 {
 		tools, err := anthropicTools(transformed.Tools, opts.CacheRetention, compat)
@@ -458,15 +456,10 @@ func addThinking(payload map[string]any, model sigma.Model, opts sigma.Options, 
 		}
 		return true
 	}
-	budget := thinkingBudget(model, opts)
-	if budget <= 0 {
-		if compat.supportsDisabledThinking {
-			payload["thinking"] = map[string]any{"type": "disabled"}
-		}
-		return false
-	}
-	budget = minInt(budget, maxInt(0, maxTokens-1024))
-	if budget <= 0 {
+	// The Messages API requires 1024 <= budget_tokens < max_tokens; clamp the
+	// budget inside max_tokens and disable thinking when no valid budget fits.
+	budget := min(thinkingBudget(model, opts), maxTokens-1024)
+	if budget < 1024 {
 		if compat.supportsDisabledThinking {
 			payload["thinking"] = map[string]any{"type": "disabled"}
 		}
@@ -677,20 +670,6 @@ func cacheControl(retention sigma.CacheRetention, compat messagesCompat) map[str
 		}
 	}
 	return control
-}
-
-func minInt(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func maxInt(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }
 
 func providerOptions(opts sigma.Options, provider sigma.ProviderID) map[string]any {

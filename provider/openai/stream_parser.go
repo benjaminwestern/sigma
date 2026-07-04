@@ -108,6 +108,8 @@ type completionStreamParser struct {
 	text             *streamblocks.Text
 	thinking         *streamblocks.Thinking
 	toolCalls        map[string]*streamblocks.ToolCall
+	toolCallOrdinals map[string]int
+	lastToolCallKey  string
 	nextBlock        int
 	usage            *sigma.Usage
 	finishReason     sigma.StopReason
@@ -121,9 +123,10 @@ type completionStreamParser struct {
 
 func parseCompletionsStream(ctx context.Context, r io.Reader, writer sigma.StreamWriter, model sigma.Model) (sigma.AssistantMessage, error) {
 	parser := completionStreamParser{
-		writer:    writer,
-		model:     model,
-		toolCalls: make(map[string]*streamblocks.ToolCall),
+		writer:           writer,
+		model:            model,
+		toolCalls:        make(map[string]*streamblocks.ToolCall),
+		toolCallOrdinals: make(map[string]int),
 		final: sigma.AssistantMessage{
 			Model:    model.ID,
 			Provider: model.Provider,
@@ -260,7 +263,7 @@ func (p *completionStreamParser) handleDelta(ctx context.Context, delta streamDe
 		})
 	}
 	for order, toolCall := range delta.ToolCalls {
-		if err := p.emitToolCall(ctx, toolCallKey(order, toolCall), order, toolCall); err != nil {
+		if err := p.emitToolCall(ctx, p.toolCallKey(order, toolCall), toolCall); err != nil {
 			return err
 		}
 	}
@@ -337,24 +340,39 @@ func (p *completionStreamParser) emitThinking(ctx context.Context, delta string)
 	})
 }
 
-func toolCallKey(order int, delta streamToolCallDelta) string {
+func (p *completionStreamParser) toolCallKey(order int, delta streamToolCallDelta) string {
 	if delta.Index != nil {
 		return fmt.Sprintf("index:%d", *delta.Index)
 	}
 	if delta.ID != "" {
 		return "id:" + delta.ID
 	}
+	// An index-less, id-less delta with no function name is an argument
+	// continuation of the most recent tool call (providers that send the id
+	// only on the first delta).
+	if delta.Function.Name == "" && p.lastToolCallKey != "" {
+		return p.lastToolCallKey
+	}
 	return fmt.Sprintf("order:%d", order)
 }
 
-func (p *completionStreamParser) emitToolCall(ctx context.Context, key string, fallbackIndex int, delta streamToolCallDelta) error {
+func (p *completionStreamParser) emitToolCall(ctx context.Context, key string, delta streamToolCallDelta) error {
 	state := p.toolCalls[key]
 	if state == nil {
 		state = &streamblocks.ToolCall{ContentIndex: p.nextContentIndex()}
+		p.toolCallOrdinals[key] = len(p.toolCalls)
 		p.toolCalls[key] = state
 	}
+	p.lastToolCallKey = key
 	if state.ID() == "" && delta.ID == "" && delta.Function.Name != "" {
-		state.SetID(fmt.Sprintf("call_%d", fallbackIndex))
+		// Synthetic ids must be unique across the whole stream: prefer the
+		// provider index and fall back to the tool call's creation ordinal,
+		// never the delta's position within its own chunk.
+		fallback := p.toolCallOrdinals[key]
+		if delta.Index != nil {
+			fallback = *delta.Index
+		}
+		state.SetID(fmt.Sprintf("call_%d", fallback))
 	}
 	state.SetID(delta.ID)
 	state.SetName(delta.Function.Name)
@@ -402,14 +420,20 @@ func (p *completionStreamParser) finalize(ctx context.Context) sigma.AssistantMe
 			p.thinking.Closed = true
 		}
 	}
-	for _, state := range p.sortedToolCalls() {
-		if len(p.reasoningDetails) > 0 {
-			if details := matchingReasoningDetails(state.ID(), p.reasoningDetails); len(details) > 0 {
-				if state.ProviderMetadata == nil {
-					state.ProviderMetadata = make(map[string]any)
-				}
-				state.ProviderMetadata["reasoning_details"] = details
+	idlessDetails, detailsByID := partitionReasoningDetails(p.reasoningDetails)
+	for position, state := range p.sortedToolCalls() {
+		details := detailsByID[state.ID()]
+		// Details without an id cannot be correlated to a specific call;
+		// attach them once, to the first tool call, so replay does not send
+		// duplicate copies for every parallel call.
+		if position == 0 && len(idlessDetails) > 0 {
+			details = append(idlessDetails, details...)
+		}
+		if len(details) > 0 {
+			if state.ProviderMetadata == nil {
+				state.ProviderMetadata = make(map[string]any)
 			}
+			state.ProviderMetadata["reasoning_details"] = details
 		}
 		call := state.ToolCall()
 		block := sigma.ToolCallBlock(call.ID, call.Name, call.Arguments)
@@ -453,19 +477,20 @@ func (p *completionStreamParser) finalize(ctx context.Context) sigma.AssistantMe
 	return p.final
 }
 
-func matchingReasoningDetails(toolCallID string, details []any) []any {
-	if len(details) == 0 {
-		return nil
-	}
-	var matched []any
+func partitionReasoningDetails(details []any) (idless []any, byID map[string][]any) {
 	for _, detail := range details {
 		typed, _ := detail.(map[string]any)
 		id, _ := typed["id"].(string)
-		if id == "" || id == toolCallID {
-			matched = append(matched, detail)
+		if id == "" {
+			idless = append(idless, detail)
+			continue
 		}
+		if byID == nil {
+			byID = make(map[string][]any)
+		}
+		byID[id] = append(byID[id], detail)
 	}
-	return matched
+	return idless, byID
 }
 
 func (p *completionStreamParser) nextContentIndex() int {

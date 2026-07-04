@@ -175,6 +175,52 @@ func TestProviderAuthRefreshUsesStoredEnterpriseDomain(t *testing.T) {
 	}
 }
 
+func TestProviderAuthRefreshPrefersConfiguredEnterpriseDomain(t *testing.T) {
+	t.Parallel()
+
+	var refreshHost string
+	client := githubCopilotOAuthTestClient(func(r *http.Request) *http.Response {
+		refreshHost = r.URL.Host
+		return githubCopilotJSONResponse(http.StatusOK, `{
+			"token":"tid=test;exp=9999999999;",
+			"expires_at":1893456000
+		}`)
+	})
+
+	store := sigma.NewInMemoryCredentialStore()
+	_, _, err := store.ModifyCredential(context.Background(), sigma.ProviderGitHubCopilot, func(sigma.StoredCredential, bool) (sigma.StoredCredential, bool, error) {
+		return sigma.StoredCredential{
+			Type:         sigma.CredentialTypeOAuthToken,
+			Value:        "expired-token",
+			RefreshToken: "github-refresh",
+			Expiry:       time.Now().Add(-time.Minute),
+			Metadata: map[string]any{
+				"enterpriseDomain": "ghe.old.example",
+			},
+		}, true, nil
+	})
+	if err != nil {
+		t.Fatalf("ModifyCredential returned error: %v", err)
+	}
+	registry := sigma.NewRegistry()
+	if err := githubcopilot.RegisterAuth(registry, githubcopilot.GitHubCopilotOAuthTokenProviderOptions{
+		HTTPClient:       client,
+		EnterpriseDomain: "ghe.new.example",
+	}); err != nil {
+		t.Fatalf("RegisterAuth returned error: %v", err)
+	}
+	if _, err := (sigma.StoredCredentialAuthResolver{Store: store, Registry: registry}).Resolve(
+		context.Background(),
+		sigma.Model{Provider: sigma.ProviderGitHubCopilot, ID: "copilot-test"},
+		sigma.Options{},
+	); err != nil {
+		t.Fatalf("Resolve returned error: %v", err)
+	}
+	if got, want := refreshHost, "api.ghe.new.example"; got != want {
+		t.Fatalf("refresh host = %q, want %q", got, want)
+	}
+}
+
 func TestLoginGitHubCopilotDeviceCodeRejectsUnsafeVerificationURI(t *testing.T) {
 	t.Parallel()
 

@@ -869,9 +869,14 @@ func supportsPromptCaching(model sigma.Model) bool {
 		return false
 	}
 	for _, candidate := range candidates {
+		// Claude 5-family patterns must not match claude-3-5-* model IDs, so
+		// match the family names explicitly instead of a bare "-5".
 		if strings.Contains(candidate, "-4-") ||
-			strings.Contains(candidate, "-5") ||
 			strings.Contains(candidate, "claude-5") ||
+			strings.Contains(candidate, "sonnet-5") ||
+			strings.Contains(candidate, "opus-5") ||
+			strings.Contains(candidate, "haiku-5") ||
+			strings.Contains(candidate, "fable-5") ||
 			strings.Contains(candidate, "claude-3-7-sonnet") ||
 			strings.Contains(candidate, "claude-3-5-haiku") {
 			return true

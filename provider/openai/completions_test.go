@@ -1588,6 +1588,129 @@ func TestStreamingIndexlessToolCallsUseIDFallback(t *testing.T) {
 	}
 }
 
+func TestStreamingIDlessToolCallsAcrossChunksGetUniqueFallbackIDs(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, `data: {"id":"chatcmpl_tools","model":"gpt-test","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"name":"a","arguments":"{}"}}]},"finish_reason":null}]}`+"\n\n")
+		_, _ = io.WriteString(w, `data: {"id":"chatcmpl_tools","model":"gpt-test","choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"function":{"name":"b","arguments":"{}"}}]},"finish_reason":null}]}`+"\n\n")
+		_, _ = io.WriteString(w, `data: {"id":"chatcmpl_tools","model":"gpt-test","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}`+"\n\n")
+		_, _ = io.WriteString(w, "data: [DONE]\n\n")
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("openai-idless-chunked-tools-test")
+	model := openAITestModel(providerID)
+	client := openAITestClient(t, providerID, model, server.URL)
+
+	final, err := client.Complete(context.Background(), model, sigma.Request{
+		Messages: []sigma.Message{sigma.UserText("run tools")},
+		Tools: []sigma.Tool{{
+			Name:        "a",
+			Description: "A",
+			InputSchema: sigma.Schema{"type": "object"},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+	if got, want := len(final.Content), 2; got != want {
+		t.Fatalf("content blocks = %d, want %d: %#v", got, want, final.Content)
+	}
+	// Each id-less call arrives in its own chunk at position 0; the synthetic
+	// ids must come from the provider index, not the position in the chunk.
+	if got, want := final.Content[0].ToolCallID, "call_0"; got != want {
+		t.Fatalf("first tool call id = %q, want %q", got, want)
+	}
+	if got, want := final.Content[1].ToolCallID, "call_1"; got != want {
+		t.Fatalf("second tool call id = %q, want %q", got, want)
+	}
+}
+
+func TestStreamingIndexlessContinuationMergesWithPriorToolCall(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, `data: {"id":"chatcmpl_tools","model":"gpt-test","choices":[{"index":0,"delta":{"tool_calls":[{"id":"call_a","type":"function","function":{"name":"read","arguments":"{\"pa"}}]},"finish_reason":null}]}`+"\n\n")
+		_, _ = io.WriteString(w, `data: {"id":"chatcmpl_tools","model":"gpt-test","choices":[{"index":0,"delta":{"tool_calls":[{"function":{"arguments":"th\":\"a.txt\"}"}}]},"finish_reason":null}]}`+"\n\n")
+		_, _ = io.WriteString(w, `data: {"id":"chatcmpl_tools","model":"gpt-test","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}`+"\n\n")
+		_, _ = io.WriteString(w, "data: [DONE]\n\n")
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("openai-indexless-continuation-test")
+	model := openAITestModel(providerID)
+	client := openAITestClient(t, providerID, model, server.URL)
+
+	final, err := client.Complete(context.Background(), model, sigma.Request{
+		Messages: []sigma.Message{sigma.UserText("read file")},
+		Tools: []sigma.Tool{{
+			Name:        "read",
+			Description: "Read a file",
+			InputSchema: sigma.Schema{"type": "object"},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+	if got, want := len(final.Content), 1; got != want {
+		t.Fatalf("content blocks = %d, want %d: %#v", got, want, final.Content)
+	}
+	if got, want := final.Content[0].ToolCallID, "call_a"; got != want {
+		t.Fatalf("tool call id = %q, want %q", got, want)
+	}
+	args, ok := final.Content[0].ToolArguments.(map[string]any)
+	if !ok {
+		t.Fatalf("tool arguments type = %T, want map", final.Content[0].ToolArguments)
+	}
+	if got, want := args["path"], "a.txt"; got != want {
+		t.Fatalf("tool path = %v, want %v", got, want)
+	}
+}
+
+func TestStreamingAttachesIDlessReasoningDetailsToFirstToolCallOnly(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, `data: {"id":"chatcmpl_reasoning","model":"gpt-test","choices":[{"index":0,"delta":{"reasoning_details":[{"type":"reasoning.encrypted","data":"secret"}]},"finish_reason":null}]}`+"\n\n")
+		_, _ = io.WriteString(w, `data: {"id":"chatcmpl_reasoning","model":"gpt-test","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"read","arguments":"{}"}},{"index":1,"id":"call_2","type":"function","function":{"name":"read","arguments":"{}"}}]},"finish_reason":null}]}`+"\n\n")
+		_, _ = io.WriteString(w, `data: {"id":"chatcmpl_reasoning","model":"gpt-test","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}`+"\n\n")
+		_, _ = io.WriteString(w, "data: [DONE]\n\n")
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("openai-idless-reasoning-details-test")
+	model := openAITestModel(providerID)
+	client := openAITestClient(t, providerID, model, server.URL)
+
+	final, err := client.Complete(context.Background(), model, sigma.Request{
+		Messages: []sigma.Message{sigma.UserText("read files")},
+		Tools: []sigma.Tool{{
+			Name:        "read",
+			Description: "Read a file",
+			InputSchema: sigma.Schema{"type": "object"},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+	if got, want := len(final.Content), 2; got != want {
+		t.Fatalf("content blocks = %d, want %d: %#v", got, want, final.Content)
+	}
+	details, ok := final.Content[0].ProviderMetadata["reasoning_details"].([]any)
+	if !ok || len(details) != 1 {
+		t.Fatalf("first call reasoning_details = %#v, want one detail", final.Content[0].ProviderMetadata["reasoning_details"])
+	}
+	// Id-less details cannot be correlated, so they must not be duplicated
+	// onto every parallel tool call.
+	if _, ok := final.Content[1].ProviderMetadata["reasoning_details"]; ok {
+		t.Fatalf("second call reasoning_details = %#v, want none", final.Content[1].ProviderMetadata["reasoning_details"])
+	}
+}
+
 func TestStreamingParsesChoiceUsage(t *testing.T) {
 	t.Parallel()
 

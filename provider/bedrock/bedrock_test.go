@@ -2311,3 +2311,28 @@ func TestProviderErrorAddsDataRetentionHintFromStreamError(t *testing.T) {
 		t.Fatalf("ProviderMessage = %q, want data retention docs link", providerErr.ProviderMessage)
 	}
 }
+
+func TestSupportsPromptCachingMatchesModelFamilies(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		id   string
+		want bool
+	}{
+		{"anthropic.claude-3-5-sonnet-20240620-v1:0", false},
+		{"anthropic.claude-3-5-sonnet-20241022-v2:0", false},
+		{"anthropic.claude-3-5-haiku-20241022-v1:0", true},
+		{"anthropic.claude-3-7-sonnet-20250219-v1:0", true},
+		{"anthropic.claude-sonnet-4-5-20250929-v1:0", true},
+		{"anthropic.claude-opus-4-1-20250805-v1:0", true},
+		{"anthropic.claude-sonnet-5-20260203-v1:0", true},
+		{"anthropic.claude-fable-5-20260501-v1:0", true},
+		{"amazon.nova-pro-v1:0", false},
+	}
+	for _, testCase := range cases {
+		got := supportsPromptCaching(sigma.Model{ID: sigma.ModelID(testCase.id)})
+		if got != testCase.want {
+			t.Errorf("supportsPromptCaching(%q) = %v, want %v", testCase.id, got, testCase.want)
+		}
+	}
+}

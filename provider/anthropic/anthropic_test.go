@@ -956,6 +956,41 @@ func TestThinkingBudgetClampsAgainstMaxTokens(t *testing.T) {
 	}
 }
 
+func TestThinkingBudgetBelowMinimumDisablesThinking(t *testing.T) {
+	t.Parallel()
+
+	requests := make(chan capturedRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captureRequest(t, requests, r)
+		writeMessagesSSE(t, w, completedEvent)
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("anthropic-thinking-minimum-test")
+	model := anthropicTestModel(providerID)
+	client := anthropicTestClient(t, providerID, model, server.URL)
+
+	// max_tokens 2000 leaves only 976 tokens of headroom, below the API's
+	// 1024 minimum budget, so thinking must be disabled instead of clamped.
+	_, err := client.Complete(
+		context.Background(),
+		model,
+		sigma.Request{Messages: []sigma.Message{sigma.UserText("hi")}},
+		sigma.WithMaxTokens(2000),
+		sigma.WithReasoningLevel(sigma.ThinkingLevelMedium),
+	)
+	if err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+
+	payload := decodePayload(t, receiveRequest(t, requests).Body)
+	if thinking, ok := payload["thinking"].(map[string]any); ok {
+		if got := thinking["type"]; got == "enabled" {
+			t.Fatalf("thinking = %v, want disabled or omitted", thinking)
+		}
+	}
+}
+
 func TestTypedAnthropicOptionsOverrideRawProviderOptions(t *testing.T) {
 	t.Parallel()
 

@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/wintermi/sigma"
@@ -46,6 +47,9 @@ type CredentialInfo struct {
 	SecretAccessKey string
 	SessionToken    string
 	BearerToken     string
+	// Expiration is the credential expiry reported by STS, ECS, or IMDS.
+	// Zero means the source did not report an expiry.
+	Expiration time.Time
 }
 
 // String returns a redacted credential description.
@@ -138,7 +142,6 @@ func authResolverCredential(ctx context.Context, model sigma.Model, opts sigma.O
 }
 
 func defaultChainCredential(ctx context.Context, model sigma.Model, opts sigma.Options, bedrockConfig Config) (CredentialInfo, error) {
-	_ = ctx
 	if bedrockConfig.Region == "" {
 		return CredentialInfo{}, credentialError("bedrock converse stream: region is required", nil, bedrockConfig, []string{"region"})
 	}
@@ -162,16 +165,33 @@ func defaultChainCredential(ctx context.Context, model sigma.Model, opts sigma.O
 	if credentials, ok := envAWSCredentials(); ok {
 		return credentials, nil
 	}
+	fingerprint := awsCredentialEnvFingerprint()
+	now := time.Now()
+	if credentials, ok := defaultChainCredentialCache.get(fingerprint, now); ok {
+		return credentials, nil
+	}
 	if credentials, ok := profileAWSCredentials(); ok {
+		defaultChainCredentialCache.put(fingerprint, credentials, now)
 		return credentials, nil
 	}
-	if credentials, ok := ecsCredentials(ctx); ok {
+	client := bedrockHTTPClient(opts)
+	// A configured ECS or web-identity source is committed to once its
+	// environment variables are present: a fetch failure surfaces instead of
+	// silently falling through to IMDS and signing with the wrong role.
+	if credentials, configured, err := ecsCredentials(ctx, client); err != nil {
+		return CredentialInfo{}, credentialError("bedrock converse stream: fetch ECS container credentials", err, bedrockConfig, nil)
+	} else if configured {
+		defaultChainCredentialCache.put(fingerprint, credentials, now)
 		return credentials, nil
 	}
-	if credentials, ok := webIdentityCredentials(ctx); ok {
+	if credentials, configured, err := webIdentityCredentials(ctx, client); err != nil {
+		return CredentialInfo{}, credentialError("bedrock converse stream: assume role with web identity", err, bedrockConfig, nil)
+	} else if configured {
+		defaultChainCredentialCache.put(fingerprint, credentials, now)
 		return credentials, nil
 	}
-	if credentials, ok := imdsCredentials(ctx); ok {
+	if credentials, ok := imdsCredentials(ctx, client); ok {
+		defaultChainCredentialCache.put(fingerprint, credentials, now)
 		return credentials, nil
 	}
 	return CredentialInfo{}, credentialError("bedrock converse stream: retrieve AWS credentials", sigma.ErrCredentialUnavailable, bedrockConfig, []string{
@@ -184,6 +204,86 @@ func defaultChainCredential(ctx context.Context, model sigma.Model, opts sigma.O
 		"env:AWS_WEB_IDENTITY_TOKEN_FILE",
 		"imds",
 	})
+}
+
+const (
+	// awsCredentialFetchTimeout bounds ECS and STS credential requests.
+	awsCredentialFetchTimeout = 10 * time.Second
+	// imdsRequestTimeout bounds each IMDS request; the metadata service is
+	// link-local and answers in milliseconds when present.
+	imdsRequestTimeout = time.Second
+	// awsCredentialCacheTTL caches credentials that report no expiry.
+	awsCredentialCacheTTL = 15 * time.Minute
+	// awsCredentialRefreshSkew refreshes expiring credentials early.
+	awsCredentialRefreshSkew = 5 * time.Minute
+)
+
+// awsCredentialCache caches the resolved default-chain credential so the
+// profile, ECS, STS, and IMDS lookups do not run on every request. Entries are
+// keyed by a fingerprint of the credential environment so configuration
+// changes invalidate the cache.
+type awsCredentialCache struct {
+	mu          sync.Mutex
+	fingerprint string
+	info        CredentialInfo
+	expiresAt   time.Time
+	valid       bool
+}
+
+var defaultChainCredentialCache awsCredentialCache
+
+func (c *awsCredentialCache) get(fingerprint string, now time.Time) (CredentialInfo, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.valid || c.fingerprint != fingerprint || !now.Before(c.expiresAt) {
+		return CredentialInfo{}, false
+	}
+	return c.info, true
+}
+
+func (c *awsCredentialCache) put(fingerprint string, info CredentialInfo, now time.Time) {
+	expiresAt := now.Add(awsCredentialCacheTTL)
+	if !info.Expiration.IsZero() {
+		expiresAt = info.Expiration.Add(-awsCredentialRefreshSkew)
+		if !expiresAt.After(now) {
+			return
+		}
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.fingerprint = fingerprint
+	c.info = info
+	c.expiresAt = expiresAt
+	c.valid = true
+}
+
+func awsCredentialEnvFingerprint() string {
+	var builder strings.Builder
+	for _, key := range []string{
+		"AWS_PROFILE",
+		"AWS_SHARED_CREDENTIALS_FILE",
+		"AWS_CONFIG_FILE",
+		"AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
+		"AWS_CONTAINER_CREDENTIALS_FULL_URI",
+		"AWS_CONTAINER_AUTHORIZATION_TOKEN",
+		"AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE",
+		"AWS_WEB_IDENTITY_TOKEN_FILE",
+		"AWS_ROLE_ARN",
+		"AWS_ROLE_SESSION_NAME",
+		"AWS_STS_ENDPOINT",
+		"AWS_EC2_METADATA_SERVICE_ENDPOINT",
+		"AWS_EC2_METADATA_DISABLED",
+	} {
+		builder.WriteString(key)
+		builder.WriteByte('=')
+		builder.WriteString(os.Getenv(key))
+		builder.WriteByte('\n')
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		builder.WriteString("HOME=")
+		builder.WriteString(home)
+	}
+	return builder.String()
 }
 
 func envAWSCredentials() (CredentialInfo, bool) {
@@ -207,9 +307,6 @@ func profileAWSCredentials() (CredentialInfo, bool) {
 	}
 	for _, file := range awsCredentialFiles() {
 		values := readAWSProfile(file, profile)
-		if len(values) == 0 && profile != "default" {
-			values = readAWSProfile(file, "profile "+profile)
-		}
 		accessKeyID := values["aws_access_key_id"]
 		secretAccessKey := values["aws_secret_access_key"]
 		if accessKeyID == "" || secretAccessKey == "" {
@@ -258,7 +355,9 @@ func readAWSProfile(file string, profile string) map[string]string {
 			section = strings.TrimSpace(line[1:strings.Index(line, "]")])
 			continue
 		}
-		if section != profile {
+		// The credentials file names sections [name] while the config file
+		// names them [profile name]; accept both in one pass.
+		if section != profile && section != "profile "+profile {
 			continue
 		}
 		key, value, ok := strings.Cut(line, "=")
@@ -274,9 +373,10 @@ type awsCredentialPayload struct {
 	AccessKeyID     string `json:"AccessKeyId"`
 	SecretAccessKey string `json:"SecretAccessKey"`
 	Token           string `json:"Token"`
+	Expiration      string `json:"Expiration"`
 }
 
-func ecsCredentials(ctx context.Context) (CredentialInfo, bool) {
+func ecsCredentials(ctx context.Context, client *http.Client) (CredentialInfo, bool, error) {
 	endpoint := os.Getenv("AWS_CONTAINER_CREDENTIALS_FULL_URI")
 	if endpoint == "" {
 		if relative := os.Getenv("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI"); relative != "" {
@@ -284,31 +384,39 @@ func ecsCredentials(ctx context.Context) (CredentialInfo, bool) {
 		}
 	}
 	if endpoint == "" {
-		return CredentialInfo{}, false
+		return CredentialInfo{}, false, nil
 	}
+	ctx, cancel := context.WithTimeout(ctx, awsCredentialFetchTimeout)
+	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil) // #nosec G704 -- ECS credential endpoints are controlled by AWS container credential env vars.
 	if err != nil {
-		return CredentialInfo{}, false
+		return CredentialInfo{}, true, err
 	}
 	if tokenFile := os.Getenv("AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE"); tokenFile != "" {
-		if data, err := os.ReadFile(tokenFile); err == nil { // #nosec G703 -- AWS defines this credential-token file path via environment.
-			req.Header.Set("Authorization", strings.TrimSpace(string(data)))
+		data, err := os.ReadFile(tokenFile) // #nosec G703 -- AWS defines this credential-token file path via environment.
+		if err != nil {
+			return CredentialInfo{}, true, fmt.Errorf("read container authorization token: %w", err)
 		}
+		req.Header.Set("Authorization", strings.TrimSpace(string(data)))
 	} else if token := os.Getenv("AWS_CONTAINER_AUTHORIZATION_TOKEN"); token != "" {
 		req.Header.Set("Authorization", token)
 	}
-	return awsCredentialsFromRequest(req)
+	info, err := awsCredentialsFromRequest(client, req)
+	if err != nil {
+		return CredentialInfo{}, true, err
+	}
+	return info, true, nil
 }
 
-func webIdentityCredentials(ctx context.Context) (CredentialInfo, bool) {
+func webIdentityCredentials(ctx context.Context, client *http.Client) (CredentialInfo, bool, error) {
 	tokenFile := os.Getenv("AWS_WEB_IDENTITY_TOKEN_FILE")
 	roleARN := os.Getenv("AWS_ROLE_ARN")
 	if tokenFile == "" || roleARN == "" {
-		return CredentialInfo{}, false
+		return CredentialInfo{}, false, nil
 	}
 	token, err := os.ReadFile(tokenFile) // #nosec G703 -- AWS defines this web-identity token file path via environment.
 	if err != nil {
-		return CredentialInfo{}, false
+		return CredentialInfo{}, true, fmt.Errorf("read web identity token: %w", err)
 	}
 	endpoint := os.Getenv("AWS_STS_ENDPOINT")
 	if endpoint == "" {
@@ -320,18 +428,20 @@ func webIdentityCredentials(ctx context.Context) (CredentialInfo, bool) {
 	form.Set("RoleArn", roleARN)
 	form.Set("RoleSessionName", firstNonEmpty(os.Getenv("AWS_ROLE_SESSION_NAME"), "sigma-bedrock"))
 	form.Set("WebIdentityToken", strings.TrimSpace(string(token)))
+	ctx, cancel := context.WithTimeout(ctx, awsCredentialFetchTimeout)
+	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(form.Encode())) // #nosec G704 -- STS endpoint override follows AWS-compatible environment behavior.
 	if err != nil {
-		return CredentialInfo{}, false
+		return CredentialInfo{}, true, err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	resp, err := awsCredentialHTTPClient().Do(req) // #nosec G704 -- STS credential exchange endpoint is AWS-compatible configuration.
+	resp, err := client.Do(req) // #nosec G704 -- STS credential exchange endpoint is AWS-compatible configuration.
 	if err != nil {
-		return CredentialInfo{}, false
+		return CredentialInfo{}, true, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return CredentialInfo{}, false
+		return CredentialInfo{}, true, fmt.Errorf("sts assume role with web identity: status %d", resp.StatusCode)
 	}
 	var decoded struct {
 		Result struct {
@@ -339,25 +449,27 @@ func webIdentityCredentials(ctx context.Context) (CredentialInfo, bool) {
 				AccessKeyID     string `xml:"AccessKeyId"`
 				SecretAccessKey string `xml:"SecretAccessKey"`
 				SessionToken    string `xml:"SessionToken"`
+				Expiration      string `xml:"Expiration"`
 			} `xml:"Credentials"`
 		} `xml:"AssumeRoleWithWebIdentityResult"`
 	}
 	if err := xml.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&decoded); err != nil {
-		return CredentialInfo{}, false
+		return CredentialInfo{}, true, fmt.Errorf("sts assume role with web identity: decode response: %w", err)
 	}
 	credentials := decoded.Result.Credentials
 	if credentials.AccessKeyID == "" || credentials.SecretAccessKey == "" {
-		return CredentialInfo{}, false
+		return CredentialInfo{}, true, errors.New("sts assume role with web identity: response is missing credentials")
 	}
 	return CredentialInfo{
 		Source:          CredentialSourceDefaultChain,
 		AccessKeyID:     credentials.AccessKeyID,
 		SecretAccessKey: credentials.SecretAccessKey,
 		SessionToken:    credentials.SessionToken,
-	}, true
+		Expiration:      parseAWSCredentialExpiration(credentials.Expiration),
+	}, true, nil
 }
 
-func imdsCredentials(ctx context.Context) (CredentialInfo, bool) {
+func imdsCredentials(ctx context.Context, client *http.Client) (CredentialInfo, bool) {
 	if strings.EqualFold(os.Getenv("AWS_EC2_METADATA_DISABLED"), "true") {
 		return CredentialInfo{}, false
 	}
@@ -365,15 +477,17 @@ func imdsCredentials(ctx context.Context) (CredentialInfo, bool) {
 	if endpoint == "" {
 		endpoint = "http://169.254.169.254"
 	}
-	token := imdsToken(ctx, endpoint)
-	roleReq, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint+"/latest/meta-data/iam/security-credentials/", nil) // #nosec G704 -- IMDS endpoint is the AWS metadata service or its documented endpoint override.
+	token := imdsToken(ctx, client, endpoint)
+	roleCtx, cancelRole := context.WithTimeout(ctx, imdsRequestTimeout)
+	defer cancelRole()
+	roleReq, err := http.NewRequestWithContext(roleCtx, http.MethodGet, endpoint+"/latest/meta-data/iam/security-credentials/", nil) // #nosec G704 -- IMDS endpoint is the AWS metadata service or its documented endpoint override.
 	if err != nil {
 		return CredentialInfo{}, false
 	}
 	if token != "" {
 		roleReq.Header.Set("X-aws-ec2-metadata-token", token)
 	}
-	resp, err := awsCredentialHTTPClient().Do(roleReq) // #nosec G704 -- IMDS endpoint is the AWS metadata service or its documented endpoint override.
+	resp, err := client.Do(roleReq) // #nosec G704 -- IMDS endpoint is the AWS metadata service or its documented endpoint override.
 	if err != nil {
 		return CredentialInfo{}, false
 	}
@@ -386,23 +500,31 @@ func imdsCredentials(ctx context.Context) (CredentialInfo, bool) {
 	if role == "" {
 		return CredentialInfo{}, false
 	}
-	credReq, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint+"/latest/meta-data/iam/security-credentials/"+url.PathEscape(role), nil) // #nosec G704 -- IMDS endpoint is the AWS metadata service or its documented endpoint override.
+	credCtx, cancelCred := context.WithTimeout(ctx, imdsRequestTimeout)
+	defer cancelCred()
+	credReq, err := http.NewRequestWithContext(credCtx, http.MethodGet, endpoint+"/latest/meta-data/iam/security-credentials/"+url.PathEscape(role), nil) // #nosec G704 -- IMDS endpoint is the AWS metadata service or its documented endpoint override.
 	if err != nil {
 		return CredentialInfo{}, false
 	}
 	if token != "" {
 		credReq.Header.Set("X-aws-ec2-metadata-token", token)
 	}
-	return awsCredentialsFromRequest(credReq)
+	info, err := awsCredentialsFromRequest(client, credReq)
+	if err != nil {
+		return CredentialInfo{}, false
+	}
+	return info, true
 }
 
-func imdsToken(ctx context.Context, endpoint string) string {
+func imdsToken(ctx context.Context, client *http.Client, endpoint string) string {
+	ctx, cancel := context.WithTimeout(ctx, imdsRequestTimeout)
+	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, endpoint+"/latest/api/token", nil) // #nosec G704 -- IMDS endpoint is the AWS metadata service or its documented endpoint override.
 	if err != nil {
 		return ""
 	}
 	req.Header.Set("X-aws-ec2-metadata-token-ttl-seconds", "21600")
-	resp, err := awsCredentialHTTPClient().Do(req) // #nosec G704 -- IMDS endpoint is the AWS metadata service or its documented endpoint override.
+	resp, err := client.Do(req) // #nosec G704 -- IMDS endpoint is the AWS metadata service or its documented endpoint override.
 	if err != nil {
 		return ""
 	}
@@ -417,32 +539,40 @@ func imdsToken(ctx context.Context, endpoint string) string {
 	return strings.TrimSpace(string(data))
 }
 
-func awsCredentialsFromRequest(req *http.Request) (CredentialInfo, bool) {
-	resp, err := awsCredentialHTTPClient().Do(req) // #nosec G704 -- credential endpoint request is constructed by default-chain providers above.
+func awsCredentialsFromRequest(client *http.Client, req *http.Request) (CredentialInfo, error) {
+	resp, err := client.Do(req) // #nosec G704 -- credential endpoint request is constructed by default-chain providers above.
 	if err != nil {
-		return CredentialInfo{}, false
+		return CredentialInfo{}, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return CredentialInfo{}, false
+		return CredentialInfo{}, fmt.Errorf("credential endpoint returned status %d", resp.StatusCode)
 	}
 	var decoded awsCredentialPayload
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&decoded); err != nil {
-		return CredentialInfo{}, false
+		return CredentialInfo{}, fmt.Errorf("decode credential response: %w", err)
 	}
 	if decoded.AccessKeyID == "" || decoded.SecretAccessKey == "" {
-		return CredentialInfo{}, false
+		return CredentialInfo{}, errors.New("credential response is missing keys")
 	}
 	return CredentialInfo{
 		Source:          CredentialSourceDefaultChain,
 		AccessKeyID:     decoded.AccessKeyID,
 		SecretAccessKey: decoded.SecretAccessKey,
 		SessionToken:    decoded.Token,
-	}, true
+		Expiration:      parseAWSCredentialExpiration(decoded.Expiration),
+	}, nil
 }
 
-func awsCredentialHTTPClient() *http.Client {
-	return &http.Client{Timeout: time.Second}
+func parseAWSCredentialExpiration(value string) time.Time {
+	if value == "" {
+		return time.Time{}
+	}
+	expiration, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return time.Time{}
+	}
+	return expiration
 }
 
 func requestStaticCredentials(opts sigma.Options, provider sigma.ProviderID) (StaticCredentials, bool) {
