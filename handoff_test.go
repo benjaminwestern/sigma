@@ -83,6 +83,40 @@ func TestTransformRequestForModelConvertsForeignThinkingWithReport(t *testing.T)
 	assertHandoffChange(t, result.Report, sigma.HandoffChangeThinkingConverted, 0, 0)
 }
 
+func TestTransformRequestForModelConvertsSameProviderDifferentModelThinking(t *testing.T) {
+	t.Parallel()
+
+	request := sigma.Request{Messages: []sigma.Message{{
+		Role:     sigma.RoleAssistant,
+		Provider: sigma.ProviderAnthropic,
+		API:      sigma.APIAnthropicMessages,
+		Model:    "claude-sonnet",
+		Content:  []sigma.ContentBlock{sigma.Thinking("model-private state", "sig")},
+	}}}
+	target := sigma.Model{
+		ID:               "claude-opus",
+		Provider:         sigma.ProviderAnthropic,
+		API:              sigma.APIAnthropicMessages,
+		SupportsThinking: true,
+	}
+
+	result, err := sigma.TransformRequestForModel(target, request)
+	if err != nil {
+		t.Fatalf("TransformRequestForModel returned error: %v", err)
+	}
+
+	block := result.Request.Messages[0].Content[0]
+	if got, want := block.Type, sigma.ContentBlockText; got != want {
+		t.Fatalf("converted block type = %q, want %q", got, want)
+	}
+	if got, want := block.Text, "<thinking>\nmodel-private state\n</thinking>"; got != want {
+		t.Fatalf("converted thinking text = %q, want %q", got, want)
+	}
+	if got := result.Report.ConvertedThinkingBlocks; got != 1 {
+		t.Fatalf("converted thinking blocks = %d, want 1", got)
+	}
+}
+
 func TestTransformRequestForModelRejectsOrReplacesUnsupportedImages(t *testing.T) {
 	t.Parallel()
 
@@ -129,7 +163,7 @@ func TestTransformRequestForModelRejectsOrReplacesUnsupportedImages(t *testing.T
 	assertHandoffChange(t, result.Report, sigma.HandoffChangeUnsupportedImageReplaced, 0, 1)
 }
 
-func TestTransformRequestForModelRepairsToolsAndDropsUnansweredCalls(t *testing.T) {
+func TestTransformRequestForModelRepairsToolsAndSynthesizesUnansweredCalls(t *testing.T) {
 	t.Parallel()
 
 	request := sigma.Request{Messages: []sigma.Message{
@@ -169,18 +203,40 @@ func TestTransformRequestForModelRepairsToolsAndDropsUnansweredCalls(t *testing.
 	if got, want := result.Request.Messages[1].ToolName, "weather"; got != want {
 		t.Fatalf("tool result name = %q, want %q", got, want)
 	}
-	if got, want := result.Request.Messages[2].Role, sigma.RoleUser; got != want {
-		t.Fatalf("inserted repair role = %q, want %q", got, want)
+	if got, want := result.Request.Messages[2].Role, sigma.RoleAssistant; got != want {
+		t.Fatalf("following assistant role = %q, want %q", got, want)
 	}
-	if got, want := result.Request.Messages[2].Content[0].Text, "Continue."; got != want {
-		t.Fatalf("inserted repair text = %q, want %q", got, want)
-	}
-	assistant := result.Request.Messages[4]
-	if got, want := len(assistant.Content), 1; got != want {
-		t.Fatalf("assistant content count after drop = %d, want %d", got, want)
+	assistant := result.Request.Messages[3]
+	if got, want := len(assistant.Content), 2; got != want {
+		t.Fatalf("assistant content count after synthesis = %d, want %d", got, want)
 	}
 	if got, want := assistant.Content[0].Text, "I can check again."; got != want {
 		t.Fatalf("remaining assistant text = %q, want %q", got, want)
+	}
+	synthetic := result.Request.Messages[4]
+	if got, want := synthetic.Role, sigma.RoleTool; got != want {
+		t.Fatalf("synthetic role = %q, want %q", got, want)
+	}
+	if got, want := synthetic.ToolCallID, "call_unanswered"; got != want {
+		t.Fatalf("synthetic tool call id = %q, want %q", got, want)
+	}
+	if got, want := synthetic.ToolName, "weather"; got != want {
+		t.Fatalf("synthetic tool name = %q, want %q", got, want)
+	}
+	if !synthetic.IsError {
+		t.Fatal("synthetic tool result IsError = false, want true")
+	}
+	if got, want := synthetic.Content[0].Text, "No result provided"; got != want {
+		t.Fatalf("synthetic text = %q, want %q", got, want)
+	}
+	if got, want := result.Request.Messages[5].Role, sigma.RoleAssistant; got != want {
+		t.Fatalf("inserted repair role = %q, want %q", got, want)
+	}
+	if got, want := result.Request.Messages[5].Content[0].Text, "I have processed the tool results."; got != want {
+		t.Fatalf("inserted repair text = %q, want %q", got, want)
+	}
+	if got, want := result.Request.Messages[6].Role, sigma.RoleUser; got != want {
+		t.Fatalf("final user role = %q, want %q", got, want)
 	}
 	if got := result.Report.RepairedToolResultNames; got != 1 {
 		t.Fatalf("repaired tool result names = %d, want 1", got)
@@ -188,12 +244,15 @@ func TestTransformRequestForModelRepairsToolsAndDropsUnansweredCalls(t *testing.
 	if got := result.Report.InsertedRepairMessages; got != 1 {
 		t.Fatalf("inserted repair messages = %d, want 1", got)
 	}
-	if got := result.Report.DroppedUnansweredToolCalls; got != 1 {
-		t.Fatalf("dropped unanswered tool calls = %d, want 1", got)
+	if got := result.Report.SynthesizedToolResults; got != 1 {
+		t.Fatalf("synthesized tool results = %d, want 1", got)
+	}
+	if got := result.Report.DroppedUnansweredToolCalls; got != 0 {
+		t.Fatalf("dropped unanswered tool calls = %d, want 0", got)
 	}
 	assertHandoffChange(t, result.Report, sigma.HandoffChangeToolResultNameRepaired, 1, -1)
-	assertHandoffChange(t, result.Report, sigma.HandoffChangeRepairMessageInserted, 2, -1)
-	assertHandoffChange(t, result.Report, sigma.HandoffChangeUnansweredToolCallDropped, 4, 1)
+	assertHandoffChange(t, result.Report, sigma.HandoffChangeToolResultSynthesized, 4, -1)
+	assertHandoffChange(t, result.Report, sigma.HandoffChangeRepairMessageInserted, 5, -1)
 }
 
 func TestTransformRequestForModelConvertsUnsupportedDeveloperRole(t *testing.T) {

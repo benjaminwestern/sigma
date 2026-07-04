@@ -507,6 +507,36 @@ func TestOpenAICompletionsCompatRepairsToolMessages(t *testing.T) {
 	goldentest.AssertJSON(t, payload, "provider/openai/compat/repairs_tool_messages.json")
 }
 
+func TestOpenAICompletionsCompatDoesNotRepairTrailingToolMessage(t *testing.T) {
+	t.Parallel()
+
+	model := compatTestModel(sigma.OpenAICompletionsCompat{
+		RequiresAssistantAfterToolResult: sigma.OpenAICompatSupported,
+	})
+	req := sigma.Request{Messages: []sigma.Message{
+		{
+			Role:    sigma.RoleAssistant,
+			Content: []sigma.ContentBlock{sigma.ToolCallBlock("call_1", "weather", map[string]any{"city": "Melbourne"})},
+		},
+		sigma.ToolResult("call_1", "sunny"),
+	}}
+
+	payload, err := chatCompletionsPayload(model, req, sigma.Options{}, openAICompletionsCompat(model, "https://custom.example/v1"))
+	if err != nil {
+		t.Fatalf("chatCompletionsPayload returned error: %v", err)
+	}
+	messages, ok := payload["messages"].([]map[string]any)
+	if !ok {
+		t.Fatalf("messages = %#v, want message array", payload["messages"])
+	}
+	if got, want := len(messages), 2; got != want {
+		t.Fatalf("message count = %d, want %d", got, want)
+	}
+	if got, want := messages[1]["role"], "tool"; got != want {
+		t.Fatalf("last message role = %v, want %q", got, want)
+	}
+}
+
 func TestOpenAICompletionsCompatDefaultsAreConservativeForCustomEndpoints(t *testing.T) {
 	t.Parallel()
 

@@ -182,6 +182,12 @@ See [release notes](docs/release-notes-v0.6.0.md).
   a target model, including thinking-to-text conversion, unsupported-image
   replacement options, tool-history repair, unanswered tool-call cleanup, and
   explicit capability-loss reports.
+- Handoff and replay normalization now preserve ordinary tool-result-to-assistant
+  loops, bridge only tool-result-to-user transitions for OpenAI-compatible
+  targets that require it, synthesize explicit error tool results for missing
+  tool outputs, preserve provider-native thinking only for exact-model replay,
+  and normalize replayed tool-call IDs for stricter Anthropic and Bedrock
+  targets.
 - Assistant messages and content blocks now expose provider-neutral source and
   citation accessors, letting callers read normalized URLs, URIs, titles,
   offsets, cited text, and copied provider metadata without scraping opaque

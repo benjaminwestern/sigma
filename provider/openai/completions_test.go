@@ -474,7 +474,7 @@ func TestChatCompletionsNormalizesProviderTextInPayload(t *testing.T) {
 	assertPayloadText(t, payload.Messages[4]["content"], "toolclean")
 }
 
-func TestChatCompletionsDropsUnansweredToolCallsBeforeUserTurn(t *testing.T) {
+func TestChatCompletionsSynthesizesUnansweredToolCallsBeforeUserTurn(t *testing.T) {
 	t.Parallel()
 
 	requests := make(chan capturedRequest, 1)
@@ -511,14 +511,26 @@ func TestChatCompletionsDropsUnansweredToolCallsBeforeUserTurn(t *testing.T) {
 	if err := json.Unmarshal(receiveRequest(t, requests).Body, &payload); err != nil {
 		t.Fatalf("Unmarshal request body returned error: %v", err)
 	}
-	if got, want := len(payload.Messages), 1; got != want {
+	if got, want := len(payload.Messages), 3; got != want {
 		t.Fatalf("message count = %d, want %d", got, want)
 	}
-	if got, want := payload.Messages[0]["role"], "user"; got != want {
-		t.Fatalf("message role = %v, want %q", got, want)
+	if got, want := payload.Messages[0]["role"], "assistant"; got != want {
+		t.Fatalf("assistant role = %v, want %q", got, want)
 	}
-	if _, ok := payload.Messages[0]["tool_calls"]; ok {
-		t.Fatalf("payload kept abandoned tool call: %#v", payload.Messages[0])
+	if _, ok := payload.Messages[0]["tool_calls"]; !ok {
+		t.Fatalf("payload dropped assistant tool call: %#v", payload.Messages[0])
+	}
+	if got, want := payload.Messages[1]["role"], "tool"; got != want {
+		t.Fatalf("synthetic role = %v, want %q", got, want)
+	}
+	if got, want := payload.Messages[1]["tool_call_id"], "call_abandoned"; got != want {
+		t.Fatalf("synthetic tool id = %v, want %q", got, want)
+	}
+	if got, want := payload.Messages[1]["content"], "No result provided"; got != want {
+		t.Fatalf("synthetic content = %v, want %q", got, want)
+	}
+	if got, want := payload.Messages[2]["role"], "user"; got != want {
+		t.Fatalf("user role = %v, want %q", got, want)
 	}
 }
 

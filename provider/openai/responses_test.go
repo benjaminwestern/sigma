@@ -199,7 +199,7 @@ func TestResponsesNormalizesProviderTextInPayload(t *testing.T) {
 	assertResponsesToolOutputText(t, payload.Input[5], "toolclean")
 }
 
-func TestResponsesDropsUnansweredToolCallsBeforeUserTurn(t *testing.T) {
+func TestResponsesSynthesizesUnansweredToolCallsBeforeUserTurn(t *testing.T) {
 	t.Parallel()
 
 	requests := make(chan capturedRequest, 1)
@@ -236,14 +236,23 @@ func TestResponsesDropsUnansweredToolCallsBeforeUserTurn(t *testing.T) {
 	if err := json.Unmarshal(receiveRequest(t, requests).Body, &payload); err != nil {
 		t.Fatalf("Unmarshal request body returned error: %v", err)
 	}
-	if got, want := len(payload.Input), 1; got != want {
+	if got, want := len(payload.Input), 3; got != want {
 		t.Fatalf("input count = %d, want %d", got, want)
 	}
-	if got, want := payload.Input[0]["role"], "user"; got != want {
-		t.Fatalf("input role = %v, want %q", got, want)
+	if got, want := payload.Input[0]["type"], "function_call"; got != want {
+		t.Fatalf("function call type = %v, want %q", got, want)
 	}
-	if got := payload.Input[0]["type"]; got != nil {
-		t.Fatalf("payload kept provider item type = %v", got)
+	if got, want := payload.Input[1]["type"], "function_call_output"; got != want {
+		t.Fatalf("synthetic type = %v, want %q", got, want)
+	}
+	if got, want := payload.Input[1]["call_id"], "call_abandoned"; got != want {
+		t.Fatalf("synthetic call id = %v, want %q", got, want)
+	}
+	if got, want := payload.Input[1]["output"], "No result provided"; got != want {
+		t.Fatalf("synthetic output = %v, want %q", got, want)
+	}
+	if got, want := payload.Input[2]["role"], "user"; got != want {
+		t.Fatalf("user role = %v, want %q", got, want)
 	}
 }
 

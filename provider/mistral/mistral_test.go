@@ -131,7 +131,7 @@ func TestCompleteSendsTextPayloadWithHooksHeadersAndOptions(t *testing.T) {
 	goldentest.AssertJSON(t, request.Body, "provider/mistral/conversations/rich_text_payload.json")
 }
 
-func TestConversationPayloadDropsUnansweredToolCallsBeforeUserTurn(t *testing.T) {
+func TestConversationPayloadSynthesizesUnansweredToolCallsBeforeUserTurn(t *testing.T) {
 	t.Parallel()
 
 	requests := make(chan capturedRequest, 1)
@@ -164,12 +164,30 @@ func TestConversationPayloadDropsUnansweredToolCallsBeforeUserTurn(t *testing.T)
 
 	payload := decodePayload(t, receiveRequest(t, requests).Body)
 	inputs := payload["inputs"].([]any)
-	if got, want := len(inputs), 1; got != want {
+	if got, want := len(inputs), 3; got != want {
 		t.Fatalf("input count = %d, want %d", got, want)
 	}
-	input := inputs[0].(map[string]any)
-	if got, want := input["role"], "user"; got != want {
-		t.Fatalf("input role = %v, want %q", got, want)
+	toolCall := inputs[0].(map[string]any)
+	if got, want := toolCall["type"], "function.call"; got != want {
+		t.Fatalf("tool call type = %v, want %q", got, want)
+	}
+	toolCallID := toolCall["tool_call_id"].(string)
+	if toolCallID == "" {
+		t.Fatal("tool call id is empty")
+	}
+	toolResult := inputs[1].(map[string]any)
+	if got, want := toolResult["type"], "function.result"; got != want {
+		t.Fatalf("synthetic type = %v, want %q", got, want)
+	}
+	if got, want := toolResult["tool_call_id"], toolCallID; got != want {
+		t.Fatalf("synthetic tool id = %v, want %q", got, want)
+	}
+	if got, want := toolResult["result"], "No result provided"; got != want {
+		t.Fatalf("synthetic result = %v, want %q", got, want)
+	}
+	user := inputs[2].(map[string]any)
+	if got, want := user["role"], "user"; got != want {
+		t.Fatalf("user role = %v, want %q", got, want)
 	}
 }
 

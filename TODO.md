@@ -653,7 +653,10 @@ should still come through the catalog refresh workflow.
       promote internal transform logic for thinking-to-tagged-text conversion
       (when target lacks reasoning support or API families differ), image
       downgrade or explicit rejection for non-vision targets, developer role
-      normalization, tool name repair, and unanswered call cleanup.
+      normalization, tool name repair, unanswered call repair with synthetic
+      error tool results, exact-model thinking preservation, provider-safe
+      replay ID normalization, and tool-result-to-user assistant bridging only
+      for targets that require it.
 - [x] Produce explicit capability-loss reports from handoff transforms (counts
       or details of converted thinking blocks, elided/rejected images, other
       degradations) so callers can surface changes rather than experiencing

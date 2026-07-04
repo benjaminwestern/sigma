@@ -252,18 +252,64 @@ func TestTransformRepairsToolCallToolResultSequences(t *testing.T) {
 	if got, want := transformed.Messages[1].ToolCallID, "call_1"; got != want {
 		t.Fatalf("tool result id = %q, want %q", got, want)
 	}
-	if got, want := len(transformed.Messages), 4; got != want {
+	if got, want := len(transformed.Messages), 3; got != want {
 		t.Fatalf("message count = %d, want %d", got, want)
 	}
-	if got, want := transformed.Messages[2].Role, sigma.RoleUser; got != want {
-		t.Fatalf("repair role = %q, want %q", got, want)
+	if got, want := transformed.Messages[2].Role, sigma.RoleAssistant; got != want {
+		t.Fatalf("assistant role = %q, want %q", got, want)
 	}
-	if got, want := transformed.Messages[2].Content[0].Text, "Continue."; got != want {
-		t.Fatalf("repair text = %q, want %q", got, want)
+	if got, want := transformed.Messages[2].Content[0].Text, "It is 18 C."; got != want {
+		t.Fatalf("assistant text = %q, want %q", got, want)
 	}
 }
 
-func TestTransformDropsUnansweredToolCallsBeforeUserTurn(t *testing.T) {
+func TestTransformBridgesToolResultBeforeUserTurn(t *testing.T) {
+	t.Parallel()
+
+	transformed, err := Transform(Input{
+		TargetModel: sigma.Model{
+			ID:       "gpt-4.1",
+			Provider: sigma.ProviderOpenAI,
+			API:      sigma.APIOpenAIResponses,
+		},
+		Compatibility: Compatibility{
+			RequireToolResultName:          true,
+			AssistantAfterToolResultRepair: true,
+		},
+		Request: sigma.Request{
+			Messages: []sigma.Message{
+				{
+					Role:    sigma.RoleAssistant,
+					Content: []sigma.ContentBlock{sigma.ToolCallBlock("call_1", "weather", map[string]any{"city": "Melbourne"})},
+				},
+				{
+					Role:       sigma.RoleTool,
+					ToolCallID: "call_1",
+					Content:    []sigma.ContentBlock{sigma.Text("18 C")},
+				},
+				sigma.UserText("Thanks."),
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Transform returned error: %v", err)
+	}
+
+	if got, want := len(transformed.Messages), 4; got != want {
+		t.Fatalf("message count = %d, want %d", got, want)
+	}
+	if got, want := transformed.Messages[2].Role, sigma.RoleAssistant; got != want {
+		t.Fatalf("repair role = %q, want %q", got, want)
+	}
+	if got, want := transformed.Messages[2].Content[0].Text, "I have processed the tool results."; got != want {
+		t.Fatalf("repair text = %q, want %q", got, want)
+	}
+	if got, want := transformed.Messages[3].Role, sigma.RoleUser; got != want {
+		t.Fatalf("user role = %q, want %q", got, want)
+	}
+}
+
+func TestTransformSynthesizesUnansweredToolCallsBeforeUserTurn(t *testing.T) {
 	t.Parallel()
 
 	request := sigma.Request{
@@ -293,10 +339,26 @@ func TestTransformDropsUnansweredToolCallsBeforeUserTurn(t *testing.T) {
 		t.Fatalf("Transform returned error: %v", err)
 	}
 
-	if got, want := len(transformed.Messages), 1; got != want {
+	if got, want := len(transformed.Messages), 3; got != want {
 		t.Fatalf("message count = %d, want %d", got, want)
 	}
-	if got, want := transformed.Messages[0].Role, sigma.RoleUser; got != want {
+	synthetic := transformed.Messages[1]
+	if got, want := synthetic.Role, sigma.RoleTool; got != want {
+		t.Fatalf("synthetic role = %q, want %q", got, want)
+	}
+	if got, want := synthetic.ToolCallID, "call_unanswered"; got != want {
+		t.Fatalf("synthetic tool call id = %q, want %q", got, want)
+	}
+	if got, want := synthetic.ToolName, "lookup"; got != want {
+		t.Fatalf("synthetic tool name = %q, want %q", got, want)
+	}
+	if !synthetic.IsError {
+		t.Fatal("synthetic tool result IsError = false, want true")
+	}
+	if got, want := synthetic.Content[0].Text, "No result provided"; got != want {
+		t.Fatalf("synthetic text = %q, want %q", got, want)
+	}
+	if got, want := transformed.Messages[2].Role, sigma.RoleUser; got != want {
 		t.Fatalf("remaining message role = %q, want %q", got, want)
 	}
 	if got, want := len(request.Messages[0].Content), 1; got != want {
@@ -342,7 +404,7 @@ func TestTransformPreservesAnsweredToolCallsBeforeUserTurn(t *testing.T) {
 	}
 }
 
-func TestTransformDropsOnlyUnansweredToolCallBlocks(t *testing.T) {
+func TestTransformSynthesizesTrailingUnansweredToolCalls(t *testing.T) {
 	t.Parallel()
 
 	transformed, err := Transform(Input{
@@ -363,7 +425,6 @@ func TestTransformDropsOnlyUnansweredToolCallBlocks(t *testing.T) {
 						sigma.ToolCallBlock("call_unanswered", "lookup", map[string]any{"query": "weather"}),
 					},
 				},
-				sigma.UserText("Skip the lookup."),
 			},
 		},
 	})
@@ -375,11 +436,103 @@ func TestTransformDropsOnlyUnansweredToolCallBlocks(t *testing.T) {
 		t.Fatalf("message count = %d, want %d", got, want)
 	}
 	blocks := transformed.Messages[0].Content
-	if got, want := len(blocks), 1; got != want {
+	if got, want := len(blocks), 2; got != want {
 		t.Fatalf("assistant content count = %d, want %d", got, want)
 	}
 	if got, want := blocks[0].Text, "I can look that up."; got != want {
 		t.Fatalf("assistant text = %q, want %q", got, want)
+	}
+	synthetic := transformed.Messages[1]
+	if got, want := synthetic.ToolCallID, "call_unanswered"; got != want {
+		t.Fatalf("synthetic tool call id = %q, want %q", got, want)
+	}
+	if !synthetic.IsError {
+		t.Fatal("synthetic tool result IsError = false, want true")
+	}
+}
+
+func TestTransformConvertsSameProviderDifferentModelThinking(t *testing.T) {
+	t.Parallel()
+
+	transformed, err := Transform(Input{
+		TargetModel: sigma.Model{
+			ID:               "claude-opus",
+			Provider:         sigma.ProviderAnthropic,
+			API:              sigma.APIAnthropicMessages,
+			SupportsThinking: true,
+		},
+		Request: sigma.Request{
+			Messages: []sigma.Message{{
+				Role:     sigma.RoleAssistant,
+				Provider: sigma.ProviderAnthropic,
+				API:      sigma.APIAnthropicMessages,
+				Model:    "claude-sonnet",
+				Content:  []sigma.ContentBlock{sigma.Thinking("private model state", "sig")},
+			}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Transform returned error: %v", err)
+	}
+
+	block := transformed.Messages[0].Content[0]
+	if got, want := block.Type, sigma.ContentBlockText; got != want {
+		t.Fatalf("converted thinking type = %q, want %q", got, want)
+	}
+	if got, want := block.Text, "<thinking>\nprivate model state\n</thinking>"; got != want {
+		t.Fatalf("converted thinking text = %q, want %q", got, want)
+	}
+}
+
+func TestTransformNormalizesToolCallIDsWithResults(t *testing.T) {
+	t.Parallel()
+
+	normalize := SafeToolCallIDNormalizer(64)
+	transformed, err := Transform(Input{
+		TargetModel: sigma.Model{
+			ID:       "claude-sonnet",
+			Provider: sigma.ProviderAnthropic,
+			API:      sigma.APIAnthropicMessages,
+		},
+		Compatibility: Compatibility{
+			NormalizeToolCallID: normalize,
+		},
+		Request: sigma.Request{
+			Messages: []sigma.Message{
+				{
+					Role: sigma.RoleAssistant,
+					Content: []sigma.ContentBlock{
+						sigma.ToolCallBlock("call:prev/with spaces|foreign+item", "lookup", map[string]any{"query": "weather"}),
+						sigma.ToolCallBlock("call:prev/with spaces|foreign-item", "lookup", map[string]any{"query": "time"}),
+					},
+				},
+				{
+					Role:       sigma.RoleTool,
+					ToolCallID: "call:prev/with spaces|foreign+item",
+					Content:    []sigma.ContentBlock{sigma.Text("18 C")},
+				},
+				{
+					Role:       sigma.RoleTool,
+					ToolCallID: "call:prev/with spaces|foreign-item",
+					Content:    []sigma.ContentBlock{sigma.Text("10 AM")},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Transform returned error: %v", err)
+	}
+
+	first := transformed.Messages[0].Content[0].ToolCallID
+	second := transformed.Messages[0].Content[1].ToolCallID
+	if first == second {
+		t.Fatalf("normalized ids collided: %q", first)
+	}
+	if got, want := transformed.Messages[1].ToolCallID, first; got != want {
+		t.Fatalf("first tool result id = %q, want %q", got, want)
+	}
+	if got, want := transformed.Messages[2].ToolCallID, second; got != want {
+		t.Fatalf("second tool result id = %q, want %q", got, want)
 	}
 }
 

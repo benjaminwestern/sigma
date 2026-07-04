@@ -8,6 +8,8 @@ package transform
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/wintermi/sigma"
 )
@@ -34,6 +36,7 @@ type Compatibility struct {
 	RequireToolResultName           bool
 	ConvertDeveloperRole            bool
 	DropUnansweredToolCalls         bool
+	NormalizeToolCallID             func(string) string
 }
 
 // Policy controls lossless request normalization choices.
@@ -41,6 +44,57 @@ type Policy struct {
 	ThinkingStartDelimiter string
 	ThinkingEndDelimiter   string
 	AllowUnsupportedImages bool
+}
+
+// SafeToolCallIDNormalizer returns a stateful normalizer that preserves a
+// stable mapping from original tool-call IDs to provider-safe IDs.
+func SafeToolCallIDNormalizer(limit int) func(string) string {
+	mapped := make(map[string]string)
+	used := make(map[string]string)
+	return func(id string) string {
+		if id == "" {
+			return id
+		}
+		if normalized := mapped[id]; normalized != "" {
+			return normalized
+		}
+		base := safeToolCallID(id, limit)
+		for attempt := 0; ; attempt++ {
+			candidate := base
+			if attempt > 0 {
+				suffix := "_" + strconv.Itoa(attempt)
+				candidate = strings.TrimRight(base[:min(len(base), max(1, limit-len(suffix)))], "_") + suffix
+			}
+			if owner := used[candidate]; owner == "" || owner == id {
+				mapped[id] = candidate
+				used[candidate] = id
+				return candidate
+			}
+		}
+	}
+}
+
+func safeToolCallID(id string, limit int) string {
+	var out strings.Builder
+	for _, r := range id {
+		switch {
+		case r >= 'a' && r <= 'z',
+			r >= 'A' && r <= 'Z',
+			r >= '0' && r <= '9',
+			r == '_',
+			r == '-':
+			out.WriteRune(r)
+		default:
+			out.WriteByte('_')
+		}
+		if out.Len() == limit {
+			break
+		}
+	}
+	if out.Len() == 0 {
+		return "_"
+	}
+	return out.String()
 }
 
 // Transform returns a transformed copy of input.Request for input.TargetModel.
@@ -70,13 +124,6 @@ func Transform(input Input) (sigma.Request, error) {
 			return sigma.Request{}, err
 		}
 
-		if input.Compatibility.AssistantAfterToolResultRepair &&
-			len(output.Messages) > 0 &&
-			output.Messages[len(output.Messages)-1].Role == sigma.RoleTool &&
-			transformed.Role == sigma.RoleAssistant {
-			output.Messages = append(output.Messages, repairMessage(input.Compatibility.AssistantAfterToolResultMessage))
-		}
-
 		output.Messages = append(output.Messages, transformed)
 		recordToolCalls(toolNamesByID, transformed)
 	}
@@ -84,90 +131,109 @@ func Transform(input Input) (sigma.Request, error) {
 	if input.Compatibility.DropUnansweredToolCalls {
 		output.Messages = dropUnansweredToolCalls(output.Messages)
 	}
+	if input.Compatibility.AssistantAfterToolResultRepair {
+		output.Messages = insertAssistantAfterToolResults(output.Messages, input.Compatibility.AssistantAfterToolResultMessage)
+	}
 
 	return output, nil
 }
 
-// DropUnansweredToolCalls returns a copy of req with replayed assistant tool
-// calls removed when a new user/developer turn arrived before the tool result.
+// DropUnansweredToolCalls returns a copy of req with synthetic error tool
+// results inserted for replayed assistant tool calls that have no result.
 func DropUnansweredToolCalls(req sigma.Request) sigma.Request {
 	return sigma.Request{
 		SystemPrompt: req.SystemPrompt,
-		Messages:     dropUnansweredToolCalls(cloneMessages(req.Messages)),
+		Messages:     synthesizeUnansweredToolResults(cloneMessages(req.Messages)),
 		Tools:        cloneTools(req.Tools),
 	}
 }
 
 func dropUnansweredToolCalls(messages []sigma.Message) []sigma.Message {
+	return synthesizeUnansweredToolResults(messages)
+}
+
+func synthesizeUnansweredToolResults(messages []sigma.Message) []sigma.Message {
 	if len(messages) == 0 {
 		return nil
 	}
-	cleaned := make([]sigma.Message, 0, len(messages))
-	for index, message := range messages {
-		if message.Role != sigma.RoleAssistant || len(message.Content) == 0 {
-			cleaned = append(cleaned, message)
-			continue
-		}
-		answered := answeredToolCallsBeforeUserTurn(messages, index)
-		if answered == nil {
-			cleaned = append(cleaned, message)
-			continue
-		}
-		message.Content = dropUnansweredToolCallBlocks(message.Content, answered)
-		if len(message.Content) == 0 {
-			continue
-		}
-		cleaned = append(cleaned, message)
-	}
-	return cleaned
-}
-
-func answeredToolCallsBeforeUserTurn(messages []sigma.Message, assistantIndex int) map[string]struct{} {
-	callIDs := assistantToolCallIDs(messages[assistantIndex])
-	if len(callIDs) == 0 {
-		return nil
-	}
+	repaired := make([]sigma.Message, 0, len(messages))
+	var pending []sigma.ContentBlock
 	answered := make(map[string]struct{})
-	for index := assistantIndex + 1; index < len(messages); index++ {
-		message := messages[index]
-		switch message.Role {
-		case sigma.RoleTool:
-			if _, ok := callIDs[message.ToolCallID]; ok {
-				answered[message.ToolCallID] = struct{}{}
-			}
-		case sigma.RoleUser, sigma.RoleDeveloper:
-			return answered
-		case sigma.RoleAssistant:
-			return nil
-		}
-	}
-	return nil
-}
-
-func assistantToolCallIDs(message sigma.Message) map[string]struct{} {
-	ids := make(map[string]struct{})
-	for _, block := range message.Content {
-		if isClientToolCall(block) {
-			ids[block.ToolCallID] = struct{}{}
-		}
-	}
-	if len(ids) == 0 {
-		return nil
-	}
-	return ids
-}
-
-func dropUnansweredToolCallBlocks(blocks []sigma.ContentBlock, answered map[string]struct{}) []sigma.ContentBlock {
-	cleaned := make([]sigma.ContentBlock, 0, len(blocks))
-	for _, block := range blocks {
-		if isClientToolCall(block) {
-			if _, ok := answered[block.ToolCallID]; !ok {
+	insertMissing := func() {
+		for _, call := range pending {
+			if _, ok := answered[call.ToolCallID]; ok {
 				continue
 			}
+			repaired = append(repaired, syntheticToolResult(call))
 		}
-		cleaned = append(cleaned, block)
+		pending = nil
+		answered = make(map[string]struct{})
 	}
-	return cleaned
+	for _, message := range messages {
+		switch message.Role {
+		case sigma.RoleAssistant:
+			insertMissing()
+			repaired = append(repaired, message)
+			pending = assistantToolCalls(message)
+		case sigma.RoleUser, sigma.RoleDeveloper:
+			insertMissing()
+			repaired = append(repaired, message)
+		case sigma.RoleTool:
+			if hasPendingToolCall(pending, message.ToolCallID) {
+				answered[message.ToolCallID] = struct{}{}
+			}
+			repaired = append(repaired, message)
+		default:
+			repaired = append(repaired, message)
+		}
+	}
+	insertMissing()
+	return repaired
+}
+
+func assistantToolCalls(message sigma.Message) []sigma.ContentBlock {
+	var calls []sigma.ContentBlock
+	for _, block := range message.Content {
+		if isClientToolCall(block) {
+			calls = append(calls, block)
+		}
+	}
+	return calls
+}
+
+func hasPendingToolCall(calls []sigma.ContentBlock, id string) bool {
+	for _, call := range calls {
+		if call.ToolCallID == id {
+			return true
+		}
+	}
+	return false
+}
+
+func syntheticToolResult(call sigma.ContentBlock) sigma.Message {
+	return sigma.Message{
+		Role:       sigma.RoleTool,
+		ToolCallID: call.ToolCallID,
+		ToolName:   call.ToolName,
+		IsError:    true,
+		Content:    []sigma.ContentBlock{sigma.Text("No result provided")},
+	}
+}
+
+func insertAssistantAfterToolResults(messages []sigma.Message, message sigma.Message) []sigma.Message {
+	if len(messages) == 0 {
+		return nil
+	}
+	repaired := make([]sigma.Message, 0, len(messages)+1)
+	for _, current := range messages {
+		if (current.Role == sigma.RoleUser || current.Role == sigma.RoleDeveloper) &&
+			len(repaired) > 0 &&
+			repaired[len(repaired)-1].Role == sigma.RoleTool {
+			repaired = append(repaired, repairMessage(message))
+		}
+		repaired = append(repaired, current)
+	}
+	return repaired
 }
 
 func isClientToolCall(block sigma.ContentBlock) bool {
@@ -192,17 +258,29 @@ func transformMessage(message sigma.Message, ctx messageContext) (sigma.Message,
 		transformed.Role = sigma.RoleUser
 	}
 
-	for index, block := range message.Content {
+	content := make([]sigma.ContentBlock, 0, len(message.Content))
+	for _, block := range message.Content {
 		if err := validateImageSupport(block, ctx); err != nil {
 			return sigma.Message{}, err
 		}
 		if transformed.Role == sigma.RoleAssistant && block.Type == sigma.ContentBlockThinking && shouldConvertThinking(message, ctx) {
-			transformed.Content[index] = sigma.Text(wrapThinking(block.ThinkingText, ctx.policy))
+			if strings.TrimSpace(block.ThinkingText) == "" || block.Redacted {
+				continue
+			}
+			content = append(content, sigma.Text(wrapThinking(block.ThinkingText, ctx.policy)))
 			continue
 		}
-		transformed.Content[index] = cloneContentBlock(block)
+		cloned := cloneContentBlock(block)
+		if cloned.Type == sigma.ContentBlockToolCall && ctx.compat.NormalizeToolCallID != nil {
+			cloned.ToolCallID = ctx.compat.NormalizeToolCallID(cloned.ToolCallID)
+		}
+		content = append(content, cloned)
 	}
+	transformed.Content = content
 
+	if transformed.Role == sigma.RoleTool && ctx.compat.NormalizeToolCallID != nil {
+		transformed.ToolCallID = ctx.compat.NormalizeToolCallID(transformed.ToolCallID)
+	}
 	if transformed.Role == sigma.RoleTool && ctx.compat.RequireToolResultName && transformed.ToolName == "" {
 		toolName, ok := ctx.toolNames[transformed.ToolCallID]
 		if !ok {
@@ -224,7 +302,10 @@ func shouldConvertThinking(message sigma.Message, ctx messageContext) bool {
 	if message.Provider != "" && message.Provider != ctx.target.Provider {
 		return true
 	}
-	return message.API != "" && ctx.target.API != "" && message.API != ctx.target.API
+	if message.API != "" && ctx.target.API != "" && message.API != ctx.target.API {
+		return true
+	}
+	return message.Model != "" && ctx.target.ID != "" && message.Model != ctx.target.ID
 }
 
 func validateImageSupport(block sigma.ContentBlock, ctx messageContext) error {
@@ -253,7 +334,10 @@ func repairMessage(message sigma.Message) sigma.Message {
 	if message.Role != "" {
 		return cloneMessage(message)
 	}
-	return sigma.UserText("Continue.")
+	return sigma.Message{
+		Role:    sigma.RoleAssistant,
+		Content: []sigma.ContentBlock{sigma.Text("I have processed the tool results.")},
+	}
 }
 
 func transformError(ctx messageContext, message string) error {

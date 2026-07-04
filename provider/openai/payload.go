@@ -1098,21 +1098,16 @@ func repairMessages(messages []map[string]any, compat completionsCompat) []map[s
 		return messages
 	}
 	repaired := make([]map[string]any, 0, len(messages)+1)
-	for i, message := range messages {
+	for _, message := range messages {
+		if role, _ := message["role"].(string); role == "user" || role == "developer" {
+			if len(repaired) > 0 && repaired[len(repaired)-1]["role"] == "tool" {
+				repaired = append(repaired, map[string]any{
+					"role":    "assistant",
+					"content": "I have processed the tool results.",
+				})
+			}
+		}
 		repaired = append(repaired, message)
-		if message["role"] != "tool" {
-			continue
-		}
-		if i+1 < len(messages) && messages[i+1]["role"] == "tool" {
-			continue
-		}
-		if i+1 < len(messages) && messages[i+1]["role"] == "assistant" {
-			continue
-		}
-		repaired = append(repaired, map[string]any{
-			"role":    "assistant",
-			"content": "",
-		})
 	}
 	return repaired
 }

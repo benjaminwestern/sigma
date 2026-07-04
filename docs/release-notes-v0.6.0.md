@@ -375,12 +375,14 @@ advice without adding any execution loop or configuration format to Sigma.
   before provider dispatch.
 - `sigma.TransformRequestForModel` and `sigma.TransformMessagesForModel` now
   adapt conversation context for a target text model without invoking a
-  provider. The helpers preserve same-model thinking blocks, convert foreign or
-  unsupported thinking to tagged text, reject unsupported image content by
-  default, optionally replace unsupported image blocks with caller-supplied
-  text, repair tool-result names where target metadata requires them, remove
-  unanswered local tool calls interrupted by a user/developer turn, and return
-  a `HandoffReport` describing every lossy or compatibility-driven change.
+  provider. The helpers preserve provider-native thinking only for exact-model
+  replay, convert foreign or unsupported thinking to tagged text, reject
+  unsupported image content by default, optionally replace unsupported image
+  blocks with caller-supplied text, repair tool-result names where target
+  metadata requires them, synthesize explicit error tool results for missing
+  tool outputs, bridge only tool-result-to-user transitions for targets that
+  require it, normalize replay IDs for stricter targets, and return a
+  `HandoffReport` describing every lossy or compatibility-driven change.
 - `sigma.AssistantMessage.Sources`, `sigma.ContentBlock.Citations`, and
   `sigma.AssistantMessage.Citations` now expose normalized source and citation
   entries from provider metadata, including URLs, URIs, titles, offsets, cited

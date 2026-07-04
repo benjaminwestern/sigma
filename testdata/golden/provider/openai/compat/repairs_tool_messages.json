@@ -20,7 +20,7 @@
       "tool_call_id": "call_1"
     },
     {
-      "content": "",
+      "content": "I have processed the tool results.",
       "role": "assistant"
     },
     {

@@ -127,7 +127,7 @@ func TestCompleteProviderBaseURLOptionOverridesModelMetadata(t *testing.T) {
 	}
 }
 
-func TestGenerativePayloadDropsUnansweredToolCallsBeforeUserTurn(t *testing.T) {
+func TestGenerativePayloadSynthesizesUnansweredToolCallsBeforeUserTurn(t *testing.T) {
 	t.Parallel()
 
 	requests := make(chan capturedRequest, 1)
@@ -163,12 +163,27 @@ func TestGenerativePayloadDropsUnansweredToolCallsBeforeUserTurn(t *testing.T) {
 		t.Fatalf("decode payload: %v", err)
 	}
 	contents := payload["contents"].([]any)
-	if got, want := len(contents), 1; got != want {
+	if got, want := len(contents), 3; got != want {
 		t.Fatalf("content count = %d, want %d", got, want)
 	}
-	content := contents[0].(map[string]any)
-	if got, want := content["role"], "user"; got != want {
-		t.Fatalf("content role = %v, want %q", got, want)
+	assistant := contents[0].(map[string]any)
+	if got, want := assistant["role"], "model"; got != want {
+		t.Fatalf("assistant role = %v, want %q", got, want)
+	}
+	toolResult := contents[1].(map[string]any)
+	if got, want := toolResult["role"], "user"; got != want {
+		t.Fatalf("tool result role = %v, want %q", got, want)
+	}
+	response := toolResult["parts"].([]any)[0].(map[string]any)["functionResponse"].(map[string]any)
+	if got, want := response["name"], "lookup"; got != want {
+		t.Fatalf("synthetic response name = %v, want %q", got, want)
+	}
+	if got, want := response["response"].(map[string]any)["error"], "No result provided"; got != want {
+		t.Fatalf("synthetic response error = %v, want %q", got, want)
+	}
+	user := contents[2].(map[string]any)
+	if got, want := user["role"], "user"; got != want {
+		t.Fatalf("user role = %v, want %q", got, want)
 	}
 }
 

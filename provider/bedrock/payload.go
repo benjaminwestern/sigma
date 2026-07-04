@@ -157,6 +157,7 @@ func conversePayload(model sigma.Model, req sigma.Request, opts sigma.Options, c
 		Compatibility: transform.Compatibility{
 			ConvertDeveloperRole:    true,
 			DropUnansweredToolCalls: true,
+			NormalizeToolCallID:     transform.SafeToolCallIDNormalizer(64),
 		},
 	})
 	if err != nil {

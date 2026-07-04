@@ -18,6 +18,12 @@
       "object": "entry",
       "tool_call_id": "23336afc7",
       "type": "function.call"
+    },
+    {
+      "object": "entry",
+      "result": "No result provided",
+      "tool_call_id": "23336afc7",
+      "type": "function.result"
     }
   ],
   "model": "mistral-test",

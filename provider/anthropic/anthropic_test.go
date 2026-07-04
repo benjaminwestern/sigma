@@ -328,7 +328,7 @@ func TestCompleteSendsProviderDefinedToolsPayload(t *testing.T) {
 	goldentest.AssertJSON(t, request.Body, "provider/anthropic/messages/provider_defined_tools_payload.json")
 }
 
-func TestMessagesPayloadDropsUnansweredToolCallsBeforeUserTurn(t *testing.T) {
+func TestMessagesPayloadSynthesizesUnansweredToolCallsBeforeUserTurn(t *testing.T) {
 	t.Parallel()
 
 	requests := make(chan capturedRequest, 1)
@@ -361,12 +361,33 @@ func TestMessagesPayloadDropsUnansweredToolCallsBeforeUserTurn(t *testing.T) {
 
 	payload := decodePayload(t, receiveRequest(t, requests).Body)
 	messages := payload["messages"].([]any)
-	if got, want := len(messages), 1; got != want {
+	if got, want := len(messages), 3; got != want {
 		t.Fatalf("message count = %d, want %d", got, want)
 	}
-	message := messages[0].(map[string]any)
-	if got, want := message["role"], "user"; got != want {
-		t.Fatalf("message role = %v, want %q", got, want)
+	assistant := messages[0].(map[string]any)
+	if got, want := assistant["role"], "assistant"; got != want {
+		t.Fatalf("assistant role = %v, want %q", got, want)
+	}
+	toolResultMessage := messages[1].(map[string]any)
+	if got, want := toolResultMessage["role"], "user"; got != want {
+		t.Fatalf("tool result message role = %v, want %q", got, want)
+	}
+	toolResult := toolResultMessage["content"].([]any)[0].(map[string]any)
+	if got, want := toolResult["type"], "tool_result"; got != want {
+		t.Fatalf("synthetic block type = %v, want %q", got, want)
+	}
+	if got, want := toolResult["tool_use_id"], "call_abandoned"; got != want {
+		t.Fatalf("synthetic tool id = %v, want %q", got, want)
+	}
+	if got, want := toolResult["is_error"], true; got != want {
+		t.Fatalf("synthetic is_error = %v, want %v", got, want)
+	}
+	if got, want := toolResult["content"], "No result provided"; got != want {
+		t.Fatalf("synthetic content = %v, want %q", got, want)
+	}
+	user := messages[2].(map[string]any)
+	if got, want := user["role"], "user"; got != want {
+		t.Fatalf("user role = %v, want %q", got, want)
 	}
 }
 
@@ -1312,6 +1333,68 @@ func TestToolResultsAreGroupedAndEmptyThinkingSignatureFallsBackToText(t *testin
 
 	request := receiveRequest(t, requests)
 	goldentest.AssertJSON(t, request.Body, "provider/anthropic/messages/grouped_tool_results_empty_signature_payload.json")
+}
+
+func TestToolCallIDsAreNormalizedForReplay(t *testing.T) {
+	t.Parallel()
+
+	requests := make(chan capturedRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captureRequest(t, requests, r)
+		writeMessagesSSE(t, w, completedEvent)
+	}))
+	t.Cleanup(server.Close)
+
+	providerID := sigma.ProviderID("anthropic-tool-id-normalization-test")
+	model := anthropicTestModel(providerID)
+	client := anthropicTestClient(t, providerID, model, server.URL)
+
+	_, err := client.Complete(
+		context.Background(),
+		model,
+		sigma.Request{Messages: []sigma.Message{
+			{
+				Role: sigma.RoleAssistant,
+				Content: []sigma.ContentBlock{
+					sigma.ToolCallBlock("call:prev/with spaces|foreign+item", "lookup", map[string]any{"query": "weather"}),
+					sigma.ToolCallBlock("call:prev/with spaces|foreign-item", "lookup", map[string]any{"query": "time"}),
+				},
+			},
+			{
+				Role:       sigma.RoleTool,
+				ToolCallID: "call:prev/with spaces|foreign+item",
+				Content:    []sigma.ContentBlock{sigma.Text("sunny")},
+			},
+			{
+				Role:       sigma.RoleTool,
+				ToolCallID: "call:prev/with spaces|foreign-item",
+				Content:    []sigma.ContentBlock{sigma.Text("10 AM")},
+			},
+		}},
+	)
+	if err != nil {
+		t.Fatalf("Complete returned error: %v", err)
+	}
+
+	payload := decodePayload(t, receiveRequest(t, requests).Body)
+	messages := payload["messages"].([]any)
+	assistant := messages[0].(map[string]any)
+	content := assistant["content"].([]any)
+	firstID := content[0].(map[string]any)["id"].(string)
+	secondID := content[1].(map[string]any)["id"].(string)
+	if firstID == secondID {
+		t.Fatalf("normalized tool call IDs collided: %q", firstID)
+	}
+	if len(firstID) > 64 || len(secondID) > 64 {
+		t.Fatalf("normalized IDs too long: %q %q", firstID, secondID)
+	}
+	toolResults := messages[1].(map[string]any)["content"].([]any)
+	if got, want := toolResults[0].(map[string]any)["tool_use_id"], firstID; got != want {
+		t.Fatalf("first tool result id = %v, want %q", got, want)
+	}
+	if got, want := toolResults[1].(map[string]any)["tool_use_id"], secondID; got != want {
+		t.Fatalf("second tool result id = %v, want %q", got, want)
+	}
 }
 
 func TestEmptyThinkingSignatureCanBePreservedForCompatibleEndpoints(t *testing.T) {

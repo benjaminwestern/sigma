@@ -102,7 +102,7 @@ func TestConversePayloadMapsMessagesToolsImagesThinkingAndCache(t *testing.T) {
 	goldentest.AssertJSON(t, payload, "provider/bedrock/converse/rich_payload.json")
 }
 
-func TestConversePayloadDropsUnansweredToolCallsBeforeUserTurn(t *testing.T) {
+func TestConversePayloadSynthesizesUnansweredToolCallsBeforeUserTurn(t *testing.T) {
 	t.Parallel()
 
 	payload, err := conversePayload(
@@ -123,11 +123,27 @@ func TestConversePayloadDropsUnansweredToolCallsBeforeUserTurn(t *testing.T) {
 		t.Fatalf("conversePayload returned error: %v", err)
 	}
 
-	if got, want := len(payload.Messages), 1; got != want {
+	if got, want := len(payload.Messages), 3; got != want {
 		t.Fatalf("message count = %d, want %d", got, want)
 	}
-	if got, want := payload.Messages[0].Role, "user"; got != want {
-		t.Fatalf("message role = %q, want %q", got, want)
+	if got, want := payload.Messages[0].Role, "assistant"; got != want {
+		t.Fatalf("assistant role = %q, want %q", got, want)
+	}
+	toolResult := payload.Messages[1].Content[0].ToolResult
+	if got, want := payload.Messages[1].Role, "user"; got != want {
+		t.Fatalf("tool result message role = %q, want %q", got, want)
+	}
+	if got, want := toolResult.ToolUseID, "call_abandoned"; got != want {
+		t.Fatalf("synthetic tool id = %q, want %q", got, want)
+	}
+	if got, want := toolResult.Status, "error"; got != want {
+		t.Fatalf("synthetic status = %q, want %q", got, want)
+	}
+	if got, want := toolResult.Content[0].Text, "No result provided"; got != want {
+		t.Fatalf("synthetic text = %q, want %q", got, want)
+	}
+	if got, want := payload.Messages[2].Role, "user"; got != want {
+		t.Fatalf("user message role = %q, want %q", got, want)
 	}
 }
 
@@ -465,6 +481,54 @@ func TestToolResultsGroupAndPreserveImages(t *testing.T) {
 	}
 	if _, ok := resultContent[1]["image"]; !ok {
 		t.Fatalf("second tool result image missing: %#v", resultContent[1])
+	}
+}
+
+func TestToolCallIDsAreNormalizedForReplay(t *testing.T) {
+	t.Parallel()
+
+	payload, err := conversePayload(
+		bedrockTestModel(sigma.ProviderAmazonBedrock),
+		sigma.Request{Messages: []sigma.Message{
+			{
+				Role: sigma.RoleAssistant,
+				Content: []sigma.ContentBlock{
+					sigma.ToolCallBlock("call:prev/with spaces|foreign+item", "lookup", map[string]any{"query": "weather"}),
+					sigma.ToolCallBlock("call:prev/with spaces|foreign-item", "lookup", map[string]any{"query": "time"}),
+				},
+			},
+			{
+				Role:       sigma.RoleTool,
+				ToolCallID: "call:prev/with spaces|foreign+item",
+				Content:    []sigma.ContentBlock{sigma.Text("sunny")},
+			},
+			{
+				Role:       sigma.RoleTool,
+				ToolCallID: "call:prev/with spaces|foreign-item",
+				Content:    []sigma.ContentBlock{sigma.Text("10 AM")},
+			},
+		}},
+		sigma.Options{},
+		Config{ModelID: "model"},
+	)
+	if err != nil {
+		t.Fatalf("conversePayload returned error: %v", err)
+	}
+
+	firstID := payload.Messages[0].Content[0].ToolUse.ID
+	secondID := payload.Messages[0].Content[1].ToolUse.ID
+	if firstID == secondID {
+		t.Fatalf("normalized tool call IDs collided: %q", firstID)
+	}
+	if len(firstID) > 64 || len(secondID) > 64 {
+		t.Fatalf("normalized IDs too long: %q %q", firstID, secondID)
+	}
+	toolResults := payload.Messages[1].Content
+	if got, want := toolResults[0].ToolResult.ToolUseID, firstID; got != want {
+		t.Fatalf("first tool result id = %q, want %q", got, want)
+	}
+	if got, want := toolResults[1].ToolResult.ToolUseID, secondID; got != want {
+		t.Fatalf("second tool result id = %q, want %q", got, want)
 	}
 }
 

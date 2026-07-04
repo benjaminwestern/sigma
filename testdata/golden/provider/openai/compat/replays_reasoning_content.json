@@ -14,6 +14,11 @@
           "type": "function"
         }
       ]
+    },
+    {
+      "content": "No result provided",
+      "role": "tool",
+      "tool_call_id": "call_1"
     }
   ],
   "model": "compat-model",

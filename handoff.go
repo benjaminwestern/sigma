@@ -8,6 +8,8 @@ package sigma
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
 )
 
 const (
@@ -32,9 +34,12 @@ const (
 	// without a matching tool result before the next user/developer turn was
 	// removed.
 	HandoffChangeUnansweredToolCallDropped HandoffChangeKind = "unanswered-tool-call-dropped"
-	// HandoffChangeRepairMessageInserted indicates a small user continuation
-	// message was inserted between a tool result and following assistant turn.
+	// HandoffChangeRepairMessageInserted indicates an assistant bridge message
+	// was inserted between a tool result and following user turn.
 	HandoffChangeRepairMessageInserted HandoffChangeKind = "repair-message-inserted"
+	// HandoffChangeToolResultSynthesized indicates a missing tool result was
+	// synthesized for an unanswered assistant tool call.
+	HandoffChangeToolResultSynthesized HandoffChangeKind = "tool-result-synthesized"
 	// HandoffChangeUnsupportedImageReplaced indicates an image block was
 	// replaced with caller-supplied text for a non-vision target.
 	HandoffChangeUnsupportedImageReplaced HandoffChangeKind = "unsupported-image-replaced"
@@ -55,6 +60,7 @@ type HandoffReport struct {
 	RepairedToolResultNames    int             `json:"repairedToolResultNames,omitempty"`
 	DroppedUnansweredToolCalls int             `json:"droppedUnansweredToolCalls,omitempty"`
 	InsertedRepairMessages     int             `json:"insertedRepairMessages,omitempty"`
+	SynthesizedToolResults     int             `json:"synthesizedToolResults,omitempty"`
 	ReplacedUnsupportedImages  int             `json:"replacedUnsupportedImages,omitempty"`
 	Changes                    []HandoffChange `json:"changes,omitempty"`
 }
@@ -123,9 +129,9 @@ func TransformRequestForModel(target Model, req Request, opts ...HandoffOption) 
 		if compat.assistantAfterToolResultRepair &&
 			len(output.Messages) > 0 &&
 			output.Messages[len(output.Messages)-1].Role == RoleTool &&
-			transformed.Role == RoleAssistant {
-			output.Messages = append(output.Messages, UserText("Continue."))
-			report.record(HandoffChangeRepairMessageInserted, index, nil, "inserted continuation before assistant message")
+			(transformed.Role == RoleUser || transformed.Role == RoleDeveloper) {
+			output.Messages = append(output.Messages, handoffRepairMessage())
+			report.record(HandoffChangeRepairMessageInserted, index, nil, "inserted assistant bridge before user message")
 		}
 
 		output.Messages = append(output.Messages, transformed)
@@ -134,6 +140,9 @@ func TransformRequestForModel(target Model, req Request, opts ...HandoffOption) 
 
 	if compat.dropUnansweredToolCalls {
 		output.Messages = dropUnansweredHandoffToolCalls(output.Messages, &report)
+	}
+	if compat.assistantAfterToolResultRepair {
+		output.Messages = insertHandoffRepairMessages(output.Messages, &report)
 	}
 
 	return HandoffResult{Request: output, Report: report}, nil
@@ -179,6 +188,7 @@ type handoffCompatibility struct {
 	requireToolResultName          bool
 	convertDeveloperRole           bool
 	dropUnansweredToolCalls        bool
+	normalizeToolCallID            func(string) string
 }
 
 func handoffCompatibilityForModel(model Model) handoffCompatibility {
@@ -187,6 +197,9 @@ func handoffCompatibilityForModel(model Model) handoffCompatibility {
 		compat.requireToolResultName = model.OpenAICompletionsCompat.RequiresToolResultName == OpenAICompatSupported
 		compat.assistantAfterToolResultRepair = model.OpenAICompletionsCompat.RequiresAssistantAfterToolResult == OpenAICompatSupported
 		compat.convertDeveloperRole = model.OpenAICompletionsCompat.SupportsDeveloperRole == OpenAICompatUnsupported
+	}
+	if model.API == APIAnthropicMessages || model.API == APIBedrockConverseStream {
+		compat.normalizeToolCallID = newHandoffToolCallIDNormalizer(64)
 	}
 	return compat
 }
@@ -207,23 +220,35 @@ func transformHandoffMessage(message Message, ctx handoffMessageContext) (Messag
 		ctx.report.record(HandoffChangeDeveloperRoleConverted, ctx.messageIndex, nil, "converted developer message to user message")
 	}
 
+	content := make([]ContentBlock, 0, len(message.Content))
 	for index, block := range message.Content {
 		if block.Type == ContentBlockImage && !ctx.target.SupportsImages() {
 			if ctx.config.unsupportedImageReplacement == nil {
 				return Message{}, handoffError(ctx, "target model does not support image content")
 			}
-			transformed.Content[index] = Text(*ctx.config.unsupportedImageReplacement)
+			content = append(content, Text(*ctx.config.unsupportedImageReplacement))
 			ctx.report.record(HandoffChangeUnsupportedImageReplaced, ctx.messageIndex, intPtr(index), "replaced image block with text")
 			continue
 		}
 		if transformed.Role == RoleAssistant && block.Type == ContentBlockThinking && shouldConvertHandoffThinking(message, ctx) {
-			transformed.Content[index] = Text(wrapHandoffThinking(block.ThinkingText, ctx.config))
+			if strings.TrimSpace(block.ThinkingText) == "" || block.Redacted {
+				continue
+			}
+			content = append(content, Text(wrapHandoffThinking(block.ThinkingText, ctx.config)))
 			ctx.report.record(HandoffChangeThinkingConverted, ctx.messageIndex, intPtr(index), "converted thinking block to text")
 			continue
 		}
-		transformed.Content[index] = cloneHandoffContentBlock(block)
+		cloned := cloneHandoffContentBlock(block)
+		if cloned.Type == ContentBlockToolCall && ctx.compat.normalizeToolCallID != nil {
+			cloned.ToolCallID = ctx.compat.normalizeToolCallID(cloned.ToolCallID)
+		}
+		content = append(content, cloned)
 	}
+	transformed.Content = content
 
+	if transformed.Role == RoleTool && ctx.compat.normalizeToolCallID != nil {
+		transformed.ToolCallID = ctx.compat.normalizeToolCallID(transformed.ToolCallID)
+	}
 	if transformed.Role == RoleTool && ctx.compat.requireToolResultName && transformed.ToolName == "" {
 		toolName, ok := ctx.toolNames[transformed.ToolCallID]
 		if !ok {
@@ -264,77 +289,97 @@ func recordHandoffToolCalls(toolNamesByID map[string]string, message Message) {
 	}
 }
 
+func handoffRepairMessage() Message {
+	return Message{
+		Role:    RoleAssistant,
+		Content: []ContentBlock{Text("I have processed the tool results.")},
+	}
+}
+
 func dropUnansweredHandoffToolCalls(messages []Message, report *HandoffReport) []Message {
 	if len(messages) == 0 {
 		return nil
 	}
-	cleaned := make([]Message, 0, len(messages))
-	for index, message := range messages {
-		if message.Role != RoleAssistant || len(message.Content) == 0 {
-			cleaned = append(cleaned, message)
-			continue
-		}
-		answered := answeredHandoffToolCallsBeforeUserTurn(messages, index)
-		if answered == nil {
-			cleaned = append(cleaned, message)
-			continue
-		}
-		message.Content = dropUnansweredHandoffToolCallBlocks(message.Content, answered, index, report)
-		if len(message.Content) == 0 {
-			continue
-		}
-		cleaned = append(cleaned, message)
-	}
-	return cleaned
-}
-
-func answeredHandoffToolCallsBeforeUserTurn(messages []Message, assistantIndex int) map[string]struct{} {
-	callIDs := handoffAssistantToolCallIDs(messages[assistantIndex])
-	if len(callIDs) == 0 {
-		return nil
-	}
+	repaired := make([]Message, 0, len(messages))
+	var pending []ContentBlock
 	answered := make(map[string]struct{})
-	for index := assistantIndex + 1; index < len(messages); index++ {
-		message := messages[index]
-		switch message.Role {
-		case RoleTool:
-			if _, ok := callIDs[message.ToolCallID]; ok {
-				answered[message.ToolCallID] = struct{}{}
-			}
-		case RoleUser, RoleDeveloper:
-			return answered
-		case RoleAssistant:
-			return nil
-		}
-	}
-	return nil
-}
-
-func handoffAssistantToolCallIDs(message Message) map[string]struct{} {
-	ids := make(map[string]struct{})
-	for _, block := range message.Content {
-		if isHandoffClientToolCall(block) {
-			ids[block.ToolCallID] = struct{}{}
-		}
-	}
-	if len(ids) == 0 {
-		return nil
-	}
-	return ids
-}
-
-func dropUnansweredHandoffToolCallBlocks(blocks []ContentBlock, answered map[string]struct{}, messageIndex int, report *HandoffReport) []ContentBlock {
-	cleaned := make([]ContentBlock, 0, len(blocks))
-	for index, block := range blocks {
-		if isHandoffClientToolCall(block) {
-			if _, ok := answered[block.ToolCallID]; !ok {
-				report.record(HandoffChangeUnansweredToolCallDropped, messageIndex, intPtr(index), "dropped unanswered assistant tool call")
+	insertMissing := func(messageIndex int) {
+		for _, call := range pending {
+			if _, ok := answered[call.ToolCallID]; ok {
 				continue
 			}
+			repaired = append(repaired, syntheticHandoffToolResult(call))
+			report.record(HandoffChangeToolResultSynthesized, messageIndex, nil, "synthesized missing tool result")
 		}
-		cleaned = append(cleaned, block)
+		pending = nil
+		answered = make(map[string]struct{})
 	}
-	return cleaned
+	for index, message := range messages {
+		switch message.Role {
+		case RoleAssistant:
+			insertMissing(index)
+			repaired = append(repaired, message)
+			pending = handoffAssistantToolCalls(message)
+		case RoleUser, RoleDeveloper:
+			insertMissing(index)
+			repaired = append(repaired, message)
+		case RoleTool:
+			if hasPendingHandoffToolCall(pending, message.ToolCallID) {
+				answered[message.ToolCallID] = struct{}{}
+			}
+			repaired = append(repaired, message)
+		default:
+			repaired = append(repaired, message)
+		}
+	}
+	insertMissing(len(messages))
+	return repaired
+}
+
+func handoffAssistantToolCalls(message Message) []ContentBlock {
+	var calls []ContentBlock
+	for _, block := range message.Content {
+		if isHandoffClientToolCall(block) {
+			calls = append(calls, block)
+		}
+	}
+	return calls
+}
+
+func hasPendingHandoffToolCall(calls []ContentBlock, id string) bool {
+	for _, call := range calls {
+		if call.ToolCallID == id {
+			return true
+		}
+	}
+	return false
+}
+
+func syntheticHandoffToolResult(call ContentBlock) Message {
+	return Message{
+		Role:       RoleTool,
+		ToolCallID: call.ToolCallID,
+		ToolName:   call.ToolName,
+		IsError:    true,
+		Content:    []ContentBlock{Text("No result provided")},
+	}
+}
+
+func insertHandoffRepairMessages(messages []Message, report *HandoffReport) []Message {
+	if len(messages) == 0 {
+		return nil
+	}
+	repaired := make([]Message, 0, len(messages)+1)
+	for index, message := range messages {
+		if (message.Role == RoleUser || message.Role == RoleDeveloper) &&
+			len(repaired) > 0 &&
+			repaired[len(repaired)-1].Role == RoleTool {
+			repaired = append(repaired, handoffRepairMessage())
+			report.record(HandoffChangeRepairMessageInserted, index, nil, "inserted assistant bridge before user message")
+		}
+		repaired = append(repaired, message)
+	}
+	return repaired
 }
 
 func isHandoffClientToolCall(block ContentBlock) bool {
@@ -366,6 +411,8 @@ func (report *HandoffReport) record(kind HandoffChangeKind, messageIndex int, co
 		report.DroppedUnansweredToolCalls++
 	case HandoffChangeRepairMessageInserted:
 		report.InsertedRepairMessages++
+	case HandoffChangeToolResultSynthesized:
+		report.SynthesizedToolResults++
 	case HandoffChangeUnsupportedImageReplaced:
 		report.ReplacedUnsupportedImages++
 	}
@@ -375,6 +422,55 @@ func (report *HandoffReport) record(kind HandoffChangeKind, messageIndex int, co
 		ContentIndex: contentIndex,
 		Detail:       detail,
 	})
+}
+
+func newHandoffToolCallIDNormalizer(limit int) func(string) string {
+	mapped := make(map[string]string)
+	used := make(map[string]string)
+	return func(id string) string {
+		if id == "" {
+			return id
+		}
+		if normalized := mapped[id]; normalized != "" {
+			return normalized
+		}
+		base := safeHandoffToolCallID(id, limit)
+		for attempt := 0; ; attempt++ {
+			candidate := base
+			if attempt > 0 {
+				suffix := "_" + strconv.Itoa(attempt)
+				candidate = strings.TrimRight(base[:min(len(base), max(1, limit-len(suffix)))], "_") + suffix
+			}
+			if owner := used[candidate]; owner == "" || owner == id {
+				mapped[id] = candidate
+				used[candidate] = id
+				return candidate
+			}
+		}
+	}
+}
+
+func safeHandoffToolCallID(id string, limit int) string {
+	var out strings.Builder
+	for _, r := range id {
+		switch {
+		case r >= 'a' && r <= 'z',
+			r >= 'A' && r <= 'Z',
+			r >= '0' && r <= '9',
+			r == '_',
+			r == '-':
+			out.WriteRune(r)
+		default:
+			out.WriteByte('_')
+		}
+		if out.Len() == limit {
+			break
+		}
+	}
+	if out.Len() == 0 {
+		return "_"
+	}
+	return out.String()
 }
 
 func cloneHandoffMessage(message Message) Message {
